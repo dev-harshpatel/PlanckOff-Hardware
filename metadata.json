@@ -1,0 +1,7 @@
+{
+  "name": "The Value Engineering -  hardware estimating ",
+  "description": "Hardware Estimating",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

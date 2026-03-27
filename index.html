@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Value Engineering</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              '50': '#ecfeff',
+              '100': '#cffafe',
+              '200': '#a5f3fc',
+              '300': '#67e8f9',
+              '400': '#22d3ee',
+              '500': '#06b6d4',
+              '600': '#0891b2',
+              '700': '#0e7490',
+              '800': '#155e75',
+              '900': '#164e63',
+              '950': '#083344',
+            },
+            secondary: {
+              '500': '#84cc16', // Lime green for 'ENGINEERING'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Synchronous, blocking load for reliability -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.4.2/mammoth.browser.min.js"></script>
+
+  <!-- Configure libraries and set error flags if they fail to load -->
+  <script>
+    window.pdfJsFailedToLoad = false;
+    window.sheetJsFailedToLoad = false;
+    try {
+      if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      } else {
+        throw new Error('pdf.js library object not found.');
+      }
+    } catch (e) {
+      console.error('Failed to configure pdf.js:', e);
+      window.pdfJsFailedToLoad = true;
+    }
+    try {
+      if (typeof XLSX === 'undefined') {
+        throw new Error('SheetJS (XLSX) library object not found.');
+      }
+    } catch (e) {
+      console.error('Failed to find SheetJS:', e);
+      window.sheetJsFailedToLoad = true;
+    }
+    try {
+      if (typeof mammoth === 'undefined') {
+        console.warn('Mammoth library object not found. DOCX support may be unavailable.');
+      }
+    } catch (e) {
+      console.error('Failed to find Mammoth:', e);
+    }
+  </script>
+
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900">
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+  <script>
+    console.log('✅ Inline script executing');
+    document.getElementById('root').innerHTML = '<div style="background:lime;padding:50px;font-size:24px;color:black;">✅ JavaScript is working! Loading React...</div>';
+    setTimeout(() => {
+      console.log('✅ About to load index.tsx module');
+    }, 100);
+  </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
