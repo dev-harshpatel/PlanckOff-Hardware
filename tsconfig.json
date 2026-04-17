@@ -1,31 +1,45 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-    "module": "ESNext",
     "lib": [
       "ES2022",
       "DOM",
       "DOM.Iterable"
     ],
-    "skipLibCheck": true,
-    "types": [
-      "node",
-      "vite/client"
-    ],
-    "esModuleInterop": true,
+    "module": "ESNext",
     "moduleResolution": "bundler",
+    "jsx": "preserve",
+    // strict: true — disabled during migration, re-enable in code-quality phase
+    // "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
     "isolatedModules": true,
-    "moduleDetection": "force",
     "allowJs": true,
-    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
       "@/*": [
         "./*"
       ]
     },
-    "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "resolveJsonModule": true,
+    "strict": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "App.tsx",
+    "index.tsx",
+    "views/ReportsViewWrapper.tsx"
+  ]
 }

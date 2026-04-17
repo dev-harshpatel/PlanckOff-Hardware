@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { ValidationReport } from '../types';
 import { saveTaskToDB, getTasksFromDB, deleteTaskFromDB } from '../utils/uploadPersistence';

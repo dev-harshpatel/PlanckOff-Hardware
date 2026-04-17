@@ -1,3 +1,4 @@
+'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { HardwareItem, Role, HardwareSet } from '../types';

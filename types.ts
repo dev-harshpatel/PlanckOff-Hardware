@@ -301,6 +301,8 @@ export interface NewProjectData {
   description?: string;
   client?: string;
   location?: string;
+  country?: string;
+  province?: string;
   dueDate?: string;
   status?: ProjectStatus;
   projectNumber?: string;
@@ -312,6 +314,9 @@ export interface Project {
   name: string;
   client: string;
   location: string;
+  country?: string;
+  province?: string;
+  description?: string;
   createdAt: Date;
   updatedAt: Date;
   // Added fields for Dashboard
@@ -320,9 +325,9 @@ export interface Project {
   projectNumber?: string;
   lastModified: string | Date; // Allow both for flexibility with legacy data
 
-  elevationTypes: ElevationType[];
-  hardwareSets: HardwareSet[];
-  doors: Door[]; // Added missing doors field
+  elevationTypes?: ElevationType[];
+  hardwareSets?: HardwareSet[];
+  doors?: Door[];
   assignedTo?: string; // Team Member ID
 }
 
@@ -391,6 +396,7 @@ export interface ManufacturerCutSheet {
   productName: string;
   modelNumber: string;
   category: 'door' | 'frame' | 'hardware';
+  csiSection?: string;
   fileUrl?: string;
   fileName?: string;
   uploadDate: Date;

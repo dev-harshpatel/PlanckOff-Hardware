@@ -1,19 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Set PDF.js worker source. `import.meta.url` works in both the browser main thread
-// and inside a Web Worker (nested workers are supported in modern browsers).
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
-
-/**
- * Extracts all text content from a PDF file.
- * Uses local pdfjs-dist instead of unstable CDN global.
- * @param file The PDF file to parse.
- * @returns A promise that resolves with the full text content of the PDF.
- * @throws An error if parsing fails.
- */
 /**
  * Result structure for a batch of pages
  */
@@ -29,11 +13,18 @@ export interface PDFBatchResult {
  * Generates text chunks from a PDF file in batches.
  * This allows for processing large files without locking the UI or consuming excessive memory.
  * It also enables "stopping" early by simply breaking the iteration loop.
- * 
+ *
  * @param file The PDF file to parse.
  * @param batchSize Number of pages to process in each yield.
  */
 export async function* extractTextGenerator(file: File, batchSize: number = 20): AsyncGenerator<PDFBatchResult> {
+    // Lazy import — keeps pdfjs-dist out of the server bundle
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url
+    ).toString();
+
     try {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });

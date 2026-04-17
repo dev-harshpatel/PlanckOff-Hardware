@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You've been invited to PlanckOff</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+
+    <!-- Header -->
+    <div style="background: #14532d; padding: 32px 40px;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">PlanckOff</h1>
+      <p style="color: #86efac; margin: 6px 0 0; font-size: 13px;">Hardware Estimating Platform</p>
+    </div>
+
+    <!-- Body -->
+    <div style="padding: 40px;">
+      <p style="color: #374151; font-size: 16px; margin: 0 0 8px; font-weight: 600;">
+        You've been invited!
+      </p>
+      <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0 0 28px;">
+        You have been invited to join <strong style="color: #111827;">PlanckOff</strong>
+        as a <strong style="color: #111827;">{{ .Data.role }}</strong>.
+        Click the button below to accept your invitation and set your password.
+      </p>
+
+      <a href="{{ .ConfirmationURL }}"
+         style="display: inline-block; background: #15803d; color: #ffffff; text-decoration: none;
+                padding: 13px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;
+                letter-spacing: 0.2px;">
+        Accept Invitation &amp; Set Password
+      </a>
+
+      <p style="color: #9ca3af; font-size: 13px; margin: 28px 0 0; line-height: 1.5;">
+        This link expires in <strong>7 days</strong>.<br>
+        If you were not expecting this invitation, you can safely ignore this email.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 28px 0;">
+
+      <p style="color: #d1d5db; font-size: 12px; margin: 0;">
+        Can't click the button? Copy this link:<br>
+        <a href="{{ .ConfirmationURL }}"
+           style="color: #15803d; word-break: break-all; font-size: 12px;">
+          {{ .ConfirmationURL }}
+        </a>
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Door } from '../types';
 import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
@@ -95,11 +93,13 @@ const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['col
 };
 
 // Export Door Schedule to PDF
-export const exportDoorScheduleToPDF = (
+export const exportDoorScheduleToPDF = async (
   doors: Door[],
   config: DoorScheduleExportConfig,
   projectName: string
-): void => {
+): Promise<void> => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -257,11 +257,13 @@ const buildHardwareSetRow = (item: any, config: HardwareSetExportConfig): any[] 
 };
 
 // Export Hardware Set to PDF
-export const exportHardwareSetToPDF = (
+export const exportHardwareSetToPDF = async (
   usageStats: any[],
   config: HardwareSetExportConfig,
   projectName: string
-): void => {
+): Promise<void> => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -439,12 +441,14 @@ const SUBMITTAL_DOOR_COLUMNS: DoorScheduleExportConfig['columns'] = {
   additional: ['swingDirection', 'specialNotes']
 };
 
-export const exportSubmittalPackageToPDF = (
+export const exportSubmittalPackageToPDF = async (
   doors: Door[],
   hardwareSets: HardwareSet[],
   elevationTypes: ElevationType[],
   config: SubmittalExportConfig
-): void => {
+): Promise<void> => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',

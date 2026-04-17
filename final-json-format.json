@@ -1,0 +1,51 @@
+{
+    "setName": "AD01b",
+    "doors": [
+      {
+        "doorTag": "2708",
+        "doorLocation": "Corridor",
+        "interiorExterior": "Interior",
+        "quantity": 2,
+        "fireRating": "90 min",
+        "leafCount": "Double",
+        "doorWidth": "3'-0\"",
+        "doorHeight": "7'-0\"",
+        "thickness": "1-3/4\"",
+        "doorMaterial": "Wood",
+        "frameMaterial": "Hollow Metal"
+      },
+      {
+        "doorTag": "2710",
+        "doorLocation": "Staircase",
+        "interiorExterior": "Exterior",
+        "quantity": 1,
+        "fireRating": "120 min",
+        "leafCount": "Single",
+        "doorWidth": "3'-6\"",
+        "doorHeight": "7'-0\"",
+        "thickness": "1-3/4\"",
+        "doorMaterial": "Metal",
+        "frameMaterial": "Steel"
+      }
+    ],
+    "hardwareItems": [
+      {
+        "qty": 2,
+        "item": "Continuous Hinge",
+        "manufacturer": "McKinney",
+        "description": "FM-HD1-SER12 x length",
+        "finish": "CA"
+      },
+      {
+        "qty": 2,
+        "item": "Exit Device",
+        "manufacturer": "Sargent",
+        "description": "56-NB-PE8613 x WEJ x hand",
+        "finish": "626"
+      }
+    ], 
+    "notes" : {
+        "hardwareNotes": "Notes about the hardware items"
+    }
+}
+

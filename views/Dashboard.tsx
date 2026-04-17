@@ -1,12 +1,10 @@
+'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Project, ProjectStatus, NewProjectData, Toast, Role } from '../types';
 import NewProjectModal from '../components/NewProjectModal';
 import {
-    BuildingOffice2Icon,
     CalendarDaysIcon,
-    PencilSquareIcon,
-    ArrowTopRightOnSquareIcon,
     MagnifyingGlassIcon,
     TrashIcon,
     UserPlusIcon,
@@ -14,15 +12,28 @@ import {
     ListBulletIcon,
     Squares2X2Icon,
     PlusIcon,
-    ChevronDownIcon
 } from '../components/icons';
 import { TeamMember } from '../types';
+import SelectDropdown from '@/components/ui/select-dropdown';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface DashboardProps {
     projects: Project[];
     onSelectProject: (projectId: string) => void;
     onAddNewProject: (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => Promise<void>;
-    onProjectUpdate: (updatedProject: Project) => void;
+    onProjectUpdate: (updatedProject: Project) => Promise<void> | void;
     onDeleteProject: (projectId: string) => void;
     userRole: Role;
     addToast: (toast: Omit<Toast, 'id'>) => void;
@@ -57,12 +68,16 @@ const statusColors: { [key in ProjectStatus]: { bg: string, text: string, border
 const ProjectCard: React.FC<{
     project: Project;
     onSelect: () => void;
-    onSave: (p: Project) => void;
+    onSave: (p: Project) => Promise<void> | void;
     onDelete: (id: string) => void;
     userRole: Role;
     teamMembers: TeamMember[];
 }> = ({ project, onSelect, onSave, onDelete, userRole, teamMembers }) => {
     const [showAssignMenu, setShowAssignMenu] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deleteConfirmation, setDeleteConfirmation] = useState('');
+    const [isAssigning, setIsAssigning] = useState(false);
+    const assignMenuRef = useRef<HTMLDivElement | null>(null);
 
     // Check permissions
     const canDelete = (userRole === Role.Administrator || userRole === Role.SeniorEstimator);
@@ -70,105 +85,170 @@ const ProjectCard: React.FC<{
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
 
-    const handleAssign = (memberId: string) => {
-        onSave({ ...project, assignedTo: memberId });
-        setShowAssignMenu(false);
-    };
+    useEffect(() => {
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!assignMenuRef.current?.contains(event.target as Node)) {
+                setShowAssignMenu(false);
+            }
+        };
 
-    const handleDelete = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (window.confirm(`Are you sure you want to delete "${project.name}"?`)) {
-            onDelete(project.id);
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+        };
+    }, []);
+
+    const handleAssign = async (memberId: string) => {
+        try {
+            setIsAssigning(true);
+            await onSave({ ...project, assignedTo: memberId || undefined });
+            setShowAssignMenu(false);
+        } finally {
+            setIsAssigning(false);
         }
     };
 
+    const handleDeleteClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDeleteConfirmation('');
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = () => {
+        onDelete(project.id);
+        setIsDeleteDialogOpen(false);
+        setDeleteConfirmation('');
+    };
+
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow p-4 mb-3 group relative">
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <h4 onClick={onSelect} className="font-bold text-gray-900 leading-tight cursor-pointer hover:text-primary-600 text-base">{project.name}</h4>
-                    <p className="text-xs text-gray-500 mt-1 font-medium">{project.client}</p>
+        <>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow p-4 mb-3 group relative">
+                <div className="flex justify-between items-start mb-2">
+                    <div>
+                        <h4 onClick={onSelect} className="font-bold text-gray-900 leading-tight cursor-pointer hover:text-primary-600 text-base">{project.name}</h4>
+                        <p className="text-xs text-gray-500 mt-1 font-medium">{project.client}</p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-1">
-                    {/* Open Project Link - Icon only to save space */}
-                    <button onClick={onSelect} className="text-primary-600 hover:text-primary-800 p-1" title="Open Project">
-                        <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-600 mt-3">
-                <div className="flex items-center gap-1.5">
-                    <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400" />
-                    <span>{formatDate(project.dueDate)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 justify-end">
-                    <span className="text-gray-400">#</span>
-                    <span>{project.projectNumber || 'N/A'}</span>
-                </div>
-                <div className="col-span-2 flex items-center gap-1.5 mt-1">
-                    {assignedMember ? (
-                        <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 max-w-full">
-                            <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
-                                {assignedMember.name.charAt(0)}
+                <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-600 mt-3">
+                    <div className="flex items-center gap-1.5">
+                        <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400" />
+                        <span>{formatDate(project.dueDate)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-gray-400">#</span>
+                        <span>{project.projectNumber || 'N/A'}</span>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-1.5 mt-1">
+                        {assignedMember ? (
+                            <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 max-w-full">
+                                <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
+                                    {assignedMember.name.charAt(0)}
+                                </div>
+                                <span className="truncate">{assignedMember.name}</span>
                             </div>
-                            <span className="truncate">{assignedMember.name}</span>
-                        </div>
-                    ) : (
-                        <span className="text-gray-400 italic">Unassigned</span>
-                    )}
-                </div>
-            </div>
-
-            {/* Hover Actions */}
-            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded pl-2">
-                {canAssign && (
-                    <div className="relative">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
-                            className={`p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${project.assignedTo ? 'text-blue-500' : ''}`}
-                            title="Assign"
-                        >
-                            <UserPlusIcon className="w-4 h-4" />
-                        </button>
-                        {showAssignMenu && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200 py-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">Assign To</div>
-                                {teamMembers.map(m => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => handleAssign(m.id)}
-                                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${project.assignedTo === m.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
-                                    >
-                                        {m.name}
-                                    </button>
-                                ))}
-                                <button onClick={() => handleAssign('')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100">Unassign</button>
-                            </div>
+                        ) : (
+                            <span className="text-gray-400 italic">Unassigned</span>
                         )}
                     </div>
-                )}
-                {canDelete && (
-                    <button onClick={handleDelete} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50">
-                        <TrashIcon className="w-4 h-4" />
+                </div>
+
+                {/* Hover Actions */}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" ref={assignMenuRef}>
+                    {canAssign && (
+                        <div className="relative">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowAssignMenu(!showAssignMenu);
+                                }}
+                                disabled={isAssigning}
+                                className={`p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${project.assignedTo ? 'text-blue-500' : ''} disabled:opacity-50`}
+                                title="Assign"
+                            >
+                                <UserPlusIcon className="w-4 h-4" />
+                            </button>
+                            {showAssignMenu && (
+                                <div className="absolute right-0 mt-1 w-52 bg-white rounded-md shadow-lg z-50 border border-gray-200 py-1" onClick={(e) => e.stopPropagation()}>
+                                    <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">Assign To</div>
+                                    {teamMembers.map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => handleAssign(m.id)}
+                                            disabled={isAssigning}
+                                            className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 ${project.assignedTo === m.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                                        >
+                                            {m.name}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => handleAssign('')}
+                                        disabled={isAssigning}
+                                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100 disabled:opacity-50"
+                                    >
+                                        Unassign
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {canDelete && (
+                        <button onClick={handleDeleteClick} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50">
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
+                    <button onClick={onSelect} className="text-xs font-semibold text-primary-600 hover:text-primary-800 flex items-center gap-1">
+                        Open Project
                     </button>
-                )}
+                    {/* Status Badge - Optional if strictly column based, but good for clarity */}
+                    <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${project.status === 'Active' ? 'bg-green-50 text-green-700' :
+                        project.status === 'Under Review' ? 'bg-amber-50 text-amber-700' :
+                            project.status === 'Submitted' ? 'bg-blue-50 text-blue-700' :
+                                project.status === 'On Hold' ? 'bg-gray-100 text-gray-600' : 'bg-purple-50 text-purple-700'
+                        }`}>
+                        {project.status || 'Active'}
+                    </span>
+                </div>
             </div>
 
-            <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
-                <button onClick={onSelect} className="text-xs font-semibold text-primary-600 hover:text-primary-800 flex items-center gap-1">
-                    Open Project <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-                </button>
-                {/* Status Badge - Optional if strictly column based, but good for clarity */}
-                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${project.status === 'Active' ? 'bg-green-50 text-green-700' :
-                    project.status === 'Under Review' ? 'bg-amber-50 text-amber-700' :
-                        project.status === 'Submitted' ? 'bg-blue-50 text-blue-700' :
-                            project.status === 'On Hold' ? 'bg-gray-100 text-gray-600' : 'bg-purple-50 text-purple-700'
-                    }`}>
-                    {project.status || 'Active'}
-                </span>
-            </div>
-        </div>
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete project</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will move <span className="font-medium text-gray-900">{project.name}</span> to trash. Type <span className="font-medium text-gray-900">confirm</span> to enable deletion.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor={`delete-confirm-${project.id}`}>Confirmation</Label>
+                        <Input
+                            id={`delete-confirm-${project.id}`}
+                            value={deleteConfirmation}
+                            onChange={(e) => setDeleteConfirmation(e.target.value)}
+                            placeholder='Type "confirm"'
+                        />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            onClick={() => {
+                                setDeleteConfirmation('');
+                            }}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteConfirm}
+                            disabled={deleteConfirmation.trim().toLowerCase() !== 'confirm'}
+                        >
+                            Delete project
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 };
 
@@ -207,6 +287,16 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
             return matchesSearch && matchesMember;
         });
     }, [projects, searchQuery, selectedMemberFilter]);
+
+    const memberFilterOptions = useMemo(() => {
+        return [
+            { value: 'All Members', label: 'All Members' },
+            ...teamMembers.map(member => ({
+                value: member.id,
+                label: member.name,
+            })),
+        ];
+    }, [teamMembers]);
 
     const handleSaveNewProject = async (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => {
         setIsCreatingProject(true);
@@ -279,19 +369,16 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
                                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                             />
                         </div>
-                        <div className="relative">
-                            <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            <select
+                        <div className="relative min-w-[220px]">
+                            <FunnelIcon className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <SelectDropdown
                                 value={selectedMemberFilter}
-                                onChange={(e) => setSelectedMemberFilter(e.target.value)}
-                                className="pl-9 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm font-medium appearance-none bg-white cursor-pointer hover:bg-gray-50 transition-colors"
-                            >
-                                <option value="All Members">All Members</option>
-                                {teamMembers.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                onChange={setSelectedMemberFilter}
+                                options={memberFilterOptions}
+                                className="w-full"
+                                triggerClassName="border-gray-300 bg-white pl-9 pr-3 hover:bg-gray-50"
+                                contentClassName="mt-1"
+                            />
                         </div>
                     </div>
                     <div className="flex items-center gap-2 ml-4">

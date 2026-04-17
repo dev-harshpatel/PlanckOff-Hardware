@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useRouter, useParams } from 'next/navigation';
 import { Door, HardwareSet, ElevationType } from '../types';
 import DoorScheduleConfig from '../components/DoorScheduleConfig';
 import HardwareSetConfig, { HardwareSetExportConfig } from '../components/HardwareSetConfig';
@@ -30,8 +32,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({
     projectName,
     onUpdateDoors
 }) => {
-    const navigate = useNavigate();
-    const { id } = useParams();
+    const router = useRouter();
+    const params = useParams();
+    const id = params.id as string;
     const [currentView, setCurrentView] = useState<ReportView>('selector');
 
     // Phase 20: Validation State
@@ -42,7 +45,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({
     // Phase 23: Export Configuration State - REMOVED
 
     const handleBackToProject = () => {
-        navigate(`/project/${id}`);
+        router.push(`/project/${id}`);
     };
 
     const handleHardwareSetExport = (config: HardwareSetExportConfig) => {
@@ -76,7 +79,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({
         setShowValidationModal(false);
         // Navigate back to project to edit door
         // The door edit modal will be triggered by the parent component
-        navigate(`/project/${id}?editDoor=${doorId}`);
+        router.push(`/project/${id}?editDoor=${doorId}`);
     };
 
     const handleExportAnyway = () => {

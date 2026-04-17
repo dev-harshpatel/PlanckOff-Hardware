@@ -1,0 +1,110 @@
+{
+    "setName": "AD01b",
+    "hardwareItems": [
+      {
+        "qty": 2,
+        "item": "Continuous Hinge",
+        "manufacturer": "McKinney",
+        "description": "FM-HD1-SER12 x length",
+        "finish": "CA"
+      },
+      {
+        "qty": 2,
+        "item": "Exit Device",
+        "manufacturer": "Sargent",
+        "description": "56-NB-PE8613 x WEJ x hand",
+        "finish": "626"
+      },
+      {
+        "qty": 3,
+        "item": "Cylinder",
+        "manufacturer": "Schlage",
+        "description": "'C' Kwy. Type x Length x Cam to suit",
+        "finish": "626"
+      },
+      {
+        "qty": 1,
+        "item": "Keyswitch",
+        "manufacturer": "Securitron",
+        "description": "MKAN2",
+        "finish": "630"
+      },
+      {
+        "qty": 2,
+        "item": "Connector",
+        "manufacturer": "ElectroLynx",
+        "description": "QC-C300",
+        "finish": "XYZ"
+      },
+      {
+        "qty": 2,
+        "item": "Connector",
+        "manufacturer": "ElectroLynx",
+        "description": "QC-C1500P",
+        "finish": ""
+      },
+      {
+        "qty": 2,
+        "item": "Operator",
+        "manufacturer": "Record",
+        "description": "8100 Full Width Header",
+        "finish": ""
+      },
+      {
+        "qty": 4,
+        "item": "Sensor",
+        "manufacturer": "BEA",
+        "description": "Superscan x length",
+        "finish": ""
+      },
+      {
+        "qty": 1,
+        "item": "Gasket",
+        "manufacturer": "Pemko",
+        "description": "S88BL x width x 2-height",
+        "finish": ""
+      },
+      {
+        "qty": 2,
+        "item": "Actuator",
+        "manufacturer": "Camden",
+        "description": "CM-7536VR/4",
+        "finish": "628"
+      },
+      {
+        "qty": 1,
+        "item": "Power Supply",
+        "manufacturer": "Securitron",
+        "description": "AQD2-4C2 by Others",
+        "finish": ""
+      },
+      {
+        "qty": 1,
+        "item": "Battery",
+        "manufacturer": "Securitron",
+        "description": "B-24-5 by Others",
+        "finish": ""
+      },
+      {
+        "qty": 1,
+        "item": "Card Reader",
+        "manufacturer": "HID",
+        "description": "By Others",
+        "finish": ""
+      },
+      {
+        "qty": 1,
+        "item": "Rem. Release",
+        "manufacturer": "",
+        "description": "By Others",
+        "finish": ""
+      },
+      {
+        "qty": 2,
+        "item": "DPS",
+        "manufacturer": "Securitron",
+        "description": "DPS-(M/W)-GY By Others",
+        "finish": ""
+      }
+    ]
+  }

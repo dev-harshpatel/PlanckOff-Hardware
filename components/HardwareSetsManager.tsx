@@ -54,7 +54,7 @@ const formatDimension = (inches: number): string => {
 };
 
 const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
-    const { hardwareSets, doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant } = props;
+    const { hardwareSets = [], doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant } = props;
 
     // ... (lines 53-68 omitted for brevity, keeping existing state) ...
     const [isModalOpen, setIsModalOpen] = useState(false);

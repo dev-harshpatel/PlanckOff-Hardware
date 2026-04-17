@@ -59,18 +59,18 @@ export const calculateHardwareUsage = (
 };
 
 // Export Door Schedule Report
-export const exportDoorSchedule = (
+export const exportDoorSchedule = async (
   doors: Door[],
   config: DoorScheduleExportConfig,
   projectName: string
-): void => {
+): Promise<void> => {
   try {
     switch (config.format) {
       case 'xlsx':
-        exportDoorScheduleToExcel(doors, config, projectName);
+        await exportDoorScheduleToExcel(doors, config, projectName);
         break;
       case 'pdf':
-        exportDoorScheduleToPDF(doors, config, projectName);
+        await exportDoorScheduleToPDF(doors, config, projectName);
         break;
       case 'csv':
         exportDoorScheduleToCSV(doors, config, projectName);
@@ -85,22 +85,22 @@ export const exportDoorSchedule = (
 };
 
 // Export Hardware Set Report
-export const exportHardwareSet = (
+export const exportHardwareSet = async (
   doors: Door[],
   hardwareSets: HardwareSet[],
   config: HardwareSetExportConfig,
   projectName: string
-): void => {
+): Promise<void> => {
   try {
     // Calculate usage statistics
     const usageStats = calculateHardwareUsage(doors, hardwareSets);
 
     switch (config.format) {
       case 'xlsx':
-        exportHardwareSetToExcel(usageStats, config, projectName);
+        await exportHardwareSetToExcel(usageStats, config, projectName);
         break;
       case 'pdf':
-        exportHardwareSetToPDF(usageStats, config, projectName);
+        await exportHardwareSetToPDF(usageStats, config, projectName);
         break;
       case 'csv':
         exportHardwareSetToCSV(usageStats, config, projectName);
@@ -115,15 +115,15 @@ export const exportHardwareSet = (
 };
 
 // Export Submittal Package
-export const exportSubmittalPackage = (
+export const exportSubmittalPackage = async (
   doors: Door[],
   hardwareSets: HardwareSet[],
   elevationTypes: ElevationType[],
   config: SubmittalExportConfig
-): void => {
+): Promise<void> => {
   try {
     if (config.format === 'pdf') {
-      exportSubmittalPackageToPDF(doors, hardwareSets, elevationTypes, config);
+      await exportSubmittalPackageToPDF(doors, hardwareSets, elevationTypes, config);
     } else {
       throw new Error(`Unsupported format: ${config.format}`);
     }

@@ -1,92 +1,123 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TeamMember, Role } from '../types';
+'use client';
+
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import type { AuthUser, RoleName } from '@/types/auth';
+
+// ---------------------------------------------------------------------------
+// Context shape
+// ---------------------------------------------------------------------------
 
 interface AuthContextType {
-    currentUser: TeamMember | null;
-    isAuthenticated: boolean;
-    login: (email: string, password: string) => Promise<{ error: any }>;
-    register: (email: string, password: string) => Promise<{ error: any }>;
-    logout: () => void;
-    teamMembers: TeamMember[];
-    inviteUser: (email: string, role: Role) => void;
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Initialize with a default user to bypass login screen
-    const [currentUser, setCurrentUser] = useState<TeamMember | null>(() => {
-        const stored = localStorage.getItem('mock_user');
-        if (stored) {
-            const user = JSON.parse(stored);
-            // Fix: Force update role to Administrator if it's not (to fix missing UI elements for existing users)
-            if (user.role !== Role.Administrator) {
-                user.role = Role.Administrator;
-                localStorage.setItem('mock_user', JSON.stringify(user));
-            }
-            return user;
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Hydrate from /api/auth/me on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrate() {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!cancelled && res.ok) {
+          const json = (await res.json()) as { user: AuthUser };
+          setUser(json.user);
         }
-
-        return {
-            id: 'default-estimator',
-            name: 'Estimator',
-            email: 'estimator@value-engineering.com',
-            role: Role.Administrator,
-            status: 'Active',
-            lastActive: new Date().toISOString()
-        };
-    });
-
-    // Always start authenticated
-    const [isAuthenticated, setIsAuthenticated] = useState(true);
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-
-    useEffect(() => {
-        // Persist the user if it was auto-generated
-        if (currentUser && !localStorage.getItem('mock_user')) {
-            localStorage.setItem('mock_user', JSON.stringify(currentUser));
-        }
-    }, [currentUser]);
-
-    const login = async () => { return { error: null }; };
-    const register = async () => { return { error: null }; };
-
-    const logout = async () => {
-        // No-op or reset default
-        setIsAuthenticated(true);
-    };
-
-    const inviteUser = async (email: string, role: Role) => {
-        const newUser: TeamMember = {
-            id: `temp-${Date.now()}`,
-            name: email.split('@')[0],
-            email,
-            role,
-            status: 'Pending',
-            lastActive: ''
-        };
-        setTeamMembers(prev => [...prev, newUser]);
-    };
-
-    return (
-        <AuthContext.Provider value={{
-            currentUser,
-            isAuthenticated,
-            login,
-            register,
-            logout,
-            teamMembers,
-            inviteUser
-        }}>
-            {children}
-        </AuthContext.Provider>
-    );
-};
-
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
+      } catch {
+        // Network error — user stays null
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     }
-    return context;
-};
+
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ error: string | null }> => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const json = (await res.json()) as { user?: AuthUser; error?: string };
+
+      if (!res.ok) {
+        return { error: json.error ?? 'Login failed.' };
+      }
+
+      if (json.user) setUser(json.user);
+      return { error: null };
+    } catch {
+      return { error: 'Network error. Please try again.' };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // Best-effort
+    }
+    setUser(null);
+    router.push('/login');
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: user !== null,
+        isLoading,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (ctx === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy compatibility shim
+// Components that still use `currentUser` from the old context will need
+// updating, but this avoids a hard crash during migration.
+// ---------------------------------------------------------------------------
+
+export function useCurrentUser(): AuthUser | null {
+  return useAuth().user;
+}
+
+export type { AuthUser, RoleName };

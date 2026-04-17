@@ -4,9 +4,6 @@ import { Door, HardwareSet, HardwareItem } from '../types';
 import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
 // Build headers for Door Schedule
 const buildDoorScheduleHeaders = (columns: DoorScheduleExportConfig['columns']): string[] => {
   const headers: string[] = [];
@@ -698,11 +695,13 @@ function createProcurementSummarySheet(
 }
 
 // Export Door Schedule to PDF
-export const exportDoorScheduleToPDF = (
+export const exportDoorScheduleToPDF = async (
     doors: Door[],
     selectedColumns: string[],
     projectName: string
-): void => {
+): Promise<void> => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     
     // Map selected column IDs to labels
