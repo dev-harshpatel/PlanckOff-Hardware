@@ -18,12 +18,37 @@ interface EnhancedDoorEditModalProps {
 
 type TabId = 'door' | 'frame' | 'hardware';
 
+type RawSection = Record<string, string | undefined>;
+
+const DOOR_GROUPS: { header: string; cols: number; keys: string[] }[] = [
+    { header: 'Identity', cols: 2, keys: ['DOOR TAG', 'BUILDING TAG', 'BUILDING LOCATION', 'BUILDING AREA', 'DOOR LOCATION', 'QUANTITY', 'HAND OF OPENINGS', 'DOOR OPERATION', 'LEAF COUNT', 'INTERIOR/EXTERIOR', 'EXCLUDE REASON'] },
+    { header: 'Dimensions', cols: 3, keys: ['WIDTH', 'HEIGHT', 'THICKNESS'] },
+    { header: 'Material & Finish', cols: 2, keys: ['FIRE RATING', 'DOOR MATERIAL', 'DOOR ELEVATION TYPE', 'DOOR CORE', 'DOOR FACE', 'DOOR EDGE', 'DOOR GUAGE', 'DOOR FINISH', 'STC RATING', 'DOOR UNDERCUT', 'DOOR INCLUDE/EXCLUDE'] },
+];
+
+const FRAME_GROUPS: { header: string; cols: number; keys: string[] }[] = [
+    { header: 'General', cols: 2, keys: ['FRAME MATERIAL', 'WALL TYPE', 'THROAT THICKNESS'] },
+    { header: 'Anchors', cols: 3, keys: ['FRAME ANCHOR', 'BASE ANCHOR', 'NO OF ANCHOR'] },
+    { header: 'Profile & Assembly', cols: 2, keys: ['FRAME PROFILE', 'FRAME ELEVATION TYPE', 'FRAME ASSEMBLY', 'FRAME GUAGE'] },
+    { header: 'Finish & Details', cols: 2, keys: ['FRAME FINISH', 'PREHUNG', 'FRAME HEAD', 'CASING', 'FRAME INCLUDE/EXCLUDE'] },
+];
+
+const DEFAULT_DOOR_SEC = (): RawSection =>
+    Object.fromEntries(DOOR_GROUPS.flatMap(g => g.keys).map(k => [k, '']));
+
+const DEFAULT_FRAME_SEC = (): RawSection =>
+    Object.fromEntries(FRAME_GROUPS.flatMap(g => g.keys).map(k => [k, '']));
+
+const prettifyKey = (key: string) =>
+    key.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">{children}</label>
 );
 
-const inputCls = "w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] placeholder:text-[var(--text-faint)] transition-colors";
 const selectCls = "w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] transition-colors";
+
+const inputCls = "w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] placeholder:text-[var(--text-faint)] transition-colors";
 
 const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div className="flex items-center gap-2 mb-3 mt-5 first:mt-0">
@@ -31,6 +56,64 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="flex-1 h-px bg-[var(--primary-border)]" />
     </div>
 );
+
+const SectionFields: React.FC<{
+    data: RawSection;
+    groups: typeof DOOR_GROUPS;
+    onChange: (key: string, value: string) => void;
+}> = ({ data, groups, onChange }) => {
+    const allGroupedKeys = new Set(groups.flatMap(g => g.keys));
+    const extraKeys = Object.keys(data).filter(k => !allGroupedKeys.has(k));
+
+    return (
+        <div className="space-y-1 max-w-2xl">
+            {groups.map(group => {
+                const presentKeys = group.keys.filter(k => k in data);
+                if (presentKeys.length === 0) return null;
+                return (
+                    <React.Fragment key={group.header}>
+                        <SectionHeader>{group.header}</SectionHeader>
+                        <div className={`grid gap-3 ${group.cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                            {presentKeys.map(key => (
+                                <div key={key}>
+                                    <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">
+                                        {prettifyKey(key)}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={inputCls}
+                                        value={data[key] ?? ''}
+                                        onChange={e => onChange(key, e.target.value)}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </React.Fragment>
+                );
+            })}
+            {extraKeys.length > 0 && (
+                <>
+                    <SectionHeader>Other</SectionHeader>
+                    <div className="grid grid-cols-2 gap-3">
+                        {extraKeys.map(key => (
+                            <div key={key}>
+                                <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">
+                                    {prettifyKey(key)}
+                                </label>
+                                <input
+                                    type="text"
+                                    className={inputCls}
+                                    value={data[key] ?? ''}
+                                    onChange={e => onChange(key, e.target.value)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
 
 const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     door,
@@ -42,6 +125,23 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const [activeTab, setActiveTab] = useState<TabId>('door');
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
     const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+
+    // Raw section state — initialized from door.sections (uppercase Excel keys)
+    // For new doors without sections, seed with empty-string defaults so all fields render.
+    const rawSections = door.sections as unknown as { door: RawSection; frame: RawSection; hardware: RawSection } | undefined;
+    const [doorSec, setDoorSec] = useState<RawSection>(() => {
+        const existing = rawSections?.door ?? {};
+        if (Object.keys(existing).length > 0) return { ...existing };
+        return { ...DEFAULT_DOOR_SEC(), 'DOOR TAG': door.doorTag || '' };
+    });
+    const [frameSec, setFrameSec] = useState<RawSection>(() => {
+        const existing = rawSections?.frame ?? {};
+        if (Object.keys(existing).length > 0) return { ...existing };
+        return DEFAULT_FRAME_SEC();
+    });
+
+    const updateDoorSec = (key: string, value: string) => setDoorSec(prev => ({ ...prev, [key]: value }));
+    const updateFrameSec = (key: string, value: string) => setFrameSec(prev => ({ ...prev, [key]: value }));
 
     React.useEffect(() => {
         const results = validateDoor(editedDoor);
@@ -63,15 +163,59 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     };
 
     const handleSave = () => {
-        const doorToSave = {
+        // Sync section edits back to typed Door fields
+        const updatedSections = {
+            ...(rawSections ?? { door: {}, frame: {}, hardware: {} }),
+            door: doorSec,
+            frame: frameSec,
+        };
+
+        const doorToSave: Door = {
             ...editedDoor,
-            hardwarePrep: generateHardwarePrepString(editedDoor.hardwarePrepSpec) || editedDoor.hardwarePrep
+            hardwarePrep: generateHardwarePrepString(editedDoor.hardwarePrepSpec) || editedDoor.hardwarePrep,
+            sections: updatedSections as unknown as Door['sections'],
+            // Sync typed fields from section edits so the rest of the app stays in sync
+            doorTag: doorSec['DOOR TAG'] ?? editedDoor.doorTag,
+            location: doorSec['DOOR LOCATION'] ?? editedDoor.location,
+            buildingTag: doorSec['BUILDING TAG'] ?? editedDoor.buildingTag,
+            buildingLocation: doorSec['BUILDING LOCATION'] ?? editedDoor.buildingLocation,
+            interiorExterior: doorSec['INTERIOR/EXTERIOR'] ?? editedDoor.interiorExterior,
+            excludeReason: doorSec['EXCLUDE REASON'] ?? editedDoor.excludeReason,
+            fireRating: doorSec['FIRE RATING'] ?? editedDoor.fireRating,
+            doorMaterial: doorSec['DOOR MATERIAL'] ?? editedDoor.doorMaterial,
+            doorCore: doorSec['DOOR CORE'] ?? editedDoor.doorCore,
+            doorFace: doorSec['DOOR FACE'] ?? editedDoor.doorFace,
+            doorEdge: doorSec['DOOR EDGE'] ?? editedDoor.doorEdge,
+            doorGauge: doorSec['DOOR GUAGE'] ?? editedDoor.doorGauge,
+            doorFinish: doorSec['DOOR FINISH'] ?? editedDoor.doorFinish,
+            stcRating: doorSec['STC RATING'] ?? editedDoor.stcRating,
+            undercut: doorSec['DOOR UNDERCUT'] ?? editedDoor.undercut,
+            doorIncludeExclude: doorSec['DOOR INCLUDE/EXCLUDE'] ?? editedDoor.doorIncludeExclude,
+            elevationTypeId: doorSec['DOOR ELEVATION TYPE'] ?? editedDoor.elevationTypeId,
+            handing: (doorSec['HAND OF OPENINGS'] ?? editedDoor.handing) as Door['handing'],
+            operation: doorSec['DOOR OPERATION'] ?? editedDoor.operation,
+            frameMaterial: (frameSec['FRAME MATERIAL'] ?? editedDoor.frameMaterial) as Door['frameMaterial'],
+            wallType: frameSec['WALL TYPE'] ?? editedDoor.wallType,
+            throatThickness: frameSec['THROAT THICKNESS'] ?? editedDoor.throatThickness,
+            frameAnchor: frameSec['FRAME ANCHOR'] ?? editedDoor.frameAnchor,
+            baseAnchor: frameSec['BASE ANCHOR'] ?? editedDoor.baseAnchor,
+            numberOfAnchors: frameSec['NO OF ANCHOR'] ?? editedDoor.numberOfAnchors,
+            frameProfile: (frameSec['FRAME PROFILE'] ?? editedDoor.frameProfile) as Door['frameProfile'],
+            frameElevationType: frameSec['FRAME ELEVATION TYPE'] ?? editedDoor.frameElevationType,
+            frameAssembly: frameSec['FRAME ASSEMBLY'] ?? editedDoor.frameAssembly,
+            frameGauge: frameSec['FRAME GUAGE'] ?? editedDoor.frameGauge,
+            frameFinish: frameSec['FRAME FINISH'] ?? editedDoor.frameFinish,
+            prehung: frameSec['PREHUNG'] ?? editedDoor.prehung,
+            frameHead: frameSec['FRAME HEAD'] ?? editedDoor.frameHead,
+            casing: frameSec['CASING'] ?? editedDoor.casing,
+            frameIncludeExclude: frameSec['FRAME INCLUDE/EXCLUDE'] ?? editedDoor.frameIncludeExclude,
         };
         onSave(doorToSave);
     };
 
     const criticalCount = validationResults.filter(r => r.severity === 'critical').length;
     const warningCount = validationResults.filter(r => r.severity === 'warning').length;
+    const [isIssuesOpen, setIsIssuesOpen] = useState(false);
 
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
         { id: 'door',     label: 'Door',     icon: <DoorOpen className="w-3.5 h-3.5" /> },
@@ -80,6 +224,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     ];
 
     return (
+        <>
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-[var(--bg)] rounded-xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col border border-[var(--border-subtle)]">
 
@@ -121,21 +266,21 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                         </button>
                     ))}
 
-                    {/* Validation pill */}
+                    {/* Validation pill — clickable */}
                     {criticalCount > 0 && (
-                        <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 text-[10px] font-semibold">
+                        <button onClick={() => setIsIssuesOpen(true)} className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-500/20 transition-colors">
                             <AlertTriangle className="w-3 h-3" />
                             {criticalCount} issue{criticalCount > 1 ? 's' : ''}
-                        </div>
+                        </button>
                     )}
                     {criticalCount === 0 && warningCount > 0 && (
-                        <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-semibold">
+                        <button onClick={() => setIsIssuesOpen(true)} className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-500/20 transition-colors">
                             <AlertTriangle className="w-3 h-3" />
                             {warningCount} warning{warningCount > 1 ? 's' : ''}
-                        </div>
+                        </button>
                     )}
                     {criticalCount === 0 && warningCount === 0 && validationResults.length > 0 && (
-                        <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-600 text-[10px] font-semibold">
+                        <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-[10px] font-semibold">
                             <CheckCircle2 className="w-3 h-3" />
                             Valid
                         </div>
@@ -147,340 +292,59 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
 
                     {/* ── DOOR TAB ── */}
                     {activeTab === 'door' && (
-                        <div className="space-y-1 max-w-2xl">
-
-                            {/* Identity — matches Excel cols 1-10 */}
-                            <SectionHeader>Identity</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Door Tag</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorTag}
-                                        onChange={e => updateField('doorTag', e.target.value)} />
-                                </div>
-                                <div>
-                                    <Label>Building Tag</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.buildingTag || ''}
-                                        onChange={e => updateField('buildingTag', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Building Location</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.buildingLocation || ''}
-                                        onChange={e => updateField('buildingLocation', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Door Location</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.location}
-                                        onChange={e => updateField('location', e.target.value)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3 pt-2">
-                                <div>
-                                    <Label>Quantity</Label>
-                                    <input type="number" className={inputCls}
-                                        value={editedDoor.quantity}
-                                        onChange={e => updateField('quantity', Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label>Leaf Count</Label>
-                                    <input type="number" className={inputCls}
-                                        value={editedDoor.leafCount ?? 1}
-                                        onChange={e => updateField('leafCount', Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label>Interior / Exterior</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.interiorExterior || ''}
-                                        placeholder="Interior / Exterior"
-                                        onChange={e => updateField('interiorExterior', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Hand of Openings</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.handing || ''}
-                                        placeholder="e.g. LHR, RHR, LHRB…"
-                                        onChange={e => updateField('handing', e.target.value as Door['handing'] || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Door Operation</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.operation || ''}
-                                        placeholder="e.g. Single Swing, Pair…"
-                                        onChange={e => updateField('operation', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="pt-2">
-                                <Label>Exclude Reason</Label>
-                                <input type="text" className={inputCls}
-                                    value={editedDoor.excludeReason || ''}
-                                    onChange={e => updateField('excludeReason', e.target.value || undefined)} />
-                            </div>
-
-                            {/* Dimensions — Excel cols 11-13 */}
-                            <SectionHeader>Dimensions</SectionHeader>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                    <Label>Width (in)</Label>
-                                    <input type="number" className={inputCls}
-                                        value={editedDoor.width}
-                                        onChange={e => updateField('width', Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label>Height (in)</Label>
-                                    <input type="number" className={inputCls}
-                                        value={editedDoor.height}
-                                        onChange={e => updateField('height', Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label>Thickness (in)</Label>
-                                    <input type="number" className={inputCls}
-                                        value={editedDoor.thickness}
-                                        onChange={e => updateField('thickness', Number(e.target.value))} />
-                                </div>
-                            </div>
-
-                            {/* Fire Rating — Excel col 14 */}
-                            <SectionHeader>Fire Rating</SectionHeader>
-                            <div className="w-1/2 pr-1.5">
-                                <Label>Fire Rating</Label>
-                                <select className={selectCls}
-                                    value={editedDoor.fireRating || ''}
-                                    onChange={e => updateField('fireRating', e.target.value || undefined)}>
-                                    <option value="">N/A</option>
-                                    <option>20 Min</option>
-                                    <option>45 Min</option>
-                                    <option>60 Min</option>
-                                    <option>90 Min</option>
-                                    <option>3 Hour</option>
-                                </select>
-                            </div>
-
-                            {/* Door Material & Finish — Excel cols 15-24 in exact order */}
-                            <SectionHeader>Door Material & Finish</SectionHeader>
-                            {/* 15: Door Material | 16: Door Elevation Type */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Door Material</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorMaterial || ''}
-                                        onChange={e => updateField('doorMaterial', e.target.value)} />
-                                </div>
-                                <div>
-                                    <Label>Door Elevation Type</Label>
-                                    <select className={selectCls}
-                                        value={editedDoor.elevationTypeId || ''}
-                                        onChange={e => updateField('elevationTypeId', e.target.value || undefined)}>
-                                        <option value="">None</option>
-                                        {elevationTypes.map(t => (
-                                            <option key={t.id} value={t.id}>{t.code}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            {/* 17: Door Core | 18: Door Face */}
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Door Core</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorCore || ''}
-                                        onChange={e => updateField('doorCore', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Door Face</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorFace || ''}
-                                        onChange={e => updateField('doorFace', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            {/* 19: Door Edge | 20: Door Gauge */}
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Door Edge</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorEdge || ''}
-                                        onChange={e => updateField('doorEdge', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Door Guage</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorGauge || ''}
-                                        onChange={e => updateField('doorGauge', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            {/* 21: Door Finish | 22: STC Rating */}
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Door Finish</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorFinish || ''}
-                                        onChange={e => updateField('doorFinish', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>STC Rating</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.stcRating || ''}
-                                        onChange={e => updateField('stcRating', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            {/* 23: Door Undercut | 24: Door Include/Exclude */}
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Door Undercut</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.undercut || ''}
-                                        placeholder='e.g. 3/4"'
-                                        onChange={e => updateField('undercut', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Door Include / Exclude</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.doorIncludeExclude || ''}
-                                        onChange={e => updateField('doorIncludeExclude', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                        </div>
+                        Object.keys(doorSec).length > 0
+                            ? <SectionFields data={doorSec} groups={DOOR_GROUPS} onChange={updateDoorSec} />
+                            : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
+                                <DoorOpen className="w-8 h-8 opacity-40" />
+                                No door section data available. Upload a sectioned Excel schedule to populate fields.
+                              </div>
                     )}
 
                     {/* ── FRAME TAB ── */}
                     {activeTab === 'frame' && (
-                        <div className="space-y-1 max-w-2xl">
-
-                            {/* Row 1-2: Material + Wall + Throat */}
-                            <SectionHeader>General</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Frame Material</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameMaterial || ''}
-                                        onChange={e => updateField('frameMaterial', e.target.value as Door['frameMaterial'])} />
-                                </div>
-                                <div>
-                                    <Label>Wall Type</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.wallType || ''}
-                                        onChange={e => updateField('wallType', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="pt-2">
-                                <Label>Throat Thickness</Label>
-                                <input type="text" className={inputCls}
-                                    value={editedDoor.throatThickness || ''}
-                                    onChange={e => updateField('throatThickness', e.target.value || undefined)} />
-                            </div>
-
-                            {/* Row 4-6: Anchors */}
-                            <SectionHeader>Anchors</SectionHeader>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                    <Label>Frame Anchor</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameAnchor || ''}
-                                        onChange={e => updateField('frameAnchor', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Base Anchor</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.baseAnchor || ''}
-                                        onChange={e => updateField('baseAnchor', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>No of Anchor</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.numberOfAnchors || ''}
-                                        onChange={e => updateField('numberOfAnchors', e.target.value || undefined)} />
-                                </div>
-                            </div>
-
-                            {/* Row 7-10: Profile + Elevation + Assembly + Gauge */}
-                            <SectionHeader>Profile & Assembly</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Frame Profile</Label>
-                                    <select className={selectCls}
-                                        value={editedDoor.frameProfile || ''}
-                                        onChange={e => updateField('frameProfile', (e.target.value || undefined) as Door['frameProfile'])}>
-                                        <option value="">Select…</option>
-                                        <option>Single Rabbet</option>
-                                        <option>Double Rabbet</option>
-                                        <option>Cased Opening</option>
-                                        <option>Borrowed Light</option>
-                                        <option>Transom</option>
-                                        <option>Custom</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <Label>Frame Elevation Type</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameElevationType || ''}
-                                        onChange={e => updateField('frameElevationType', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Frame Assembly</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameAssembly || ''}
-                                        onChange={e => updateField('frameAssembly', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Frame Guage</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameGauge || ''}
-                                        placeholder="e.g. 16 GA, 18 GA"
-                                        onChange={e => updateField('frameGauge', e.target.value || undefined)} />
-                                </div>
-                            </div>
-
-                            {/* Row 11-15: Finish + Prehung + Head + Casing + Include/Exclude */}
-                            <SectionHeader>Finish & Details</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Frame Finish</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameFinish || ''}
-                                        onChange={e => updateField('frameFinish', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Prehung</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.prehung || ''}
-                                        placeholder="Yes / No"
-                                        onChange={e => updateField('prehung', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <Label>Frame Head</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.frameHead || ''}
-                                        onChange={e => updateField('frameHead', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Casing</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.casing || ''}
-                                        onChange={e => updateField('casing', e.target.value || undefined)} />
-                                </div>
-                            </div>
-                            <div className="pt-2">
-                                <Label>Frame Include / Exclude</Label>
-                                <input type="text" className={inputCls}
-                                    value={editedDoor.frameIncludeExclude || ''}
-                                    onChange={e => updateField('frameIncludeExclude', e.target.value || undefined)} />
-                            </div>
-                        </div>
+                        Object.keys(frameSec).length > 0
+                            ? <SectionFields data={frameSec} groups={FRAME_GROUPS} onChange={updateFrameSec} />
+                            : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
+                                <Frame className="w-8 h-8 opacity-40" />
+                                No frame section data available. Upload a sectioned Excel schedule to populate fields.
+                              </div>
                     )}
 
                     {/* ── HARDWARE TAB ── */}
                     {activeTab === 'hardware' && (
                         <div className="space-y-1 max-w-2xl">
+
+                            {/* Assignment controls */}
+                            <SectionHeader>Assignment</SectionHeader>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label>Provided Hardware Set</Label>
+                                    <input type="text" className={inputCls}
+                                        value={editedDoor.providedHardwareSet || ''}
+                                        placeholder="e.g. Set 3.0, Set A…"
+                                        onChange={e => updateField('providedHardwareSet', e.target.value || undefined)} />
+                                </div>
+                                <div>
+                                    <Label>Assigned Hardware Set</Label>
+                                    <select className={selectCls}
+                                        value={editedDoor.assignedHardwareSet?.id || ''}
+                                        onChange={e => {
+                                            const set = hardwareSets.find(s => s.id === e.target.value);
+                                            updateField('assignedHardwareSet', set);
+                                        }}>
+                                        <option value="">None</option>
+                                        {hardwareSets.map(set => (
+                                            <option key={set.id} value={set.id}>{set.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <Label>Hardware Include / Exclude</Label>
+                                <input type="text" className={inputCls}
+                                    value={editedDoor.hardwareIncludeExclude || ''}
+                                    onChange={e => updateField('hardwareIncludeExclude', e.target.value || undefined)} />
+                            </div>
 
                             {/* Matched Hardware Set Items Table */}
                             <SectionHeader>Matched Hardware Set</SectionHeader>
@@ -557,56 +421,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                                 </div>
                             )}
 
-                            {/* Assignment controls */}
-                            <SectionHeader>Assignment</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Provided Hardware Set</Label>
-                                    <input type="text" className={inputCls}
-                                        value={editedDoor.providedHardwareSet || ''}
-                                        placeholder="e.g. Set 3.0, Set A…"
-                                        onChange={e => updateField('providedHardwareSet', e.target.value || undefined)} />
-                                </div>
-                                <div>
-                                    <Label>Assigned Hardware Set</Label>
-                                    <select className={selectCls}
-                                        value={editedDoor.assignedHardwareSet?.id || ''}
-                                        onChange={e => {
-                                            const set = hardwareSets.find(s => s.id === e.target.value);
-                                            updateField('assignedHardwareSet', set);
-                                        }}>
-                                        <option value="">None</option>
-                                        {hardwareSets.map(set => (
-                                            <option key={set.id} value={set.id}>{set.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="pt-2">
-                                <Label>Hardware Include / Exclude</Label>
-                                <input type="text" className={inputCls}
-                                    value={editedDoor.hardwareIncludeExclude || ''}
-                                    onChange={e => updateField('hardwareIncludeExclude', e.target.value || undefined)} />
-                            </div>
 
-                            <SectionHeader>Hardware Prep</SectionHeader>
-                            <HardwarePrepEditor
-                                value={editedDoor.hardwarePrepSpec}
-                                onChange={value => updateField('hardwarePrepSpec', value)}
-                            />
-
-                            <SectionHeader>Electrification</SectionHeader>
-                            <ElectrificationEditor
-                                value={editedDoor.electrification}
-                                onChange={value => updateField('electrification', value)}
-                            />
-
-                            <SectionHeader>Hinge Specification</SectionHeader>
-                            <HingeSpecEditor
-                                value={editedDoor.hingeSpec}
-                                onChange={value => updateField('hingeSpec', value)}
-                                doorHeight={editedDoor.height}
-                            />
                         </div>
                     )}
                 </div>
@@ -633,6 +448,68 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                 </div>
             </div>
         </div>
+
+        {/* Issues detail modal */}
+        {isIssuesOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setIsIssuesOpen(false)}>
+                <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+                        <h3 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-500" />
+                            Validation Issues — Door {editedDoor.doorTag}
+                        </h3>
+                        <button onClick={() => setIsIssuesOpen(false)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="overflow-y-auto flex-1 p-4 space-y-2">
+                        {validationResults.map((r, i) => (
+                            <div key={i} className={`rounded-lg border p-3 ${
+                                r.severity === 'critical'
+                                    ? 'bg-red-500/10 border-red-500/20'
+                                    : r.severity === 'warning'
+                                    ? 'bg-amber-500/10 border-amber-500/20'
+                                    : 'bg-blue-500/10 border-blue-500/20'
+                            }`}>
+                                <div className="flex items-start gap-2">
+                                    <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                                        r.severity === 'critical' ? 'text-red-500' :
+                                        r.severity === 'warning' ? 'text-amber-500' : 'text-blue-500'
+                                    }`} />
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-medium text-[var(--text)]">{r.message}</p>
+                                        {r.field && (
+                                            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                                                Field: <span className="font-mono">{String(r.field)}</span>
+                                            </p>
+                                        )}
+                                        {r.suggestion && (
+                                            <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">{r.suggestion}</p>
+                                        )}
+                                    </div>
+                                    <span className={`ml-auto flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                        r.severity === 'critical' ? 'bg-red-500/20 text-red-600 dark:text-red-400' :
+                                        r.severity === 'warning' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' :
+                                        'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                                    }`}>{r.severity}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="px-5 py-3 border-t border-[var(--border)] flex justify-end flex-shrink-0">
+                        <button
+                            onClick={() => setIsIssuesOpen(false)}
+                            className="px-4 py-1.5 text-sm bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 

@@ -16,8 +16,10 @@ import {
   getHardwarePdfExtraction,
   getDoorScheduleImport,
   upsertProjectHardwareFinal,
+  updateProjectHardwareFinal,
   getProjectHardwareFinal,
 } from '@/lib/db/hardware';
+import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 
 export const GET = withAuth(
@@ -93,6 +95,33 @@ export const POST = withAuth(
         unmatchedDoorCodes: mergeResult.unmatchedDoorCodes,
         pdfSetsWithNoDoors: mergeResult.pdfSetsWithNoDoors,
         warnings: mergeResult.warnings,
+      },
+    });
+  },
+);
+
+export const PUT = withAuth(
+  async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+    const projectId = params?.id as string;
+
+    let body: { finalJson: MergedHardwareSet[] };
+    try {
+      body = await req.json() as { finalJson: MergedHardwareSet[] };
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    }
+
+    if (!Array.isArray(body.finalJson)) {
+      return NextResponse.json({ error: 'Body must contain a "finalJson" array.' }, { status: 400 });
+    }
+
+    const { data, error } = await updateProjectHardwareFinal(projectId, body.finalJson);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({
+      data: {
+        id: data!.id,
+        updatedAt: data!.updatedAt,
       },
     });
   },

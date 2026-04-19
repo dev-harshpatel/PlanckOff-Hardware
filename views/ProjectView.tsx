@@ -7,11 +7,12 @@ import HardwareSetsManager from '../components/HardwareSetsManager';
 import DoorScheduleManager from '../components/DoorScheduleManager';
 import { generateReport } from '../utils/reportGenerator';
 // process... imports removed from direct use, but types might be needed
-import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight } from 'lucide-react';
+import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, ChevronUp, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
 import { captureTrainingExample } from '../services/mlOpsService';
-import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
+import { transformHardwareSets, transformDoors, transformFromFinalJson } from '../utils/hardwareTransformers';
+import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 import UploadConfirmationModal from '../components/UploadConfirmationModal';
 import { type ProcessingTask } from '../components/ProcessingIndicator';
 import ErrorModal from '../components/ErrorModal';
@@ -154,12 +155,57 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         isInitialMount.current = true;
     }, [project.id]);
 
+    // Helper: reload UI from the final JSON (single source of truth)
+    const loadFromFinalJson = useCallback(async (): Promise<boolean> => {
+        try {
+            const res = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
+            if (!res.ok) return false;
+            const json = await res.json() as { data?: { finalJson?: MergedHardwareSet[] } };
+            const finalJson = json.data?.finalJson;
+            if (!finalJson || finalJson.length === 0) return false;
+            const { hardwareSets: hs, doors: ds } = transformFromFinalJson(finalJson);
+            if (hs.length > 0) {
+                setHardwareSets(hs);
+                isInitialMount.current = true;
+            }
+            if (ds.length > 0) {
+                setDoors(ds);
+                isInitialMount.current = true;
+            }
+            return hs.length > 0 || ds.length > 0;
+        } catch {
+            return false;
+        }
+    }, [project.id]);
+
     // Fetch stored hardware PDF + door schedule from new tables and populate UI state
     useEffect(() => {
         let cancelled = false;
 
         async function loadProjectData() {
             try {
+                // 1. Try the final JSON first (single source of truth)
+                const mergeRes = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
+                if (!cancelled && mergeRes.ok) {
+                    const mergeJson = await mergeRes.json() as { data?: { finalJson?: MergedHardwareSet[] } };
+                    const finalJson = mergeJson.data?.finalJson;
+                    if (finalJson && finalJson.length > 0) {
+                        const { hardwareSets: hs, doors: ds } = transformFromFinalJson(finalJson);
+                        if (hs.length > 0) {
+                            setHardwareSets(hs);
+                            isInitialMount.current = true;
+                        }
+                        if (ds.length > 0) {
+                            setDoors(ds);
+                            isInitialMount.current = true;
+                        }
+                        return; // loaded from final JSON — no need for fallback
+                    }
+                }
+
+                if (cancelled) return;
+
+                // 2. Fallback: fetch separate PDF + door schedule tables
                 const [hwRes, dsRes] = await Promise.all([
                     fetch(`/api/projects/${project.id}/hardware-pdf`, { credentials: 'include' }),
                     fetch(`/api/projects/${project.id}/door-schedule`, { credentials: 'include' }),
@@ -174,16 +220,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     ? transformHardwareSets(hwJson.data.extractedJson)
                     : [];
 
-                const doors = dsJson?.data?.scheduleJson
+                const loadedDoors = dsJson?.data?.scheduleJson
                     ? transformDoors(dsJson.data.scheduleJson, sets)
                     : [];
 
                 if (sets.length > 0) {
                     setHardwareSets(sets);
-                    isInitialMount.current = true; // prevent auto-save on hydration
+                    isInitialMount.current = true;
                 }
-                if (doors.length > 0) {
-                    setDoors(doors);
+                if (loadedDoors.length > 0) {
+                    setDoors(loadedDoors);
                     isInitialMount.current = true;
                 }
             } catch {
@@ -193,6 +239,63 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
         loadProjectData();
         return () => { cancelled = true; };
+    }, [project.id]);
+
+    // Convert current UI state back to MergedHardwareSet[] and PUT to final JSON
+    const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[]): Promise<void> => {
+        try {
+            const finalJson: MergedHardwareSet[] = currentSets.map((set): MergedHardwareSet => {
+                const matchedDoors = currentDoors.filter(
+                    (d) =>
+                        d.assignedHardwareSet?.id === set.id ||
+                        d.providedHardwareSet?.toLowerCase() === set.name.toLowerCase(),
+                );
+
+                const mergedDoors: MergedDoor[] = matchedDoors.map((d): MergedDoor => ({
+                    doorTag: d.doorTag,
+                    hwSet: d.providedHardwareSet ?? '',
+                    matchedSetName: set.name,
+                    buildingArea: undefined,
+                    doorLocation: d.location,
+                    interiorExterior: d.interiorExterior,
+                    quantity: d.quantity,
+                    fireRating: d.fireRating,
+                    leafCount: d.leafCount !== undefined ? String(d.leafCount) : undefined,
+                    doorType: d.type,
+                    doorWidth: d.width ? `${Math.floor(d.width / 12)}'-${d.width % 12}"` : undefined,
+                    doorHeight: d.height ? `${Math.floor(d.height / 12)}'-${d.height % 12}"` : undefined,
+                    thickness: d.thickness ? String(d.thickness) : undefined,
+                    doorMaterial: d.doorMaterial,
+                    frameMaterial: d.frameMaterial as string | undefined,
+                    hardwarePrep: d.hardwarePrep,
+                    excludeReason: d.excludeReason,
+                    // sections may carry raw Excel column name keys — cast through unknown
+                    sections: d.sections as unknown as MergedDoor['sections'],
+                }));
+
+                return {
+                    setName: set.name,
+                    hardwareItems: set.items.map((item) => ({
+                        qty: item.quantity,
+                        item: item.name,
+                        manufacturer: item.manufacturer ?? '',
+                        description: item.description ?? '',
+                        finish: item.finish ?? '',
+                    })),
+                    notes: set.description ?? '',
+                    doors: mergedDoors,
+                };
+            });
+
+            await fetch(`/api/projects/${project.id}/hardware-merge`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ finalJson }),
+            });
+        } catch (err) {
+            console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
+        }
     }, [project.id]);
 
     const performSave = useCallback(() => {
@@ -209,6 +312,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 });
             }
 
+            // Persist edits back to the final JSON (fire-and-forget)
+            saveToFinalJson(hardwareSets, doors).catch(() => {/* already logged inside */});
+
             setSaveStatus('saved');
             setTimeout(() => {
                 setSaveStatus(currentStatus => currentStatus === 'saved' ? 'idle' : currentStatus);
@@ -217,7 +323,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             console.error("Auto-save failed:", e);
             setSaveStatus('error');
         }
-    }, [project, hardwareSets, doors, onProjectUpdate]);
+    }, [project, hardwareSets, doors, onProjectUpdate, saveToFinalJson]);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -249,6 +355,17 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
     const [doorUploadFile, setDoorUploadFile] = useState<File | null>(null);
     const [isDoorUploadModalOpen, setIsDoorUploadModalOpen] = useState(false);
+
+    // Combined upload (Excel + PDF together)
+    const [isCombinedUploadOpen, setIsCombinedUploadOpen] = useState(false);
+    const [isCombinedMinimized, setIsCombinedMinimized] = useState(false);
+    const [combinedExcelFile, setCombinedExcelFile] = useState<File | null>(null);
+    const [combinedPdfFile, setCombinedPdfFile] = useState<File | null>(null);
+    const [isCombinedProcessing, setIsCombinedProcessing] = useState(false);
+    const [combinedProgress, setCombinedProgress] = useState(0);
+    const [combinedCurrentStep, setCombinedCurrentStep] = useState('');
+    const [combinedLogs, setCombinedLogs] = useState<{ level: 'info' | 'success' | 'warn' | 'error'; msg: string }[]>([]);
+    const logsEndRef = useRef<HTMLDivElement>(null);
 
     // Legacy errors
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -326,6 +443,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             // Run merge (no-op if door schedule not yet uploaded)
             updateProcessingTask(taskId, { stage: 'Merging with door schedule…', progress: 92 });
             const mergeStats = await runHardwareMerge();
+
+            // Reload from final JSON if merge succeeded
+            if (mergeStats) {
+                await loadFromFinalJson();
+            }
 
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
             setTimeout(() => removeProcessingTask(taskId), 2000);
@@ -406,6 +528,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             updateProcessingTask(taskId, { stage: 'Merging with hardware sets…', progress: 92 });
             const mergeStats = await runHardwareMerge();
 
+            // Reload from final JSON if merge succeeded
+            if (mergeStats) {
+                await loadFromFinalJson();
+            }
+
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
             setTimeout(() => removeProcessingTask(taskId), 2000);
 
@@ -443,6 +570,122 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setIsDoorUploadModalOpen(false);
         setDoorUploadFile(null);
         if (file) processDoorSchedule(file);
+    };
+
+    const addLog = useCallback((level: 'info' | 'success' | 'warn' | 'error', msg: string) => {
+        setCombinedLogs(prev => [...prev, { level, msg }]);
+        // Auto-scroll handled by useEffect watching combinedLogs
+    }, []);
+
+    useEffect(() => {
+        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [combinedLogs]);
+
+    const processCombinedUpload = async (excelFile: File, pdfFile: File) => {
+        setIsCombinedProcessing(true);
+        setCombinedProgress(0);
+        setCombinedLogs([]);
+
+        const step = (msg: string, progress: number) => {
+            setCombinedCurrentStep(msg);
+            setCombinedProgress(progress);
+            addLog('info', msg);
+        };
+
+        try {
+            step(`Reading "${excelFile.name}" (${(excelFile.size / 1024).toFixed(0)} KB)…`, 5);
+            await new Promise(r => setTimeout(r, 200));
+
+            step(`Reading "${pdfFile.name}" (${(pdfFile.size / 1024).toFixed(0)} KB)…`, 10);
+            await new Promise(r => setTimeout(r, 200));
+
+            step('Uploading files to server…', 15);
+
+            const form = new FormData();
+            form.append('excel', excelFile);
+            form.append('pdf', pdfFile);
+
+            // Simulate the long PDF AI step with timed log updates
+            const pdfProgressTimer = setInterval(() => {
+                setCombinedProgress(prev => {
+                    if (prev >= 70) { clearInterval(pdfProgressTimer); return prev; }
+                    const next = prev + 3;
+                    if (next === 20) { addLog('info', 'Parsing door schedule columns and rows…'); setCombinedCurrentStep('Parsing door schedule…'); }
+                    if (next === 30) { addLog('success', `Door schedule parsed — found rows.`); addLog('info', 'Sending hardware PDF to AI (Gemini)…'); setCombinedCurrentStep('AI reading hardware PDF…'); }
+                    if (next === 45) { addLog('info', 'AI extracting hardware sets and items…'); }
+                    if (next === 60) { addLog('info', 'AI processing hardware specifications…'); }
+                    return next;
+                });
+            }, 800);
+
+            const res = await fetch(`/api/projects/${project.id}/process`, {
+                method: 'POST',
+                credentials: 'include',
+                body: form,
+            });
+
+            clearInterval(pdfProgressTimer);
+
+            const json = await res.json() as {
+                data?: {
+                    setCount: number;
+                    matchedDoorCount: number;
+                    unmatchedDoorCount: number;
+                    unmatchedDoorCodes: string[];
+                    pdfSetsWithNoDoors: string[];
+                    warnings: string[];
+                    rowCount: number;
+                    itemCount: number;
+                };
+                error?: string;
+            };
+
+            if (!res.ok) throw new Error(json.error ?? 'Processing failed.');
+
+            const { setCount, matchedDoorCount, unmatchedDoorCount, unmatchedDoorCodes, pdfSetsWithNoDoors, rowCount, itemCount, warnings } = json.data!;
+
+            addLog('success', `Door schedule: ${rowCount} door rows parsed from Excel.`);
+            addLog('success', `Hardware PDF: ${setCount} sets, ${itemCount} items extracted by AI.`);
+
+            step('Matching doors to hardware sets…', 80);
+            await new Promise(r => setTimeout(r, 150));
+
+            addLog('success', `${matchedDoorCount} doors matched to hardware sets.`);
+            if (unmatchedDoorCount > 0) {
+                addLog('warn', `${unmatchedDoorCount} doors unmatched: ${unmatchedDoorCodes.slice(0, 5).join(', ')}${unmatchedDoorCodes.length > 5 ? '…' : ''}`);
+            }
+            if (pdfSetsWithNoDoors.length > 0) {
+                addLog('warn', `${pdfSetsWithNoDoors.length} PDF set(s) have no matching doors.`);
+            }
+            warnings.forEach(w => addLog('warn', w));
+
+            step('Saving final data to database…', 88);
+            await new Promise(r => setTimeout(r, 150));
+            addLog('success', 'Final JSON saved to database.');
+
+            step('Populating project view…', 94);
+            await loadFromFinalJson();
+
+            setCombinedProgress(100);
+            setCombinedCurrentStep('Complete');
+            addLog('success', `Done! Project data loaded. ${matchedDoorCount}/${rowCount} doors linked across ${setCount} sets.`);
+
+            addToast({
+                type: 'success',
+                message: `Processed ${rowCount} doors and ${setCount} sets. ${matchedDoorCount} doors linked.`,
+            });
+
+            // Warnings are already shown in the logs panel — no need for ErrorModal
+
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            addLog('error', `Failed: ${msg}`);
+            setCombinedCurrentStep('Failed');
+            setCombinedProgress(0);
+            addToast({ type: 'error', message: `Processing failed: ${msg}` });
+        } finally {
+            setIsCombinedProcessing(false);
+        }
     };
 
     const handleSaveSet = (set: HardwareSet) => {
@@ -611,8 +854,17 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         </button>
                     </div>
 
-                    {/* Right — save status */}
-                    <div className="flex justify-end min-w-[90px]">
+                    {/* Right — process files button + save status */}
+                    <div className="flex items-center gap-3 justify-end min-w-[90px]">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsCombinedUploadOpen(true)}
+                            className="gap-1.5 text-[var(--text-muted)]"
+                        >
+                            <Upload className="h-4 w-4" />
+                            <span className="hidden md:inline">Process Files</span>
+                        </Button>
                         <SaveStatusIndicator status={saveStatus} onRetry={performSave} />
                     </div>
 
@@ -687,6 +939,216 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     onUpdate={handleElevationUpdate}
                     onClose={() => setIsElevationManagerOpen(false)}
                 />
+            )}
+
+            {/* Combined Upload Modal — full overlay (hidden when minimized) */}
+            {isCombinedUploadOpen && !isCombinedMinimized && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+                            <div className="flex items-center gap-2">
+                                <GitMerge className="h-4 w-4 text-[var(--text-muted)]" />
+                                <h2 className="text-sm font-semibold text-[var(--text)]">
+                                    Process Door Schedule &amp; Hardware PDF
+                                </h2>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                {isCombinedProcessing && (
+                                    <button
+                                        onClick={() => setIsCombinedMinimized(true)}
+                                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"
+                                        aria-label="Minimize"
+                                        title="Minimize — processing continues in background"
+                                    >
+                                        <Minus className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        if (!isCombinedProcessing) {
+                                            setIsCombinedUploadOpen(false);
+                                            setCombinedExcelFile(null);
+                                            setCombinedPdfFile(null);
+                                            setCombinedLogs([]);
+                                            setCombinedProgress(0);
+                                            setCombinedCurrentStep('');
+                                        }
+                                    }}
+                                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    disabled={isCombinedProcessing}
+                                    aria-label="Close"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* File inputs */}
+                        <div className="px-5 py-4 flex flex-col gap-4 flex-shrink-0">
+                            <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-[var(--text-secondary)] flex items-center gap-1.5">
+                                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                                    Door Schedule (.xlsx)
+                                </span>
+                                <input
+                                    type="file"
+                                    accept=".xlsx"
+                                    disabled={isCombinedProcessing}
+                                    onChange={(e) => setCombinedExcelFile(e.target.files?.[0] ?? null)}
+                                    className="text-sm text-[var(--text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[var(--bg-muted)] file:text-[var(--text-secondary)] hover:file:bg-[var(--bg-subtle)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                {combinedExcelFile && (
+                                    <span className="text-xs text-[var(--text-muted)] truncate">{combinedExcelFile.name}</span>
+                                )}
+                            </label>
+
+                            <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-[var(--text-secondary)] flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5" />
+                                    Hardware PDF (.pdf)
+                                </span>
+                                <input
+                                    type="file"
+                                    accept=".pdf"
+                                    disabled={isCombinedProcessing}
+                                    onChange={(e) => setCombinedPdfFile(e.target.files?.[0] ?? null)}
+                                    className="text-sm text-[var(--text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[var(--bg-muted)] file:text-[var(--text-secondary)] hover:file:bg-[var(--bg-subtle)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                {combinedPdfFile && (
+                                    <span className="text-xs text-[var(--text-muted)] truncate">{combinedPdfFile.name}</span>
+                                )}
+                            </label>
+                        </div>
+
+                        {/* Progress bar + step label (shown while processing) */}
+                        {isCombinedProcessing && (
+                            <div className="px-5 pb-3 flex-shrink-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs text-[var(--text-muted)] truncate pr-2">{combinedCurrentStep}</span>
+                                    <span className="text-xs text-[var(--text-faint)] tabular-nums flex-shrink-0">{combinedProgress}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                        style={{ width: `${combinedProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Logs panel (shown once processing starts or logs exist) */}
+                        {combinedLogs.length > 0 && (
+                            <div className="mx-5 mb-3 flex-1 min-h-0 overflow-y-auto bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg p-3 font-mono text-xs space-y-1 max-h-52">
+                                {combinedLogs.map((log, i) => (
+                                    <div key={i} className={
+                                        log.level === 'success' ? 'text-green-600 dark:text-green-400' :
+                                        log.level === 'warn' ? 'text-amber-600 dark:text-amber-400' :
+                                        log.level === 'error' ? 'text-red-600 dark:text-red-400' :
+                                        'text-[var(--text-muted)]'
+                                    }>
+                                        {log.level === 'success' ? '✓ ' : log.level === 'warn' ? '⚠ ' : log.level === 'error' ? '✗ ' : '· '}
+                                        {log.msg}
+                                    </div>
+                                ))}
+                                <div ref={logsEndRef} />
+                            </div>
+                        )}
+
+                        {/* Footer */}
+                        <div className="px-5 py-4 border-t border-[var(--border)] flex items-center justify-end gap-2 flex-shrink-0">
+                            {combinedProgress === 100 && !isCombinedProcessing ? (
+                                <Button
+                                    size="sm"
+                                    onClick={() => {
+                                        setIsCombinedUploadOpen(false);
+                                        setCombinedExcelFile(null);
+                                        setCombinedPdfFile(null);
+                                        setCombinedLogs([]);
+                                        setCombinedProgress(0);
+                                        setCombinedCurrentStep('');
+                                    }}
+                                    className="gap-1.5"
+                                >
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Done
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setIsCombinedUploadOpen(false);
+                                            setCombinedExcelFile(null);
+                                            setCombinedPdfFile(null);
+                                            setCombinedLogs([]);
+                                            setCombinedProgress(0);
+                                            setCombinedCurrentStep('');
+                                        }}
+                                        disabled={isCombinedProcessing}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => {
+                                            if (combinedExcelFile && combinedPdfFile) {
+                                                processCombinedUpload(combinedExcelFile, combinedPdfFile);
+                                            }
+                                        }}
+                                        disabled={!combinedExcelFile || !combinedPdfFile || isCombinedProcessing}
+                                        className="gap-1.5"
+                                    >
+                                        {isCombinedProcessing ? (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Processing…
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="h-3.5 w-3.5" />
+                                                Process
+                                            </>
+                                        )}
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Minimized floating widget — shown when modal is minimized during processing */}
+            {isCombinedUploadOpen && isCombinedMinimized && (
+                <div className="fixed bottom-6 right-6 z-50">
+                    <button
+                        onClick={() => setIsCombinedMinimized(false)}
+                        className="flex items-center gap-3 bg-[var(--bg)] border border-[var(--border)] rounded-full shadow-lg px-4 py-2.5 hover:bg-[var(--bg-muted)] transition-colors group"
+                    >
+                        <div className="relative">
+                            {isCombinedProcessing ? (
+                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                            ) : combinedProgress === 100 ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            ) : (
+                                <Database className="h-4 w-4 text-[var(--text-muted)]" />
+                            )}
+                        </div>
+                        <div className="flex flex-col items-start min-w-0">
+                            <span className="text-xs font-medium text-[var(--text)] truncate max-w-[180px]">
+                                {combinedCurrentStep || 'Processing files…'}
+                            </span>
+                            <div className="w-full h-1 bg-[var(--bg-muted)] rounded-full mt-1 overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${combinedProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                        <ChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text)] flex-shrink-0" />
+                    </button>
+                </div>
             )}
         </main>
     );

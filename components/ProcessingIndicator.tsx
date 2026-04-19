@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 export interface ProcessingTask {
   id: string;
   fileName: string;
-  type: 'hardware-pdf' | 'door-schedule';
+  type: 'hardware-pdf' | 'door-schedule' | 'combined';
   stage: string;        // e.g. "Extracting text (page 4/8)…"
   progress: number;     // 0–100
 }

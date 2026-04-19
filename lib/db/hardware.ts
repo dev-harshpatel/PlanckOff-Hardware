@@ -150,6 +150,11 @@ export interface MergedDoor {
   hasDoorCloser?: boolean;
   comments?: string;
   excludeReason?: string;
+  sections?: {
+    door: Record<string, string | undefined>;
+    frame: Record<string, string | undefined>;
+    hardware: Record<string, string | undefined>;
+  };
 }
 
 /** One hardware set with its matched doors — the canonical merged shape. */
@@ -350,6 +355,26 @@ export async function upsertProjectHardwareFinal(
         },
         { onConflict: 'project_id' },
       )
+      .select()
+      .single();
+
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: toProjectHardwareFinal(data), error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function updateProjectHardwareFinal(
+  projectId: string,
+  finalJson: MergedHardwareSet[],
+): Promise<DbResult<ProjectHardwareFinal>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('project_hardware_finals')
+      .update({ final_json: finalJson })
+      .eq('project_id', projectId)
       .select()
       .single();
 

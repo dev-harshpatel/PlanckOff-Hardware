@@ -121,6 +121,7 @@ function toMergedDoor(row: DoorScheduleRow, matchedSetName: string): MergedDoor 
     hasDoorCloser: row.hasDoorCloser,
     comments: row.comments,
     excludeReason: row.excludeReason,
+    sections: row.sections,
   };
 }
 

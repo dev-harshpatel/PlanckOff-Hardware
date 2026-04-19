@@ -94,6 +94,7 @@ These are documented fully in `/architecture`. Short version:
 5. **Named exports only** — No `export default` for components.
 6. **Event handlers prefixed `handle*`** — `handleSave`, not `onSave` (except prop names).
 7. **Every constant in `constants/`** — No magic strings or numbers in components/services.
+8. **Dark mode is mandatory for ALL UI work** — Never use hardcoded Tailwind color classes (`bg-white`, `bg-gray-*`, `text-gray-*`, `border-gray-*`, `bg-red-50`, `bg-green-50`, etc.). Always use CSS custom property tokens: `bg-[var(--bg)]`, `bg-[var(--bg-muted)]`, `bg-[var(--bg-subtle)]`, `text-[var(--text)]`, `text-[var(--text-secondary)]`, `text-[var(--text-muted)]`, `border-[var(--border)]`. For semantic colors (success/warning/error) use Tailwind with explicit dark variants: e.g. `text-amber-600 dark:text-amber-400`. Violations must be fixed before completing any UI task.
 
 ---
 

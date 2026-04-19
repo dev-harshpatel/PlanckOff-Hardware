@@ -12,44 +12,44 @@ const ErrorModal: React.FC<ErrorModalProps> = ({ isOpen, onClose, title = "Uploa
 
     return (
         <div
-            className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4"
+            className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4"
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[80vh]"
+                className="bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[80vh]"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="p-4 border-b flex justify-between items-center bg-red-50 rounded-t-lg">
-                    <h2 className="text-lg font-bold text-red-800 flex items-center gap-2">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="p-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-muted)] rounded-t-lg">
+                    <h2 className="text-base font-semibold text-[var(--text)] flex items-center gap-2">
+                        <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         {title}
                     </h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto flex-1">
-                    <p className="text-sm text-gray-600 mb-4">
+                <div className="p-5 overflow-y-auto flex-1">
+                    <p className="text-xs text-[var(--text-muted)] mb-3">
                         The following items were skipped or flagged during processing:
                     </p>
-                    <ul className="space-y-2">
+                    <ul className="space-y-1.5">
                         {errors.map((err, idx) => (
-                            <li key={idx} className="bg-red-50 text-red-700 text-sm p-2 rounded border border-red-100 font-mono">
+                            <li key={idx} className="bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs p-2 rounded border border-amber-500/20 font-mono">
                                 • {err}
                             </li>
                         ))}
                     </ul>
                 </div>
 
-                <div className="p-4 border-t bg-gray-50 flex justify-end">
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-muted)] rounded-b-lg flex justify-end">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-100"
+                        className="px-4 py-1.5 bg-[var(--bg)] border border-[var(--border)] rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] transition-colors"
                     >
                         Dismiss
                     </button>
