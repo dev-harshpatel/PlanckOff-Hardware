@@ -112,11 +112,11 @@ const ResizablePanels: React.FC<ResizablePanelsProps> = ({
     return (
         <div
             ref={containerRef}
-            className="flex h-full w-full overflow-hidden"
+            className="flex h-full min-h-0 w-full overflow-hidden"
         >
             {/* Left Panel */}
             <div
-                className="overflow-auto"
+                className="h-full min-h-0 min-w-0 overflow-hidden"
                 style={{ width: `${splitRatio}%` }}
             >
                 {leftPanel}
@@ -124,13 +124,9 @@ const ResizablePanels: React.FC<ResizablePanelsProps> = ({
 
             {/* Draggable Divider */}
             <div
-                className={`
-          relative flex-shrink-0 w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize
-          transition-colors group
-          ${isDragging ? 'bg-blue-500' : ''}
-        `}
+                className={`relative flex-shrink-0 w-px cursor-col-resize transition-colors group ${isDragging ? 'bg-[var(--primary-ring)]' : 'bg-[var(--border)] hover:bg-[var(--primary-ring)]'}`}
                 onMouseDown={handleMouseDown}
-                onTouchStart={handleMouseDown}
+                onTouchStart={handleMouseDown as unknown as React.TouchEventHandler<HTMLDivElement>}
                 onKeyDown={handleKeyDown}
                 tabIndex={0}
                 role="separator"
@@ -139,9 +135,11 @@ const ResizablePanels: React.FC<ResizablePanelsProps> = ({
                 aria-valuemin={minLeftWidth}
                 aria-valuemax={maxLeftWidth}
             >
-                {/* Visual indicator */}
-                <div className="absolute inset-y-0 -left-1 -right-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-1 h-12 bg-blue-500 rounded-full shadow-lg" />
+                {/* Drag handle pill */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {[0,1,2,3,4].map(i => (
+                        <div key={i} className="w-0.5 h-0.5 rounded-full bg-[var(--primary-ring)]" />
+                    ))}
                 </div>
 
                 {/* Touch-friendly hit area */}
@@ -150,7 +148,7 @@ const ResizablePanels: React.FC<ResizablePanelsProps> = ({
 
             {/* Right Panel */}
             <div
-                className="overflow-auto"
+                className="h-full min-h-0 min-w-0 overflow-hidden"
                 style={{ width: `${100 - splitRatio}%` }}
             >
                 {rightPanel}

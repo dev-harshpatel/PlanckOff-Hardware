@@ -42,14 +42,14 @@ export default function LoginPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
       <div className="w-full max-w-md">
         {/* Logo / Branding */}
         <div className="flex flex-col items-center mb-8">
@@ -60,15 +60,15 @@ export default function LoginPage() {
             height={48}
             priority
           />
-          <p className="mt-3 text-sm text-gray-500">Hardware Estimating Platform</p>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">Hardware Estimating Platform</p>
         </div>
 
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Sign in to your account</h2>
+        <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-[var(--border)] p-8">
+          <h2 className="text-xl font-semibold text-[var(--text-secondary)] mb-6">Sign in to your account</h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Email address
               </label>
               <input
@@ -78,13 +78,13 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Password
               </label>
               <input
@@ -94,7 +94,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="••••••••"
               />
             </div>

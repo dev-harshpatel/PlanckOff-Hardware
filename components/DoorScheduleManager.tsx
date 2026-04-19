@@ -8,17 +8,21 @@ import ContextualProgressBar from './ContextualProgressBar';
 import { useBackgroundUpload } from '../contexts/BackgroundUploadContext';
 import ValidationReportModal from './ValidationReportModal';
 import Tooltip from './Tooltip';
-import { TableRowSkeleton } from './SkeletonLoader';
 import {
-    TableCellsIcon,
-    MagnifyingGlassIcon,
-    ArrowUpTrayIcon,
-    ExclamationTriangleIcon,
-    PlusIcon,
-    TrashIcon,
-    AdjustmentsHorizontalIcon,
-    XCircleIcon
-} from './icons';
+    Table2, Search, Upload, AlertTriangle, Plus, Trash2,
+    SlidersHorizontal, X, Loader2, Zap, Layers, ClipboardList,
+    ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, GripVertical, Filter,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+
+interface ActiveUploadTask {
+    fileName: string;
+    stage: string;
+    progress: number;
+}
 
 // Column Definition Helper
 interface ColumnDef {
@@ -31,65 +35,51 @@ interface ColumnDef {
     isCore?: boolean;
 }
 
-const DEFAULT_CORE_COLUMNS: ColumnDef[] = [
-    { key: 'doorTag', label: 'Tag', width: 'min-w-[80px]', type: 'text', isCore: true },
-    { key: 'location', label: 'Location', width: 'min-w-[100px]', type: 'text', isCore: true },
-    { key: 'quantity', label: 'Qty', width: 'w-16', type: 'number', align: 'center', isCore: true },
-    { key: 'width', label: 'Width (Ft)', width: 'w-24', type: 'number', align: 'center', isCore: true },
-    { key: 'height', label: 'Height (Ft)', width: 'w-24', type: 'number', align: 'center', isCore: true },
-    { key: 'thickness', label: 'Thk', width: 'w-16', type: 'number', align: 'center', isCore: true },
-    { key: 'fireRating', label: 'Rating', width: 'w-24', type: 'text', isCore: true },
-    { key: 'doorMaterial', label: 'Door Mat', width: 'min-w-[80px]', type: 'text', isCore: true },
-    { key: 'frameMaterial', label: 'Frame Mat', width: 'min-w-[80px]', type: 'text', isCore: true },
-    { key: 'hardwarePrep', label: 'HW Prep', width: 'min-w-[120px]', type: 'text', isCore: true },
-    { key: 'providedHardwareSet', label: 'Prov. Set', width: 'min-w-[100px]', type: 'text', isCore: true },
+// All columns exactly matching the Excel sheet fields.
+// Keys must match Door type properties and xlsxParser headerMappings.
+const ALL_AVAILABLE_COLUMNS: ColumnDef[] = [
+    { key: 'doorTag',               label: 'Door Tag',                width: 'min-w-[90px]',  type: 'text',   isCore: true },
+    { key: 'buildingTag',           label: 'Building Tag',            width: 'min-w-[100px]', type: 'text' },
+    { key: 'buildingLocation',      label: 'Building Location',       width: 'min-w-[130px]', type: 'text' },
+    { key: 'location',              label: 'Door Location',           width: 'min-w-[120px]', type: 'text',   isCore: true },
+    { key: 'quantity',              label: 'Quantity',                width: 'w-20',          type: 'number', align: 'center', isCore: true },
+    { key: 'handing',               label: 'Hand of Openings',        width: 'min-w-[120px]', type: 'text' },
+    { key: 'operation',             label: 'Door Operation',          width: 'min-w-[120px]', type: 'text' },
+    { key: 'leafCount',             label: 'Leaf Count',              width: 'w-20',          type: 'number', align: 'center' },
+    { key: 'interiorExterior',      label: 'Interior/Exterior',       width: 'min-w-[120px]', type: 'text' },
+    { key: 'excludeReason',         label: 'Exclude Reason',          width: 'min-w-[130px]', type: 'text' },
+    { key: 'width',                 label: 'Width',                   width: 'w-20',          type: 'number', align: 'center', isCore: true },
+    { key: 'height',                label: 'Height',                  width: 'w-20',          type: 'number', align: 'center', isCore: true },
+    { key: 'thickness',             label: 'Thickness',               width: 'w-20',          type: 'number', align: 'center', isCore: true },
+    { key: 'fireRating',            label: 'Fire Rating',             width: 'min-w-[100px]', type: 'text',   isCore: true },
+    { key: 'doorMaterial',          label: 'Door Material',           width: 'min-w-[120px]', type: 'text',   isCore: true },
+    { key: 'elevationTypeId',       label: 'Door Elevation Type',     width: 'min-w-[140px]', type: 'text' },
+    { key: 'doorCore',              label: 'Door Core',               width: 'min-w-[100px]', type: 'text' },
+    { key: 'doorFace',              label: 'Door Face',               width: 'min-w-[100px]', type: 'text' },
+    { key: 'doorEdge',              label: 'Door Edge',               width: 'min-w-[100px]', type: 'text' },
+    { key: 'doorGauge',             label: 'Door Guage',              width: 'min-w-[100px]', type: 'text' },
+    { key: 'doorFinish',            label: 'Door Finish',             width: 'min-w-[100px]', type: 'text' },
+    { key: 'stcRating',             label: 'STC Rating',              width: 'min-w-[90px]',  type: 'text' },
+    { key: 'undercut',              label: 'Door Undercut',           width: 'min-w-[100px]', type: 'text' },
+    { key: 'doorIncludeExclude',    label: 'Door Include/Exclude',    width: 'min-w-[140px]', type: 'text' },
+    { key: 'frameMaterial',         label: 'Frame Material',          width: 'min-w-[120px]', type: 'text',   isCore: true },
+    { key: 'wallType',              label: 'Wall Type',               width: 'min-w-[100px]', type: 'text' },
+    { key: 'throatThickness',       label: 'Throat Thickness',        width: 'min-w-[120px]', type: 'text' },
+    { key: 'frameAnchor',           label: 'Frame Anchor',            width: 'min-w-[110px]', type: 'text' },
+    { key: 'baseAnchor',            label: 'Base Anchor',             width: 'min-w-[100px]', type: 'text' },
+    { key: 'numberOfAnchors',       label: 'No of Anchor',            width: 'min-w-[100px]', type: 'text' },
+    { key: 'frameProfile',          label: 'Frame Profile',           width: 'min-w-[110px]', type: 'text' },
+    { key: 'frameElevationType',    label: 'Frame Elevation Type',    width: 'min-w-[150px]', type: 'text' },
+    { key: 'frameAssembly',         label: 'Frame Assembly',          width: 'min-w-[120px]', type: 'text' },
+    { key: 'frameGauge',            label: 'Frame Guage',             width: 'min-w-[100px]', type: 'text' },
+    { key: 'frameFinish',           label: 'Frame Finish',            width: 'min-w-[100px]', type: 'text' },
+    { key: 'prehung',               label: 'Prehung',                 width: 'min-w-[90px]',  type: 'text' },
+    { key: 'frameHead',             label: 'Frame Head',              width: 'min-w-[100px]', type: 'text' },
+    { key: 'casing',                label: 'Casing',                  width: 'min-w-[90px]',  type: 'text' },
+    { key: 'frameIncludeExclude',   label: 'Frame Include/Exclude',   width: 'min-w-[150px]', type: 'text' },
+    { key: 'providedHardwareSet',   label: 'Hardware Set',            width: 'min-w-[110px]', type: 'text',   isCore: true },
+    { key: 'hardwareIncludeExclude',label: 'Hardware Include/Exclude',width: 'min-w-[160px]', type: 'text' },
 ];
-
-
-const EXTENDED_CORE_COLUMNS: ColumnDef[] = [
-    { key: 'buildingTag', label: 'Bldg Tag', width: 'min-w-[80px]', type: 'text' },
-    { key: 'interiorExterior', label: 'Int/Ext', width: 'w-24', type: 'select', options: ['Interior', 'Exterior'] },
-    { key: 'leafCount', label: 'Leaves', width: 'w-16', type: 'number', align: 'center' },
-    { key: 'operation', label: 'Op.', width: 'w-20', type: 'text' },
-
-    // Phase 19: Door Handing
-    { key: 'handing', label: 'Handing', width: 'min-w-[80px]', type: 'select', options: ['LH', 'RH', 'LHR', 'RHR', 'LHRB', 'RHRB', 'N/A'] },
-
-    // Phase 19: Structured Material Fields
-    { key: 'doorCoreType', label: 'Core Type', width: 'min-w-[120px]', type: 'text' },
-    { key: 'doorFaceType', label: 'Face Type', width: 'min-w-[120px]', type: 'text' },
-    { key: 'doorFaceSpecies', label: 'Species', width: 'min-w-[100px]', type: 'text' },
-    { key: 'doorFaceGrade', label: 'Grade', width: 'min-w-[80px]', type: 'select', options: ['Premium', 'Custom', 'Standard', 'Economy'] },
-
-    // Phase 19: Finish System (keeping legacy doorFinish for compatibility)
-    { key: 'doorFinish', label: 'Finish (Legacy)', width: 'min-w-[100px]', type: 'text' },
-    { key: 'finishSystem.basePrep', label: 'Finish Base', width: 'min-w-[100px]', type: 'text' },
-    { key: 'finishSystem.finishType', label: 'Finish Type', width: 'min-w-[100px]', type: 'text' },
-    { key: 'finishSystem.manufacturer', label: 'Finish Mfr', width: 'min-w-[100px]', type: 'text' },
-
-    // Phase 19: Enhanced Fire Rating
-    { key: 'fireRatingLabel', label: 'Fire Label', width: 'min-w-[80px]', type: 'select', options: ['UL', 'WHI', 'Intertek', 'N/A'] },
-    { key: 'undercut', label: 'Undercut', width: 'min-w-[70px]', type: 'number' },
-
-    // Existing fields
-    { key: 'stcRating', label: 'STC', width: 'w-16', type: 'text' },
-    { key: 'doorFace', label: 'Dr Face (Legacy)', width: 'min-w-[80px]', type: 'text' },
-
-    // Phase 19: Enhanced Frame Fields
-    { key: 'frameGauge', label: 'Frm Gauge', width: 'min-w-[80px]', type: 'select', options: ['16 GA', '18 GA', '20 GA', '14 GA', '12 GA', 'N/A'] },
-    { key: 'frameProfile', label: 'Frm Profile', width: 'min-w-[120px]', type: 'text' },
-    { key: 'frameType', label: 'Frm Type', width: 'min-w-[80px]', type: 'text' },
-    { key: 'wallType', label: 'Wall Type', width: 'min-w-[80px]', type: 'text' },
-    { key: 'jambDepth', label: 'Jamb Dp', width: 'min-w-[60px]', type: 'text' },
-
-    // Phase 19: Manufacturer Tracking
-    { key: 'doorManufacturer', label: 'Dr Mfr', width: 'min-w-[100px]', type: 'text' },
-    { key: 'frameManufacturer', label: 'Frm Mfr', width: 'min-w-[100px]', type: 'text' },
-
-    { key: 'elevationTypeId', label: 'Elev Code', width: 'w-20', type: 'text' }, // Treated as text/select special case
-];
-
-const ALL_AVAILABLE_COLUMNS = [...DEFAULT_CORE_COLUMNS, ...EXTENDED_CORE_COLUMNS];
 
 interface CustomColumn {
     id: string;
@@ -109,39 +99,24 @@ interface DoorScheduleManagerProps {
     elevationTypes?: ElevationType[];
     onManageElevations?: () => void;
     addToast: (toast: Omit<Toast, 'id'>) => void;
+    activeTask?: ActiveUploadTask;
 }
 
 type StatusFilter = 'all' | 'pending' | 'complete' | 'error';
 
-const LoadingSpinner: React.FC<{ inButton?: boolean }> = ({ inButton = true }) => {
-    const size = inButton ? "h-5 w-5" : "h-8 w-8";
-    return (
-        <svg className={`animate-spin ${size} ${inButton ? 'text-white' : 'text-primary-600'}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-    );
-};
-
-const ConfidenceIndicator: React.FC<{ confidence?: 'high' | 'medium' | 'low'; reason?: string }> = ({ confidence, reason }) => {
+const ConfidenceIndicator: React.FC<{ confidence?: 'high' | 'medium' | 'low'; reason?: string }> = ({ confidence }) => {
     if (!confidence) return null;
 
     const config = {
-        high: { color: 'bg-green-500', label: 'High Confidence' },
-        medium: { color: 'bg-yellow-400', label: 'Medium Confidence' },
-        low: { color: 'bg-red-500', label: 'Low Confidence' }
+        high: { color: 'bg-green-500' },
+        medium: { color: 'bg-yellow-400' },
+        low: { color: 'bg-red-500' }
     };
 
-    const { color, label } = config[confidence];
-    const tooltipText = `${label}: ${reason || 'No reason provided'}`;
+    const { color } = config[confidence];
 
     return (
-        <div className="relative group inline-block">
-            <span className={`block w-2.5 h-2.5 rounded-full ${color}`}></span>
-            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max max-w-xs bg-gray-800 text-white text-xs rounded py-1 px-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {tooltipText}
-            </div>
-        </div>
+        <span className={`block w-2.5 h-2.5 rounded-full ${color}`}></span>
     );
 };
 
@@ -163,7 +138,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     onProvidedSetChange,
     elevationTypes = [],
     onManageElevations,
-    addToast
+    addToast,
+    activeTask,
 }) => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [doorMaterialFilter, setDoorMaterialFilter] = useState<string>('all');
@@ -184,7 +160,10 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
     // Selection State
     // Column Management State
-    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_CORE_COLUMNS.map(c => c.key)));
+    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(ALL_AVAILABLE_COLUMNS.filter(c => c.isCore).map(c => c.key)));
+    const [columnOrder, setColumnOrder] = useState<string[]>(() => ALL_AVAILABLE_COLUMNS.map(c => c.key));
+    const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+    const dragSourceKey = useRef<string | null>(null);
     const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
     const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false);
     const [newColumnName, setNewColumnName] = useState('');
@@ -192,6 +171,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [reportModalOpen, setReportModalOpen] = useState(false);
+    const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+    const filterMenuRef = useRef<HTMLDivElement>(null);
 
     // Background Context for errors
     const { tasks } = useBackgroundUpload();
@@ -217,6 +198,18 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             inputRef.current.focus();
         }
     }, [editingCell]);
+
+    // Close filter menu on outside click
+    useEffect(() => {
+        if (!isFilterMenuOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+                setIsFilterMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [isFilterMenuOpen]);
 
     const statusCounts = useMemo(() => {
         if (!Array.isArray(doors)) return { pending: 0, complete: 0, error: 0 };
@@ -249,7 +242,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     const filteredAndSortedDoors = useMemo(() => {
         let result = doors;
 
-        // ... filters ...
         // Filter by Status
         if (statusFilter !== 'all') {
             result = result.filter(door => door.status === statusFilter);
@@ -399,7 +391,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             doorMaterial: '',
             frameMaterial: '',
             hardwarePrep: '',
-            schedule: 'Manual',
             type: '',
             status: 'pending'
         };
@@ -464,7 +455,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             if (onProvidedSetChange) {
                 onProvidedSetChange(editingCell.id, String(tempValue));
             }
-            // Also update the local door state immediately to reflect UI change, 
+            // Also update the local door state immediately to reflect UI change,
             // though parent logic will likely overwrite it properly
             onDoorsUpdate(prev => prev.map(d => {
                 if (d.id === editingCell.id) {
@@ -481,13 +472,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         onDoorsUpdate(prev => prev.map(d => {
             if (d.id === editingCell.id) {
                 let newVal = tempValue;
-                const isCustom = editingCell.field.toString().startsWith('custom_'); // Convention or check list
+                const isCustom = editingCell.field.toString().startsWith('custom_');
 
-                // Parse numbers if applicable
-                // Simplified check: if existing value is number, or column def says number
-                // For now, relies on provided state
-
-                // Logic for update
                 if (isCustom || !Object.keys(d).includes(editingCell.field as string)) {
                     // Update custom field
                     const currentCustom = d.customFields || {};
@@ -531,22 +517,34 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         label: string;
         count: number;
         tooltip: string;
-    }> = ({ filter, label, count, tooltip }) => (
-        <button
-            onClick={() => setStatusFilter(filter)}
-            title={tooltip}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-2 ${statusFilter === filter
-                ? 'bg-primary-600 text-white font-semibold shadow'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-        >
-            {label}
-            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${statusFilter === filter ? 'bg-white text-primary-600' : 'bg-gray-400 text-white'
-                }`}>
-                {count}
-            </span>
-        </button>
-    );
+    }> = ({ filter, label, count, tooltip }) => {
+        const isActive = statusFilter === filter;
+        const edgeRadiusClass =
+            filter === 'all'
+                ? 'rounded-l-md'
+                : filter === 'error'
+                    ? 'rounded-r-md'
+                    : '';
+        const dotColors: Record<StatusFilter, string> = {
+            all:      '',
+            pending:  'bg-amber-400',
+            complete: 'bg-green-500',
+            error:    'bg-red-500',
+        };
+        return (
+            <button
+                onClick={() => setStatusFilter(filter)}
+                title={tooltip}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${edgeRadiusClass} ${isActive ? 'bg-[var(--primary-bg)] text-[var(--primary-text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-subtle)]'}`}
+            >
+                {filter !== 'all' && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColors[filter]}`} />}
+                {label}
+                <span className={`text-[10px] font-bold tabular-nums ${isActive ? 'text-[var(--primary-text-muted)]' : 'text-[var(--text-faint)]'}`}>
+                    {count}
+                </span>
+            </button>
+        );
+    };
 
     const renderCell = (door: Door, colKey: string, type: 'text' | 'number' | 'select' = 'text', options?: string[]) => {
         const isEditing = editingCell?.id === door.id && editingCell?.field === colKey;
@@ -572,7 +570,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
         if (isEditing) {
             if (type === 'select' && options) {
-                // ... select render ...
                 return (
                     <select
                         ref={inputRef as any}
@@ -580,7 +577,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         onChange={(e) => setTempValue(e.target.value)}
                         onBlur={saveEdit}
                         onKeyDown={handleKeyDown}
-                        className="w-full p-1 text-sm border-2 border-blue-500 rounded focus:outline-none shadow-sm bg-white"
+                        className="w-full p-1 text-sm border-2 border-[var(--primary-ring)] rounded focus:outline-none shadow-sm bg-[var(--bg)]"
                         autoFocus
                     >
                         <option value="">Select...</option>
@@ -598,18 +595,17 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     onChange={(e) => setTempValue(e.target.value)}
                     onBlur={saveEdit}
                     onKeyDown={handleKeyDown}
-                    className="w-full p-1 text-sm border-2 border-blue-500 rounded focus:outline-none shadow-sm"
+                    className="w-full p-1 text-sm border-2 border-[var(--primary-ring)] rounded focus:outline-none shadow-sm"
                     autoFocus
                 />
             );
         }
 
-        const isEditable = typeof value !== 'object'; // Simple check
+        const isEditable = typeof value !== 'object';
 
         let displayContent: React.ReactNode;
         if (value !== undefined && value !== null && value !== '') {
             if (typeof value === 'object') {
-                // Hardware Set
                 displayContent = (value as HardwareSet).name || '[Object]';
             } else if (colKey === 'width' || colKey === 'height') {
                 displayContent = formatDimension(value as number);
@@ -618,27 +614,14 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             }
         } else {
             if (colKey === 'width' || colKey === 'height') {
-                displayContent = <span className="text-gray-400 text-xs">0'-0"</span>;
+                displayContent = <span className="text-[var(--text-faint)] text-xs">0'-0"</span>;
             } else {
-                displayContent = <span className="text-gray-300 text-xs">-</span>;
+                displayContent = <span className="text-[var(--text-faint)] text-xs">—</span>;
             }
         }
 
         return (
-            <div
-                onClick={isEditable ? () => startEditing(door, colKey as keyof Door) : undefined}
-                onKeyDown={isEditable ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        startEditing(door, colKey as keyof Door);
-                    }
-                } : undefined}
-                tabIndex={isEditable ? 0 : undefined}
-                role={isEditable ? 'button' : undefined}
-                aria-label={isEditable ? `Edit ${String(colKey)}: ${value || 'Empty'}` : undefined}
-                className={`${isEditable ? 'cursor-text hover:bg-gray-100 focus:ring-2 focus:ring-inset focus:ring-primary-500' : 'cursor-default'} p-1 rounded min-h-[24px] flex items-center transition-colors truncate outline-none`}
-                title={isEditable ? `Edit ${String(colKey)}` : undefined}
-            >
+            <div className="p-1 rounded min-h-[24px] flex items-center truncate text-[var(--text-secondary)]">
                 {displayContent}
             </div>
         );
@@ -646,17 +629,57 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
     const SortIcon: React.FC<{ columnKey: keyof Door }> = ({ columnKey }) => {
         if (sortConfig?.key !== columnKey) {
-            return <svg className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100" fill="currentColor" viewBox="0 0 20 20"><path d="M5 10l5-5 5 5H5z" /><path d="M5 14l5 5 5-5H5z" /></svg>;
+            return <ChevronsUpDown className="w-3 h-3 text-[var(--text-faint)] opacity-0 group-hover:opacity-100" />;
         }
-        return sortConfig.direction === 'asc' ? (
-            <svg className="w-3 h-3 text-primary-600" fill="currentColor" viewBox="0 0 20 20"><path d="M5 14l5-5 5 5H5z" /></svg>
-        ) : (
-            <svg className="w-3 h-3 text-primary-600" fill="currentColor" viewBox="0 0 20 20"><path d="M5 6l5 5 5-5H5z" /></svg>
-        );
+        return sortConfig.direction === 'asc'
+            ? <ChevronUp className="w-3 h-3 text-[var(--primary-text-muted)]" />
+            : <ChevronDown className="w-3 h-3 text-[var(--primary-text-muted)]" />;
     };
 
     const handleElevationChange = (doorId: string, typeId: string) => {
         onDoorsUpdate(prev => prev.map(d => d.id === doorId ? { ...d, elevationTypeId: typeId } : d));
+    };
+
+    // Columns in current drag order
+    const orderedColumns = useMemo(() => {
+        const colMap = new Map(ALL_AVAILABLE_COLUMNS.map(c => [c.key, c]));
+        return columnOrder.map(key => colMap.get(key)).filter((c): c is ColumnDef => c !== undefined);
+    }, [columnOrder]);
+
+    // Drag-to-reorder handlers
+    const handleColDragStart = (e: React.DragEvent<HTMLTableCellElement>, colKey: string) => {
+        dragSourceKey.current = colKey;
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleColDragOver = (e: React.DragEvent<HTMLTableCellElement>, colKey: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragSourceKey.current && dragSourceKey.current !== colKey) {
+            setDragOverKey(colKey);
+        }
+    };
+
+    const handleColDrop = (e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+        e.preventDefault();
+        const sourceKey = dragSourceKey.current;
+        if (!sourceKey || sourceKey === targetKey) { setDragOverKey(null); return; }
+        setColumnOrder(prev => {
+            const next = [...prev];
+            const from = next.indexOf(sourceKey);
+            const to = next.indexOf(targetKey);
+            if (from === -1 || to === -1) return prev;
+            next.splice(from, 1);
+            next.splice(to, 0, sourceKey);
+            return next;
+        });
+        dragSourceKey.current = null;
+        setDragOverKey(null);
+    };
+
+    const handleColDragEnd = () => {
+        dragSourceKey.current = null;
+        setDragOverKey(null);
     };
 
     const renderHeader = (col: ColumnDef | CustomColumn) => {
@@ -667,11 +690,29 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         const label = col.label;
         const widthClass = 'width' in col ? col.width : 'min-w-[100px]';
         const align = 'align' in col ? col.align : 'left';
+        const isStdCol = 'key' in col;
+        const isDragOver = dragOverKey === colKey;
 
         return (
-            <th key={colKey} scope="col" className={`px-2 py-3 border-b border-gray-200 ${widthClass} cursor-pointer hover:bg-gray-200 group select-none`} onClick={() => handleSort(colKey as keyof Door)} title={`Sort by ${label}`}>
+            <th
+                key={colKey}
+                scope="col"
+                draggable={isStdCol}
+                onDragStart={isStdCol ? (e) => handleColDragStart(e, colKey) : undefined}
+                onDragOver={isStdCol ? (e) => handleColDragOver(e, colKey) : undefined}
+                onDrop={isStdCol ? (e) => handleColDrop(e, colKey) : undefined}
+                onDragEnd={isStdCol ? handleColDragEnd : undefined}
+                onClick={() => handleSort(colKey as keyof Door)}
+                className={`px-2 py-2.5 border-b border-[var(--primary-border)] ${widthClass} hover:bg-[var(--primary-bg-hover)] group select-none transition-colors
+                    ${isStdCol ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
+                    ${isDragOver ? 'border-l-2 border-[var(--primary-ring)] bg-[var(--primary-bg-hover)]' : 'border-l border-transparent'}`}
+                title={isStdCol ? `Drag to reorder · Click to sort` : `Sort by ${label}`}
+            >
                 <div className={`flex items-center gap-1 ${align === 'center' ? 'justify-center' : 'justify-start'}`}>
-                    <span className="truncate">{label}</span>
+                    {isStdCol && (
+                        <GripVertical className="w-3 h-3 text-[var(--primary-border)] opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
+                    )}
+                    <span className="truncate text-xs font-semibold text-[var(--primary-text)] uppercase tracking-wide">{label}</span>
                     <SortIcon columnKey={colKey as keyof Door} />
                 </div>
             </th>
@@ -704,7 +745,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         });
         setNewColumnName('');
         addToast({ type: 'success', message: `Column "${newColumnName}" added` });
-        // Keep modal open
     };
 
     const removeCustomColumn = (id: string) => {
@@ -717,55 +757,62 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-md relative flex flex-col h-full min-h-[600px] overflow-hidden">
-            {/* Column Customizer Modal (Simple Overlay) */}
+        <div className="bg-[var(--bg)] rounded-xl shadow-sm border border-[var(--border)] relative flex flex-col h-full">
+            {/* Column Customizer Dropdown */}
             {isColumnCustomizerOpen && (
-                <div className="absolute top-16 right-6 z-50 w-80 bg-white rounded-lg shadow-xl border border-gray-200 flex flex-col max-h-[80%] animate-scaleIn">
-                    <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-lg">
-                        <h3 className="font-bold text-gray-700">Customize Columns</h3>
-                        <button onClick={() => setIsColumnCustomizerOpen(false)} className="text-gray-400 hover:text-gray-600"><XCircleIcon className="w-5 h-5" /></button>
+                <div className="absolute top-14 right-4 z-50 w-80 bg-[var(--bg)] rounded-lg shadow-xl border border-[var(--border)] flex flex-col max-h-[480px] animate-scaleIn">
+                    <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex justify-between items-center">
+                        <h3 className="text-sm font-semibold text-[var(--text)]">Customize Columns</h3>
+                        <button onClick={() => setIsColumnCustomizerOpen(false)} className="text-[var(--text-faint)] hover:text-[var(--text-muted)] p-0.5 rounded">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
-                    <div className="p-3 border-b border-gray-100 bg-gray-50">
+                    <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
                         <div className="flex gap-2">
                             <input
                                 type="text"
-                                placeholder="New Column Name"
-                                className="flex-1 text-sm p-1.5 border rounded"
+                                placeholder="New column name"
+                                className="flex-1 text-sm px-2.5 py-1.5 border border-[var(--border-strong)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                                 value={newColumnName}
                                 onChange={e => setNewColumnName(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && addCustomColumn()}
                             />
-                            <button onClick={addCustomColumn} type="button" className="bg-primary-600 text-white px-3 text-sm rounded font-medium hover:bg-primary-700">Add</button>
+                            <Button onClick={addCustomColumn} size="sm" className="h-8">Add</Button>
                         </div>
                     </div>
                     <div className="overflow-y-auto p-2 flex-1">
-                        <p className="text-xs font-bold text-gray-500 uppercase px-2 py-1">Standard Columns</p>
+                        <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider px-2 py-1.5">Standard Columns</p>
                         {ALL_AVAILABLE_COLUMNS.map(col => (
-                            <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                            <label key={col.key} className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-[var(--bg-subtle)] rounded cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={visibleColumns.has(col.key)}
                                     onChange={() => toggleColumn(col.key)}
-                                    className="rounded text-primary-600 focus:ring-primary-500"
+                                    className="rounded text-[var(--primary-action)] focus:ring-[var(--primary-ring)] w-3.5 h-3.5"
                                 />
-                                <span className="text-sm text-gray-700">{col.label}</span>
+                                <span className="text-sm text-[var(--text-secondary)]">{col.label}</span>
                             </label>
                         ))}
                         {customColumns.length > 0 && (
                             <>
-                                <p className="text-xs font-bold text-gray-500 uppercase px-2 py-1 mt-2">Custom Columns</p>
+                                <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider px-2 py-1.5 mt-2">Custom Columns</p>
                                 {customColumns.map(col => (
-                                    <div key={col.id} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-50 rounded">
-                                        <label className="flex items-center gap-2 cursor-pointer flex-1">
+                                    <div key={col.id} className="flex items-center justify-between px-2 py-1.5 hover:bg-[var(--bg-subtle)] rounded">
+                                        <label className="flex items-center gap-2.5 cursor-pointer flex-1">
                                             <input
                                                 type="checkbox"
                                                 checked={visibleColumns.has(col.id)}
                                                 onChange={() => toggleColumn(col.id)}
-                                                className="rounded text-primary-600 focus:ring-primary-500"
+                                                className="rounded text-[var(--primary-action)] focus:ring-[var(--primary-ring)] w-3.5 h-3.5"
                                             />
-                                            <span className="text-sm text-gray-700">{col.label}</span>
+                                            <span className="text-sm text-[var(--text-secondary)]">{col.label}</span>
                                         </label>
-                                        <button onClick={() => removeCustomColumn(col.id)} className="text-red-400 hover:text-red-600"><TrashIcon className="w-3 h-3" /></button>
+                                        <button
+                                            onClick={() => removeCustomColumn(col.id)}
+                                            className="text-[var(--text-faint)] hover:text-red-500 p-1 rounded transition-colors"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
                                     </div>
                                 ))}
                             </>
@@ -776,31 +823,47 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
             <ContextualProgressBar type="door-schedule" />
 
-            {/* Enhanced Header with Gradient */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 border-b border-blue-800">
+            {/* Header */}
+            {activeTask ? (
+                <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] rounded-t-xl px-5 py-3.5 flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-2.5">
+                        {activeTask.progress >= 100 ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                            <Loader2 className="w-4 h-4 text-[var(--primary-text-muted)] animate-spin flex-shrink-0" />
+                        )}
+                        <span className="text-sm font-medium text-[var(--text)] truncate">{activeTask.fileName}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-[var(--primary-text-muted)] truncate flex-1">{activeTask.stage}</span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <Progress value={activeTask.progress} className="w-24 h-1 bg-[var(--primary-bg-hover)]" />
+                            <span className="text-[10px] text-[var(--text-faint)] w-7 text-right">{activeTask.progress}%</span>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+            <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] rounded-t-xl px-5 py-3 flex-shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                            <TableCellsIcon className="w-7 h-7 text-white" />
+                        <div className="bg-[var(--primary-bg-hover)] p-2 rounded-lg">
+                            <Table2 className="w-4 h-4 text-[var(--primary-text-muted)]" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white">Door Schedule</h2>
-                            <p className="text-blue-100 text-sm mt-0.5">
-                                {filteredAndSortedDoors.length} {filteredAndSortedDoors.length === 1 ? 'Door' : 'Doors'} • {statusCounts.complete || 0} Assigned
+                            <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule</h2>
+                            <p className="text-[var(--primary-text-muted)] text-xs mt-0.5">
+                                {filteredAndSortedDoors.length} {filteredAndSortedDoors.length === 1 ? 'door' : 'doors'} · {statusCounts.complete || 0} assigned
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         {onManageElevations && (
                             <Tooltip content="Manage Elevation Types">
                                 <button
                                     onClick={onManageElevations}
-                                    className="flex items-center gap-2 px-3 py-2.5 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white rounded-lg hover:bg-white/20 hover:scale-105 active:scale-95 text-sm font-medium transition-all shadow-lg hover:shadow-xl"
+                                    className="p-1.5 text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors bg-[var(--bg)]"
                                 >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    Manage Elevations
+                                    <Layers className="w-3.5 h-3.5" />
                                 </button>
                             </Tooltip>
                         )}
@@ -808,231 +871,310 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             <button
                                 onClick={onUploadClick}
                                 disabled={isLoading || isAssigningBatch}
-                                className="px-4 py-2.5 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white rounded-lg hover:bg-white/20 hover:scale-105 active:scale-95 text-sm font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-wait transition-all shadow-lg hover:shadow-xl"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isLoading ? (
-                                    <>
-                                        <LoadingSpinner inButton={true} />
-                                        Processing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <ArrowUpTrayIcon className="w-5 h-5" />
-                                        Upload Schedule
-                                    </>
-                                )}
+                                {isLoading
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Upload className="w-3.5 h-3.5" />
+                                }
+                                {isLoading ? 'Processing…' : 'Upload'}
                             </button>
                         </Tooltip>
+                        <button
+                            onClick={handleAddDoor}
+                            disabled={isLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Door
+                        </button>
                         <Tooltip content="Automatically assign hardware sets to all pending doors">
                             <button
                                 onClick={handleAssignAll}
                                 disabled={isLoading || isAssigningBatch || filteredAndSortedDoors.length === 0}
-                                className="px-4 py-2.5 bg-white text-blue-700 rounded-lg hover:bg-blue-50 hover:scale-105 active:scale-95 text-sm font-semibold disabled:opacity-50 min-w-[140px] transition-all shadow-lg hover:shadow-xl"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isAssigningBatch ? (
-                                    <div className="flex items-center justify-center gap-2">
-                                        <LoadingSpinner inButton={false} />
-                                        <span>Processing...</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center gap-2">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        Assign All AI
-                                    </div>
-                                )}
+                                {isAssigningBatch
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Zap className="w-3.5 h-3.5" />
+                                }
+                                {isAssigningBatch ? 'Processing…' : 'Assign All'}
                             </button>
                         </Tooltip>
                     </div>
                 </div>
             </div>
+            )}
 
-            {/* Enhanced Toolbar: Filter & Search */}
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                {/* Status Filter Chips */}
-                {/* Status & Actions Controls */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wide mr-1">Status:</span>
-                        <FilterButton filter="all" label="All" count={doors.length} tooltip="Show all doors" />
-                        <FilterButton filter="pending" label="Pending" count={statusCounts.pending || 0} tooltip="Show doors waiting for assignment" />
-                        <FilterButton filter="complete" label="Complete" count={statusCounts.complete || 0} tooltip="Show doors with assigned hardware" />
-                        <FilterButton filter="error" label="Error" count={statusCounts.error || 0} tooltip="Show doors that failed assignment" />
-
-                        <button
-                            onClick={() => setReportModalOpen(true)}
-                            disabled={!hasRowErrors && !hasUploadErrors}
-                            className={`ml-2 px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5 transition-colors shadow-sm border ${hasRowErrors || hasUploadErrors
-                                ? 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200'
-                                : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
-                                }`}
-                            title={hasRowErrors || hasUploadErrors ? "View Error Report / Skipped Items" : "No issues found"}
-                        >
-                            <ExclamationTriangleIcon className="w-4 h-4" />
-                            <span className="font-medium">Review Issues</span>
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setIsColumnCustomizerOpen(!isColumnCustomizerOpen)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium transition-colors shadow-sm ${isColumnCustomizerOpen ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                        >
-                            <AdjustmentsHorizontalIcon className="w-4 h-4" />
-                            Columns
-                        </button>
-
-                        <button
-                            onClick={handleAddDoor}
-                            disabled={isLoading}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm font-medium transition-colors shadow-sm"
-                        >
-                            <PlusIcon className="w-4 h-4" />
-                            Add Door
-                        </button>
-
-                        <button
-                            onClick={handleDeleteSelected}
-                            disabled={isLoading || selectedRows.size === 0}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium transition-colors shadow-sm ${selectedRows.size > 0
-                                ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100 focus:ring-red-500'
-                                : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed' // Always visible style
-                                }`}
-                        >
-                            <TrashIcon className="w-4 h-4" />
-                            Delete {selectedRows.size > 0 ? `(${selectedRows.size})` : ''}
-                        </button>
-                    </div>
+            {/* Compact single-row toolbar */}
+            <div className="px-3 py-1.5 bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center gap-2 flex-shrink-0">
+                {/* Status segmented control */}
+                <div className="flex items-center divide-x divide-[var(--border)] border border-[var(--border)] rounded-md overflow-hidden">
+                    <FilterButton filter="all" label="All" count={doors.length} tooltip="Show all doors" />
+                    <FilterButton filter="pending" label="Pending" count={statusCounts.pending || 0} tooltip="Show doors waiting for assignment" />
+                    <FilterButton filter="complete" label="Complete" count={statusCounts.complete || 0} tooltip="Show doors with assigned hardware" />
+                    <FilterButton filter="error" label="Error" count={statusCounts.error || 0} tooltip="Show doors that failed assignment" />
                 </div>
 
-                {/* Bottom Row: Advanced Filters and Search */}
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 w-full">
-                    <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-                        {/* Door Material Filter */}
-                        <div className="relative min-w-[150px] flex-grow lg:flex-grow-0" title="Filter by Door Material">
-                            <select
-                                value={doorMaterialFilter}
-                                onChange={(e) => setDoorMaterialFilter(e.target.value)}
-                                className="w-full pl-3 pr-8 py-1.5 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm appearance-none"
-                            >
-                                <option value="all">All Door Materials</option>
-                                {uniqueDoorMaterials.map(mat => (
-                                    <option key={mat} value={mat}>{mat}</option>
-                                ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                        </div>
+                <div className="flex-1" />
 
-                        {/* Frame Material Filter */}
-                        <div className="relative min-w-[150px] flex-grow lg:flex-grow-0" title="Filter by Frame Material">
-                            <select
-                                value={frameMaterialFilter}
-                                onChange={(e) => setFrameMaterialFilter(e.target.value)}
-                                className="w-full pl-3 pr-8 py-1.5 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm appearance-none"
-                            >
-                                <option value="all">All Frame Materials</option>
-                                {uniqueFrameMaterials.map(mat => (
-                                    <option key={mat} value={mat}>{mat}</option>
-                                ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="relative w-full lg:w-72" title="Search across all door properties">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search all columns..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                        />
-                    </div>
+                {/* Search */}
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-faint)] pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search…"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-44 pl-8 pr-3 py-1.5 border border-[var(--border)] rounded-md bg-[var(--bg)] text-xs placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                    />
                 </div>
+
+                {/* Filters dropdown */}
+                <div className="relative" ref={filterMenuRef}>
+                    <button
+                        onClick={() => setIsFilterMenuOpen(prev => !prev)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-md text-xs font-medium transition-colors ${
+                            (doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all')
+                                ? 'bg-[var(--primary-bg)] border-[var(--primary-border)] text-[var(--primary-text)]'
+                                : isFilterMenuOpen
+                                    ? 'bg-[var(--bg-muted)] border-[var(--border-strong)] text-[var(--text-secondary)]'
+                                    : 'bg-[var(--bg)] border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]'
+                        }`}
+                    >
+                        <Filter className="w-3.5 h-3.5" />
+                        Filters
+                        {(doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all') && (
+                            <span className="ml-0.5 bg-[var(--primary-action)] text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                                {(doorMaterialFilter !== 'all' ? 1 : 0) + (frameMaterialFilter !== 'all' ? 1 : 0)}
+                            </span>
+                        )}
+                    </button>
+                    {isFilterMenuOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-30 bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-lg p-3 w-56 flex flex-col gap-2.5">
+                            <p className="text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider">Material Filters</p>
+                            <div>
+                                <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Door Material</label>
+                                <div className="relative">
+                                    <select
+                                        value={doorMaterialFilter}
+                                        onChange={(e) => setDoorMaterialFilter(e.target.value)}
+                                        className="w-full pl-2.5 pr-7 py-1.5 border border-[var(--border)] rounded-md bg-[var(--bg)] text-xs text-[var(--text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] appearance-none"
+                                    >
+                                        <option value="all">All</option>
+                                        {uniqueDoorMaterials.map(mat => (
+                                            <option key={mat} value={mat}>{mat}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-faint)]" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Frame Material</label>
+                                <div className="relative">
+                                    <select
+                                        value={frameMaterialFilter}
+                                        onChange={(e) => setFrameMaterialFilter(e.target.value)}
+                                        className="w-full pl-2.5 pr-7 py-1.5 border border-[var(--border)] rounded-md bg-[var(--bg)] text-xs text-[var(--text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] appearance-none"
+                                    >
+                                        <option value="all">All</option>
+                                        {uniqueFrameMaterials.map(mat => (
+                                            <option key={mat} value={mat}>{mat}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-faint)]" />
+                                </div>
+                            </div>
+                            {(doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all') && (
+                                <button
+                                    onClick={() => { setDoorMaterialFilter('all'); setFrameMaterialFilter('all'); }}
+                                    className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] underline text-left transition-colors"
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Columns */}
+                <button
+                    onClick={() => setIsColumnCustomizerOpen(!isColumnCustomizerOpen)}
+                    className={`p-1.5 border rounded-md transition-colors ${isColumnCustomizerOpen ? 'bg-[var(--primary-bg)] border-[var(--primary-border)] text-[var(--primary-text)]' : 'bg-[var(--bg)] border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]'}`}
+                    title="Customize columns"
+                >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Issues — only when there are issues */}
+                {(hasRowErrors || hasUploadErrors) && (
+                    <button
+                        onClick={() => setReportModalOpen(true)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        title="View Error Report"
+                    >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Issues
+                    </button>
+                )}
+
+                {/* Delete — only when rows are selected */}
+                {selectedRows.size > 0 && (
+                    <button
+                        onClick={handleDeleteSelected}
+                        disabled={isLoading}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete ({selectedRows.size})
+                    </button>
+                )}
             </div>
 
-            <div className="mb-2 text-sm text-gray-500 flex justify-between">
-                <span>Showing <strong>{filteredAndSortedDoors.length}</strong> doors</span>
-                <span className="text-xs text-gray-400 italic">Click any cell to edit • Enter to save</span>
+            {/* Active filter chips */}
+            {(statusFilter !== 'all' || doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all' || searchQuery.trim()) && (
+                <div className="px-4 py-2 flex items-center gap-1.5 flex-wrap border-b border-[var(--border-subtle)] bg-[var(--bg)] flex-shrink-0">
+                    <span className="text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider mr-1">Filters:</span>
+                    {statusFilter !== 'all' && (() => {
+                        const statusColors: Record<string, string> = {
+                            pending: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100',
+                            complete: 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100',
+                            error: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30',
+                        };
+                        return (
+                            <button
+                                onClick={() => setStatusFilter('all')}
+                                className={`flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 text-xs rounded-full transition-colors ${statusColors[statusFilter] ?? 'bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-emphasis)]'}`}
+                            >
+                                Status: <span className="font-medium capitalize">{statusFilter}</span>
+                                <X className="w-3 h-3 ml-0.5" />
+                            </button>
+                        );
+                    })()}
+                    {doorMaterialFilter !== 'all' && (
+                        <button
+                            onClick={() => setDoorMaterialFilter('all')}
+                            className="flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 bg-[var(--primary-bg)] text-[var(--primary-text)] border border-[var(--primary-border)] text-xs rounded-full hover:bg-[var(--primary-bg-hover)] transition-colors"
+                        >
+                            Door: <span className="font-medium">{doorMaterialFilter}</span>
+                            <X className="w-3 h-3 ml-0.5" />
+                        </button>
+                    )}
+                    {frameMaterialFilter !== 'all' && (
+                        <button
+                            onClick={() => setFrameMaterialFilter('all')}
+                            className="flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 bg-[var(--primary-bg)] text-[var(--primary-text)] border border-[var(--primary-border)] text-xs rounded-full hover:bg-[var(--primary-bg-hover)] transition-colors"
+                        >
+                            Frame: <span className="font-medium">{frameMaterialFilter}</span>
+                            <X className="w-3 h-3 ml-0.5" />
+                        </button>
+                    )}
+                    {searchQuery.trim() && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 bg-[var(--primary-bg)] text-[var(--primary-text)] border border-[var(--primary-border)] text-xs rounded-full hover:bg-[var(--primary-bg-hover)] transition-colors"
+                        >
+                            Search: <span className="font-medium">"{searchQuery}"</span>
+                            <X className="w-3 h-3 ml-0.5" />
+                        </button>
+                    )}
+                    <button
+                        onClick={() => { setDoorMaterialFilter('all'); setFrameMaterialFilter('all'); setSearchQuery(''); setStatusFilter('all'); }}
+                        className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] underline ml-1 transition-colors"
+                    >
+                        Clear all
+                    </button>
+                </div>
+            )}
+
+            {/* Table info bar */}
+            <div className="px-4 py-2 flex justify-between items-center bg-[var(--bg)] border-b border-[var(--border-subtle)] flex-shrink-0">
+                <span className="text-xs text-[var(--text-muted)]">
+                    Showing <strong className="text-[var(--text-secondary)]">{filteredAndSortedDoors.length}</strong> doors
+                </span>
+                <span className="text-[10px] text-[var(--text-faint)]">Click any row to open the editor</span>
             </div>
 
             {/* Main Table */}
-            <div className="flex-grow overflow-x-auto border border-gray-200 rounded-md relative bg-white">
-
-                <table className="min-w-full text-sm text-left text-gray-600">
-                    <thead className="text-sm text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
+            <div className="flex-grow min-h-0 overflow-auto relative bg-[var(--bg)]">
+                <table className="min-w-full text-sm text-left text-[var(--text-muted)]">
+                    <thead className="text-xs text-[var(--primary-text)] bg-[var(--primary-bg)] sticky top-0 z-10 shadow-[0_1px_0_0_var(--primary-border)]">
                         <tr>
-                            <th scope="col" className="w-10 px-3 py-3 text-left border-b border-gray-200 bg-gray-50">
+                            <th scope="col" className="w-10 px-3 py-2.5 border-b border-[var(--primary-border)]">
                                 <input
                                     type="checkbox"
                                     onChange={toggleSelectAll}
                                     checked={filteredAndSortedDoors.length > 0 && selectedRows.size === filteredAndSortedDoors.length}
-                                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4 cursor-pointer"
+                                    className="rounded border-[var(--primary-border)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] h-3.5 w-3.5 cursor-pointer"
                                 />
                             </th>
 
-                            {/* Dynamic Columns */}
-                            {ALL_AVAILABLE_COLUMNS.map(col => renderHeader(col))}
+                            {orderedColumns.map(col => renderHeader(col))}
                             {customColumns.map(col => renderHeader(col))}
 
-                            <th scope="col" className="px-3 py-3 border-b border-gray-200 bg-primary-50 text-primary-800 font-semibold min-w-[140px] shadow-inner">Assigned Set</th>
-                            <th scope="col" className="px-3 py-3 border-b border-gray-200 text-center min-w-[80px]">Action</th>
+                            <th scope="col" className="px-2 py-2.5 border-b border-[var(--primary-border)] bg-[var(--primary-bg-hover)] min-w-[140px]">
+                                <span className="text-xs font-semibold text-[var(--primary-text)] uppercase tracking-wide">Assigned Set</span>
+                            </th>
+                            <th scope="col" className="px-2 py-2.5 border-b border-[var(--primary-border)] text-center min-w-[80px]">
+                                <span className="text-xs font-semibold text-[var(--primary-text)] uppercase tracking-wide">Action</span>
+                            </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-[var(--border-subtle)]">
                         {isLoading && Array.from({ length: 10 }).map((_, i) => (
-                            <TableRowSkeleton key={`skeleton-${i}`} columns={17} />
+                            <tr key={`skeleton-${i}`} className="border-b border-[var(--border-subtle)]">
+                                <td className="px-3 py-3"><Skeleton className="h-3.5 w-3.5 rounded" /></td>
+                                {Array.from({ length: 11 }).map((_, j) => (
+                                    <td key={j} className="px-2 py-2.5">
+                                        <Skeleton className="h-4 w-full rounded" />
+                                    </td>
+                                ))}
+                                <td className="px-2 py-2.5"><Skeleton className="h-5 w-20 rounded" /></td>
+                                <td className="px-2 py-2.5 text-center"><Skeleton className="h-6 w-14 rounded mx-auto" /></td>
+                            </tr>
                         ))}
-                        {!isLoading && filteredAndSortedDoors.map((door) => {
-                            // Determine if this row has a critical data validation issue
-                            const providedLower = door.providedHardwareSet?.trim().toLowerCase() || '';
-                            // If a set is missing entirely, that's one issue.
-                            const isMissingSet = !providedLower;
-                            // If a set is provided but doesn't match any known hardware set, that's a critical invalid reference.
-                            const isInvalidRef = providedLower && !validSetNames.has(providedLower);
 
-                            // Strict validation: Any unknown reference or missing set flags the row.
+                        {!isLoading && filteredAndSortedDoors.map((door) => {
+                            const providedLower = door.providedHardwareSet?.trim().toLowerCase() || '';
+                            const isMissingSet = !providedLower;
+                            const isInvalidRef = providedLower && !validSetNames.has(providedLower);
                             const isValidationFailure = isMissingSet || isInvalidRef;
 
                             return (
                                 <tr
                                     key={door.id}
-                                    className={`transition-colors group cursor-pointer ${isValidationFailure ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500' : selectedRows.has(door.id) ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50'}`}
-                                    onDoubleClick={() => setEditModalDoor(door)}
-                                    title="Double-click to edit"
+                                    className={`transition-colors group cursor-pointer ${isValidationFailure
+                                        ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-l-2 border-red-400 dark:border-red-800'
+                                        : selectedRows.has(door.id)
+                                            ? 'bg-[var(--primary-bg)] border-l-2 border-[var(--primary-ring)]'
+                                            : 'hover:bg-[var(--bg-subtle)] border-l-2 border-transparent'
+                                        }`}
+                                    onClick={() => setEditModalDoor(door)}
+                                    title="Click to edit door"
                                 >
-                                    <td className="px-3 py-3 border-b border-gray-100">
+                                    <td className="px-3 py-2.5">
                                         <input
                                             type="checkbox"
                                             checked={selectedRows.has(door.id)}
                                             onChange={() => toggleRowSelection(door.id)}
-                                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4 cursor-pointer"
+                                            className="rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] h-3.5 w-3.5 cursor-pointer"
                                             onClick={(e) => e.stopPropagation()}
                                         />
                                     </td>
 
-                                    {/* Dynamic Row Rendering */}
-                                    {ALL_AVAILABLE_COLUMNS.map(col => {
+                                    {orderedColumns.map(col => {
                                         if (!visibleColumns.has(col.key)) return null;
-                                        // Special Handling for Elevation Type Select
+
                                         if (col.key === 'elevationTypeId') {
                                             return (
-                                                <td key={col.key} className="px-2 py-2 border-b border-gray-100">
+                                                <td key={col.key} className="px-2 py-2">
                                                     <select
                                                         value={door.elevationTypeId || ''}
                                                         onChange={(e) => handleElevationChange(door.id, e.target.value)}
-                                                        className="w-full text-sm p-1 border-transparent bg-transparent hover:border-gray-300 rounded focus:border-primary-500 focus:ring-1 focus:ring-primary-500 cursor-pointer"
+                                                        className="w-full text-xs p-1 border-transparent bg-transparent hover:border-[var(--border-strong)] rounded focus:border-[var(--primary-ring)] focus:ring-1 focus:ring-[var(--primary-ring)] cursor-pointer"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
-                                                        <option value="" className="text-gray-400">--</option>
+                                                        <option value="" className="text-[var(--text-faint)]">--</option>
                                                         {elevationTypes.map(t => (
                                                             <option key={t.id} value={t.id}>{t.code}</option>
                                                         ))}
@@ -1041,20 +1183,19 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                             );
                                         }
 
-                                        // Special Handling for Provided Set (Invalid Ref Logic)
                                         if (col.key === 'providedHardwareSet') {
                                             return (
-                                                <td key={col.key} className={`px-2 py-2 font-medium border-l border-b border-gray-100 ${isInvalidRef ? 'text-red-700 font-bold' : 'text-gray-700'}`}>
+                                                <td key={col.key} className={`px-2 py-2 font-medium border-l border-[var(--border-subtle)] ${isInvalidRef ? 'text-red-700 font-bold' : 'text-[var(--text-secondary)]'}`}>
                                                     {renderCell(door, 'providedHardwareSet')}
                                                 </td>
                                             );
                                         }
 
                                         const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
-                                        const weightClass = col.key === 'doorTag' ? 'font-medium text-gray-900' : '';
+                                        const weightClass = col.key === 'doorTag' ? 'font-semibold text-[var(--text)]' : '';
 
                                         return (
-                                            <td key={col.key} className={`px-2 py-2 border-b border-gray-100 ${alignClass} ${weightClass}`}>
+                                            <td key={col.key} className={`px-2 py-2 ${alignClass} ${weightClass}`}>
                                                 {renderCell(door, col.key, col.type, col.options)}
                                             </td>
                                         );
@@ -1063,97 +1204,92 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                     {customColumns.map(col => {
                                         if (!visibleColumns.has(col.id)) return null;
                                         return (
-                                            <td key={col.id} className="px-2 py-2 border-b border-gray-100">
+                                            <td key={col.id} className="px-2 py-2">
                                                 {renderCell(door, col.id, col.type)}
                                             </td>
                                         );
                                     })}
 
-                                    {/* Assigned Hardware Set Column - Fixed */}
-
-                                    {/* Assigned Hardware Set Column */}
-                                    <td className={`px-2 py-2 border-l border-gray-100 text-sm ${door.status === 'error' ? 'bg-red-50' : 'bg-primary-50/30'}`}>
+                                    {/* Assigned Set column */}
+                                    <td className={`px-2 py-2 border-l border-[var(--border-subtle)] ${door.status === 'error' ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-[var(--primary-bg)]/20'}`}>
                                         {isInvalidRef ? (
-                                            <span className="font-bold text-red-600 italic block flex items-center gap-1" title="Hardware set not found in database">
-                                                <ExclamationTriangleIcon className="w-4 h-4" />
+                                            <Badge variant="destructive" className="text-[10px] gap-1">
+                                                <AlertTriangle className="w-2.5 h-2.5" />
                                                 Unknown Set
-                                            </span>
+                                            </Badge>
                                         ) : isMissingSet ? (
-                                            <span className="font-bold text-amber-500 italic block" title="No hardware set specified">Missing Set</span>
+                                            <Badge variant="warning" className="text-[10px]">
+                                                Missing Set
+                                            </Badge>
                                         ) : door.status === 'complete' && door.assignedHardwareSet ? (
-                                            <div className="flex items-center justify-between">
-                                                <span className="font-bold text-primary-700 block truncate" title={door.assignedHardwareSet.name}>{renderCell(door, 'assignedHardwareSet')}</span>
+                                            <div className="flex items-center justify-between gap-1">
+                                                <span className="font-medium text-primary-700 text-xs truncate" title={(door.assignedHardwareSet as unknown as HardwareSet).name}>
+                                                    {renderCell(door, 'assignedHardwareSet')}
+                                                </span>
                                                 <ConfidenceIndicator confidence={door.assignmentConfidence} reason={door.assignmentReason} />
                                             </div>
                                         ) : door.status === 'error' && door.errorMessage ? (
-                                            <div className="flex items-center text-red-600" title={door.errorMessage}>
-                                                <ExclamationTriangleIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-                                                <span className="truncate font-semibold">Error</span>
-                                            </div>
+                                            <Badge variant="destructive" className="text-[10px] gap-1" title={door.errorMessage}>
+                                                <AlertTriangle className="w-2.5 h-2.5" />
+                                                Error
+                                            </Badge>
                                         ) : (
-                                            <span className="text-gray-400 italic">Pending...</span>
+                                            <span className="text-[var(--text-faint)] text-xs italic">Pending…</span>
                                         )}
                                     </td>
 
+                                    {/* Action column */}
                                     <td className="px-2 py-2 text-center">
-                                        <div className="flex items-center justify-center gap-2">
+                                        <div className="flex items-center justify-center gap-1">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleDeleteRow(door.id); }}
-                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                className="p-1.5 text-[var(--text-faint)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                                                 title="Delete Door"
                                             >
-                                                <TrashIcon className="w-4 h-4" />
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                             <button
-                                                onClick={() => handleAssignHardware(door.id)}
+                                                onClick={(e) => { e.stopPropagation(); handleAssignHardware(door.id); }}
                                                 disabled={door.status === 'loading' || isLoading || isAssigningBatch || isValidationFailure}
                                                 title={isValidationFailure ? "Fix Provided Set first" : "Run AI to assign hardware set"}
-                                                className={`w-full flex justify-center items-center px-2 py-1 text-xs font-medium text-white rounded shadow-sm transition-all ${door.status === 'loading' ? 'bg-primary-400 cursor-not-allowed' :
-                                                    isValidationFailure ? 'bg-gray-300 cursor-not-allowed' :
-                                                        door.status === 'complete' ? 'bg-green-500 hover:bg-green-600 opacity-80 hover:opacity-100' :
+                                                className={`flex items-center px-2 py-1 text-[10px] font-semibold text-white rounded transition-all ${door.status === 'loading' ? 'bg-[var(--primary-action)]/60 cursor-not-allowed' :
+                                                    isValidationFailure ? 'bg-[var(--bg-emphasis)] cursor-not-allowed text-[var(--text-muted)]' :
+                                                        door.status === 'complete' ? 'bg-green-500 hover:bg-green-600' :
                                                             door.status === 'error' ? 'bg-red-500 hover:bg-red-600' :
-                                                                'bg-primary-600 hover:bg-primary-700'
+                                                                'bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)]'
                                                     } disabled:opacity-50`}
                                             >
-                                                {door.status === 'loading' ? <LoadingSpinner inButton /> : door.status === 'complete' ? 'Retry' : 'Assign'}
+                                                {door.status === 'loading'
+                                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                    : door.status === 'complete' ? 'Retry' : 'Assign'
+                                                }
                                             </button>
                                         </div>
                                     </td>
                                 </tr>
                             );
                         })}
+
                         {!isLoading && filteredAndSortedDoors.length === 0 && (
                             <tr>
-                                <td colSpan={17} className="py-16">
+                                <td colSpan={17} className="py-20">
                                     <div className="flex flex-col items-center justify-center text-center">
-                                        {/* Empty State Illustration */}
-                                        <div className="mb-6">
-                                            <svg className="w-32 h-32 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                            </svg>
-                                        </div>
-
-                                        {/* Empty State Message */}
-                                        <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                                        <ClipboardList className="w-14 h-14 text-[var(--text-faint)] mb-4" />
+                                        <h3 className="text-sm font-semibold text-[var(--text-muted)] mb-1">
                                             {searchQuery || statusFilter !== 'all' || doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all'
                                                 ? "No Doors Match Your Filters"
                                                 : "No Door Schedule Yet"}
                                         </h3>
-                                        <p className="text-gray-500 mb-6 max-w-md">
+                                        <p className="text-xs text-[var(--text-faint)] mb-5 max-w-xs">
                                             {searchQuery || statusFilter !== 'all' || doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all'
                                                 ? "Try adjusting your search query or filters to see more results."
                                                 : "Upload a door schedule file to get started with hardware assignment."}
                                         </p>
-
-                                        {/* Call to Action */}
                                         {!searchQuery && statusFilter === 'all' && doorMaterialFilter === 'all' && frameMaterialFilter === 'all' && (
-                                            <button
-                                                onClick={onUploadClick}
-                                                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
-                                            >
-                                                <ArrowUpTrayIcon className="w-5 h-5" />
+                                            <Button onClick={onUploadClick} size="sm">
+                                                <Upload className="w-3.5 h-3.5 mr-1.5" />
                                                 Upload Door Schedule
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 </td>
@@ -1167,17 +1303,15 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                 <ValidationReportModal
                     isOpen={reportModalOpen}
                     onClose={() => setReportModalOpen(false)}
-                    report={lastErrorTask.result!} // We check basic existence before
+                    report={lastErrorTask.result!}
                     fileName={lastErrorTask.file.name}
                 />
             )}
 
-            {/* Phase 19: Enhanced Door Edit Modal */}
             {editModalDoor && (
                 <EnhancedDoorEditModal
                     door={editModalDoor}
                     onSave={(updatedDoor) => {
-                        // Apply migration to auto-populate legacy fields
                         const migratedDoor = migrateDoorData(updatedDoor);
                         onDoorsUpdate(prev => prev.map(d => d.id === migratedDoor.id ? migratedDoor : d));
                         setEditModalDoor(null);

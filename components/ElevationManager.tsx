@@ -64,11 +64,11 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="relative bg-[var(--bg)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h2 className="text-xl font-bold text-gray-800">Manage Elevation Types</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                <div className="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-subtle)] rounded-t-xl">
+                    <h2 className="text-xl font-bold text-[var(--text-secondary)]">Manage Elevation Types</h2>
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -77,21 +77,21 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
 
                 <div className="flex-1 overflow-hidden flex">
                     {/* List Panel */}
-                    <div className="w-1/3 border-r border-gray-200 overflow-y-auto p-4 bg-gray-50">
-                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Existing Types</h3>
+                    <div className="w-1/3 border-r border-[var(--border)] overflow-y-auto p-4 bg-[var(--bg-subtle)]">
+                        <h3 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Existing Types</h3>
                         <div className="space-y-3">
                             {types.map(type => (
                                 <div
                                     key={type.id}
-                                    className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:ring-2 ring-blue-500 cursor-pointer transition-all relative group"
+                                    className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)] shadow-sm hover:ring-2 ring-blue-500 cursor-pointer transition-all relative group"
                                 >
-                                    <div className="aspect-w-16 aspect-h-9 mb-2 bg-gray-100 rounded overflow-hidden h-32 flex items-center justify-center">
+                                    <div className="aspect-w-16 aspect-h-9 mb-2 bg-[var(--bg-muted)] rounded overflow-hidden h-32 flex items-center justify-center">
                                         <img src={type.imageData} alt={type.code} className="object-contain max-h-full" />
                                     </div>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <div className="font-bold text-gray-900">{type.code}</div>
-                                            <div className="text-xs text-gray-500 line-clamp-2">{type.description}</div>
+                                            <div className="font-bold text-[var(--text)]">{type.code}</div>
+                                            <div className="text-xs text-[var(--text-muted)] line-clamp-2">{type.description}</div>
                                         </div>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDelete(type.id); }}
@@ -105,7 +105,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                 </div>
                             ))}
                             {types.length === 0 && (
-                                <div className="text-center py-8 text-gray-400 italic">
+                                <div className="text-center py-8 text-[var(--text-faint)] italic">
                                     No elevation types created yet.
                                 </div>
                             )}
@@ -114,40 +114,40 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
 
                     {/* Editor Panel */}
                     <div className="w-2/3 p-6 overflow-y-auto">
-                        <h3 className="text-lg font-bold text-gray-800 mb-6">Add New Elevation Type</h3>
+                        <h3 className="text-lg font-bold text-[var(--text-secondary)] mb-6">Add New Elevation Type</h3>
 
                         <div className="space-y-6 max-w-lg">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Elevation Code <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     placeholder="e.g. Type A, E-1, GW-01"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    className="w-full px-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] outline-none"
                                     value={newType.code}
                                     onChange={e => setNewType({ ...newType, code: e.target.value })}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Description
                                 </label>
                                 <textarea
                                     placeholder="e.g. Full glass aluminum entry door..."
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none h-24 resize-none"
+                                    className="w-full px-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] outline-none h-24 resize-none"
                                     value={newType.description}
                                     onChange={e => setNewType({ ...newType, description: e.target.value })}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                                     Upload Drawing/Image <span className="text-red-500">*</span>
                                 </label>
                                 <div
-                                    className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="border-2 border-dashed border-[var(--border-strong)] rounded-xl p-6 text-center hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer"
                                     onClick={() => fileInputRef.current?.click()}
                                 >
                                     {newType.imageData ? (
@@ -164,8 +164,8 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                             <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
                                                 <CameraIcon className="w-6 h-6" />
                                             </div>
-                                            <div className="font-medium text-gray-900">Click to upload image</div>
-                                            <div className="text-xs text-gray-500">Supports PNG, JPG, GIF</div>
+                                            <div className="font-medium text-[var(--text)]">Click to upload image</div>
+                                            <div className="text-xs text-[var(--text-muted)]">Supports PNG, JPG, GIF</div>
                                         </div>
                                     )}
                                     <input
@@ -183,8 +183,8 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                     onClick={handleSaveNew}
                                     disabled={!newType.code || !newType.imageData}
                                     className={`w-full py-3 rounded-lg font-bold text-white shadow-md transition-all ${!newType.code || !newType.imageData
-                                            ? 'bg-gray-300 cursor-not-allowed'
-                                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+                                            ? 'bg-[var(--bg-emphasis)] cursor-not-allowed'
+                                            : 'bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] hover:shadow-lg'
                                         }`}
                                 >
                                     Create Elevation Type

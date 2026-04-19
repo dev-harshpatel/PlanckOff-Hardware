@@ -73,17 +73,17 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-50">
+        <div className="h-full flex flex-col bg-[var(--bg-subtle)]">
             {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-4">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Price Book Manager</h1>
-                        <p className="text-sm text-gray-600 mt-1">Manage pricing for doors, frames, and hardware</p>
+                        <h1 className="text-2xl font-bold text-[var(--text)]">Price Book Manager</h1>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">Manage pricing for doors, frames, and hardware</p>
                     </div>
                     <div className="flex gap-3">
                         {onImportCSV && (
-                            <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2">
+                            <label className="px-4 py-2 bg-[var(--bg)] border border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer flex items-center gap-2">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
@@ -102,7 +102,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                         {onExportCSV && (
                             <button
                                 onClick={onExportCSV}
-                                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                className="px-4 py-2 bg-[var(--bg)] border border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors flex items-center gap-2"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
@@ -112,7 +112,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                         )}
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+                            className="px-4 py-2 bg-[var(--primary-action)] text-white rounded-lg hover:bg-[var(--primary-action-hover)] transition-colors flex items-center gap-2 font-medium"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -145,7 +145,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                 {/* Search and Filter */}
                 <div className="flex gap-4">
                     <div className="flex-1 relative">
-                        <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         <input
@@ -153,13 +153,13 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                             placeholder="Search by item type, description, manufacturer, or model..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                         />
                     </div>
                     <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value as any)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="px-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                     >
                         <option value="all">All Categories</option>
                         <option value="door">Doors</option>
@@ -171,25 +171,25 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
 
             {/* Price Book Table */}
             <div className="flex-1 overflow-auto px-6 py-4">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-[var(--bg)] rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
                     <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
+                        <thead className="bg-[var(--bg-subtle)] border-b border-[var(--border)]">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Type</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Manufacturer</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Model</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Unit Price</th>
-                                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">UOM</th>
-                                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Category</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Item Type</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Manufacturer</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Model</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Description</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Unit Price</th>
+                                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">UOM</th>
+                                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-[var(--border-subtle)]">
                             {filteredPriceBook.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
-                                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
+                                        <svg className="mx-auto h-12 w-12 text-[var(--text-faint)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                         <p className="text-lg font-medium">No price entries found</p>
@@ -198,7 +198,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                                 </tr>
                             ) : (
                                 filteredPriceBook.map((entry) => (
-                                    <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={entry.id} className="hover:bg-[var(--bg-subtle)] transition-colors">
                                         <td className="px-4 py-3">
                                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${entry.category === 'door' ? 'bg-green-100 text-green-800' :
                                                     entry.category === 'frame' ? 'bg-purple-100 text-purple-800' :
@@ -207,21 +207,21 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                                                 {entry.category}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 font-medium text-gray-900">{entry.itemType}</td>
-                                        <td className="px-4 py-3 text-gray-600">{entry.manufacturer || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-600">{entry.modelNumber || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-600 max-w-xs truncate" title={entry.description}>
+                                        <td className="px-4 py-3 font-medium text-[var(--text)]">{entry.itemType}</td>
+                                        <td className="px-4 py-3 text-[var(--text-muted)]">{entry.manufacturer || '-'}</td>
+                                        <td className="px-4 py-3 text-[var(--text-muted)]">{entry.modelNumber || '-'}</td>
+                                        <td className="px-4 py-3 text-[var(--text-muted)] max-w-xs truncate" title={entry.description}>
                                             {entry.description}
                                         </td>
-                                        <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                        <td className="px-4 py-3 text-right font-semibold text-[var(--text)]">
                                             ${entry.unitPrice.toFixed(2)}
                                         </td>
-                                        <td className="px-4 py-3 text-center text-gray-600">{entry.unitOfMeasure}</td>
+                                        <td className="px-4 py-3 text-center text-[var(--text-muted)]">{entry.unitOfMeasure}</td>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 <button
                                                     onClick={() => handleEdit(entry)}
-                                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                    className="p-1 text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] rounded transition-colors"
                                                     title="Edit"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,7 +248,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
 
                 {/* Results count */}
                 {filteredPriceBook.length > 0 && (
-                    <div className="mt-4 text-sm text-gray-600 text-center">
+                    <div className="mt-4 text-sm text-[var(--text-muted)] text-center">
                         Showing {filteredPriceBook.length} of {priceBook.length} entries
                     </div>
                 )}
@@ -305,14 +305,14 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900">
+            <div className="bg-[var(--bg)] rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-[var(--bg)] border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-[var(--text)]">
                         {entry ? 'Edit Price Entry' : 'Add Price Entry'}
                     </h2>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -323,11 +323,11 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {/* Category */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Category *</label>
                         <select
                             value={formData.category}
                             onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             required
                         >
                             <option value="door">Door</option>
@@ -338,12 +338,12 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
 
                     {/* Item Type */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Item Type *</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Item Type *</label>
                         <input
                             type="text"
                             value={formData.itemType}
                             onChange={(e) => setFormData({ ...formData, itemType: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             placeholder="e.g., Hollow Metal Door, Mortise Lock"
                             required
                         />
@@ -352,32 +352,32 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                     {/* Manufacturer and Model */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Manufacturer</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Manufacturer</label>
                             <input
                                 type="text"
                                 value={formData.manufacturer}
                                 onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Model Number</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Model Number</label>
                             <input
                                 type="text"
                                 value={formData.modelNumber}
                                 onChange={(e) => setFormData({ ...formData, modelNumber: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             />
                         </div>
                     </div>
 
                     {/* Description */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Description *</label>
                         <textarea
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             rows={3}
                             required
                         />
@@ -386,22 +386,22 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                     {/* Price and UOM */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price ($) *</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Unit Price ($) *</label>
                             <input
                                 type="number"
                                 step="0.01"
                                 value={formData.unitPrice}
                                 onChange={(e) => setFormData({ ...formData, unitPrice: parseFloat(e.target.value) })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                                 required
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measure *</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Unit of Measure *</label>
                             <select
                                 value={formData.unitOfMeasure}
                                 onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value as any })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                                 required
                             >
                                 <option value="each">Each</option>
@@ -414,23 +414,23 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                     {/* Labor */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Labor Hours</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Labor Hours</label>
                             <input
                                 type="number"
                                 step="0.1"
                                 value={formData.laborHours || ''}
                                 onChange={(e) => setFormData({ ...formData, laborHours: e.target.value ? parseFloat(e.target.value) : undefined })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Labor Rate ($/hr)</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Labor Rate ($/hr)</label>
                             <input
                                 type="number"
                                 step="0.01"
                                 value={formData.laborRate || ''}
                                 onChange={(e) => setFormData({ ...formData, laborRate: e.target.value ? parseFloat(e.target.value) : undefined })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             />
                         </div>
                     </div>
@@ -438,21 +438,21 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                     {/* Supplier and Lead Time */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Supplier</label>
                             <input
                                 type="text"
                                 value={formData.supplier}
                                 onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Lead Time</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Lead Time</label>
                             <input
                                 type="text"
                                 value={formData.leadTime}
                                 onChange={(e) => setFormData({ ...formData, leadTime: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                                 placeholder="e.g., 2-3 weeks"
                             />
                         </div>
@@ -460,27 +460,27 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
 
                     {/* Notes */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Notes</label>
                         <textarea
                             value={formData.notes}
                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                             rows={2}
                         />
                     </div>
 
                     {/* Actions */}
-                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                    <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="px-4 py-2 text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] rounded-lg transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                            className="px-4 py-2 bg-[var(--primary-action)] text-white rounded-lg hover:bg-[var(--primary-action-hover)] transition-colors font-medium"
                         >
                             {entry ? 'Update' : 'Add'} Price
                         </button>

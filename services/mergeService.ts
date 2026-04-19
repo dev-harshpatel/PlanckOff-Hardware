@@ -7,8 +7,7 @@
  *
  * Matching strategy (applied in order, first match wins):
  *   1. Exact match, case-insensitive         — "CA01" === "CA01"
- *   2. Base name match (strip after ".")     — "SE02a.W" → "SE02a"
- *   3. Prefix match (strip trailing letters) — "AD05e" → "AD05" (last resort)
+ *   2. Prefix match (strip trailing letters) — "AD05e" → "AD05" (last resort)
  *
  * Server-side only. Never import from client components.
  */
@@ -75,18 +74,13 @@ function prefixName(code: string): string {
 function matchSetName(
   hwSet: string,
   setIndex: Map<string, string>, // normalized key → original setName
-  baseIndex: Map<string, string>,
   prefixIndex: Map<string, string[]>,
-): { setName: string; matchType: 'exact' | 'base' | 'prefix' } | null {
+): { setName: string; matchType: 'exact' | 'prefix' } | null {
   // 1. Exact (case-insensitive)
   const exact = setIndex.get(normalize(hwSet));
   if (exact) return { setName: exact, matchType: 'exact' };
 
-  // 2. Base name (strip after ".")
-  const base = baseIndex.get(baseName(hwSet));
-  if (base) return { setName: base, matchType: 'base' };
-
-  // 3. Prefix (strip trailing letters) — only use if exactly one set matches
+  // 2. Prefix (strip trailing letters) — only use if exactly one set matches
   const prefix = prefixIndex.get(prefixName(hwSet));
   if (prefix && prefix.length === 1) return { setName: prefix[0], matchType: 'prefix' };
 
@@ -188,18 +182,13 @@ export function mergeHardwareData(
 
   // Build lookup indexes from PDF sets
   const setIndex = new Map<string, string>();      // exact normalized → original setName
-  const baseIndex = new Map<string, string>();     // base normalized → original setName
   const prefixIndex = new Map<string, string[]>(); // prefix → [setNames]
 
   for (const set of pdfSets) {
     const norm = normalize(set.setName);
-    const base = baseName(set.setName);
     const prefix = prefixName(set.setName);
 
     setIndex.set(norm, set.setName);
-
-    // Base index: if collision, keep first (PDF sets shouldn't share base names)
-    if (!baseIndex.has(base)) baseIndex.set(base, set.setName);
 
     // Prefix index: collect all matches for ambiguity detection
     const existing = prefixIndex.get(prefix) ?? [];
@@ -224,18 +213,14 @@ export function mergeHardwareData(
       continue;
     }
 
-    const match = matchSetName(hwSet, setIndex, baseIndex, prefixIndex);
+    const match = matchSetName(hwSet, setIndex, prefixIndex);
 
     if (match) {
       const mergedDoor = toMergedDoor(row, match.setName);
       doorsBySet.get(match.setName)!.push(mergedDoor);
       matchedDoorCount++;
 
-      if (match.matchType === 'base') {
-        warnings.push(
-          `Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by base name (variant suffix stripped).`,
-        );
-      } else if (match.matchType === 'prefix') {
+      if (match.matchType === 'prefix') {
         warnings.push(
           `Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by prefix (trailing letters stripped) — verify this is correct.`,
         );

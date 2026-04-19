@@ -18,10 +18,13 @@ const HEADER_MAP: Record<string, keyof DoorScheduleRow> = {
   'door tag': 'doorTag', 'doortag': 'doorTag', 'door#': 'doorTag',
   'door no': 'doorTag', 'door no.': 'doorTag', 'tag': 'doorTag',
   'mark': 'doorTag', 'dr. #': 'doorTag', 'dr #': 'doorTag',
-  // HW Set (the join key)
+  // HW Set (join key) — "HARDWARE SET" in new sectioned format maps here
   'hw set': 'hwSet', 'hwset': 'hwSet', 'hw#': 'hwSet',
   'hardware set #': 'hwSet', 'set#': 'hwSet', 'set #': 'hwSet',
-  // Building area
+  'hardware set': 'hwSet',
+  // Building
+  'building tag': 'buildingTag', 'buildingtag': 'buildingTag',
+  'building location': 'buildingLocation', 'buildinglocation': 'buildingLocation',
   'buildingn area': 'buildingArea', 'building area': 'buildingArea',
   'building': 'buildingArea', 'area': 'buildingArea',
   // Room
@@ -34,33 +37,53 @@ const HEADER_MAP: Record<string, keyof DoorScheduleRow> = {
   'interior exterior': 'interiorExterior',
   // Quantity
   'quantity': 'quantity', 'qty': 'quantity', 'count': 'quantity',
-  // Wall type
-  'wall type': 'wallType', 'walltype': 'wallType',
-  // Throat thickness
-  'throat thickness': 'throatThickness', 'throat': 'throatThickness',
-  // Exclude reason
-  'exclude reason': 'excludeReason',
-  // Fire rating
-  'fire rating': 'fireRating', 'firerating': 'fireRating', 'fr': 'fireRating',
-  // Leaf count
+  // Handing / operation / leaf
+  'hand of openings': 'handOfOpenings', 'handing': 'handOfOpenings', 'hand of opening': 'handOfOpenings',
+  'door operation': 'doorOperation', 'operation': 'doorOperation',
   'leaf count': 'leafCount', 'leafcount': 'leafCount', 'leaves': 'leafCount',
-  // Door type (elevation code)
-  'door type': 'doorType', 'type': 'doorType', 'elevation': 'doorType',
+  // Exclude
+  'exclude reason': 'excludeReason', 'excludereason': 'excludeReason',
   // Dimensions
   'door width': 'doorWidth', 'width': 'doorWidth',
   'door height': 'doorHeight', 'height': 'doorHeight',
   'thickness': 'thickness',
   'door width (mm)': 'doorWidthMm', 'width (mm)': 'doorWidthMm',
   'door height (mm)': 'doorHeightMm', 'height (mm)': 'doorHeightMm',
-  // Materials
+  // Fire rating
+  'fire rating': 'fireRating', 'firerating': 'fireRating', 'fr': 'fireRating',
+  // Door type / elevation
+  'door type': 'doorType', 'type': 'doorType', 'elevation': 'doorType',
+  'door elevation type': 'doorElevationType', 'door elev type': 'doorElevationType',
+  // Door material & finish
   'door material': 'doorMaterial', 'door mat': 'doorMaterial',
+  'door core': 'doorCore', 'doorcore': 'doorCore',
+  'door face': 'doorFace', 'doorface': 'doorFace',
+  'door edge': 'doorEdge', 'dooredge': 'doorEdge',
+  'door guage': 'doorGauge', 'door gauge': 'doorGauge', 'doorguage': 'doorGauge', 'doorgauge': 'doorGauge',
   'door finish': 'doorFinish',
+  'stc rating': 'stcRating', 'stcrating': 'stcRating', 'stc': 'stcRating',
+  'door undercut': 'doorUndercut', 'undercut': 'doorUndercut',
+  'door include/exclude': 'doorIncludeExclude', 'door include exclude': 'doorIncludeExclude',
   'glazing type': 'glazingType', 'glazing': 'glazingType',
+  // Frame
+  'wall type': 'wallType', 'walltype': 'wallType',
+  'throat thickness': 'throatThickness', 'throat': 'throatThickness',
   'frame type': 'frameType',
   'frame material': 'frameMaterial', 'frame mat': 'frameMaterial',
+  'frame anchor': 'frameAnchor', 'frameanchor': 'frameAnchor',
+  'base anchor': 'baseAnchor', 'baseanchor': 'baseAnchor',
+  'no of anchor': 'numberOfAnchors', 'number of anchors': 'numberOfAnchors', 'noofanchor': 'numberOfAnchors',
+  'frame profile': 'frameProfile', 'frameprofile': 'frameProfile',
+  'frame elevation type': 'frameElevationType', 'frame elev type': 'frameElevationType',
+  'frame assembly': 'frameAssembly', 'frameassembly': 'frameAssembly',
+  'frame guage': 'frameGauge', 'frame gauge': 'frameGauge', 'frameguage': 'frameGauge', 'framegauge': 'frameGauge',
   'frame finish': 'frameFinish',
+  'prehung': 'prehung', 'pre hung': 'prehung', 'pre-hung': 'prehung',
+  'frame head': 'frameHead', 'framehead': 'frameHead',
+  'casing': 'casing',
+  'frame include/exclude': 'frameIncludeExclude', 'frame include exclude': 'frameIncludeExclude',
   // Hardware
-  'hardware set': 'hardwareSet', // human label (e.g. "STOREROOM LOCKSET")
+  'hardware include/exclude': 'hardwareIncludeExclude', 'hardware include exclude': 'hardwareIncludeExclude',
   'hardware prep': 'hardwarePrep', 'hw prep': 'hardwarePrep',
   'hardware on door': 'hardwareOnDoor', 'hardware on door ': 'hardwareOnDoor',
   // Boolean accessories
@@ -163,20 +186,41 @@ function buildHeaderMap(headers: string[]): Map<string, keyof DoorScheduleRow> {
 
 /**
  * Header keywords that strongly indicate a door schedule sheet.
- * Checked against the first non-empty row of each sheet.
+ * Checked against the first field-name row (skipping section-label rows).
  */
 const DOOR_SHEET_SIGNALS = new Set([
   'door tag', 'doortag', 'door#', 'door no', 'door no.', 'tag', 'mark',
   'dr. #', 'dr #',
-  'hw set', 'hwset', 'hw#', 'hardware set #', 'set#', 'set #',
+  'hw set', 'hwset', 'hw#', 'hardware set #', 'set#', 'set #', 'hardware set',
+  'door location', 'door material', 'fire rating',
 ]);
 
-/** Return the header cells from the first non-empty row of a worksheet. */
+/**
+ * Section-label values used in row 0 of the new sectioned Excel format.
+ * When a row contains ONLY these values (plus empty strings), it's a section header row.
+ */
+const SECTION_LABEL_TOKENS = new Set(['DOOR', 'FRAME', 'HARDWARE']);
+
+/** Returns true if the row is a section-label row (new 2-row header format). */
+function isSectionLabelRow(cells: string[]): boolean {
+  const nonEmpty = cells.filter((c) => c !== '');
+  return nonEmpty.length >= 2 && nonEmpty.every((c) => SECTION_LABEL_TOKENS.has(c.toUpperCase()));
+}
+
+/**
+ * Return the field-name header cells from a worksheet.
+ * Skips a leading section-label row if the new 2-row header format is detected.
+ */
 function getSheetHeaders(ws: XLSX.WorkSheet): string[] {
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
-  for (const row of rows) {
-    const cells = (row as unknown[]).map((c) => String(c ?? '').trim());
-    if (cells.some((c) => c !== '')) return cells;
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][];
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] as unknown[]).map((c) => String(c ?? '').trim());
+    if (!cells.some((c) => c !== '')) continue; // skip empty rows
+    if (isSectionLabelRow(cells) && i + 1 < rows.length) {
+      // This is the section-label row — the next row holds the real field names
+      return (rows[i + 1] as unknown[]).map((c) => String(c ?? '').trim());
+    }
+    return cells;
   }
   return [];
 }
@@ -227,6 +271,20 @@ function selectTargetSheet(workbook: XLSX.WorkBook): {
 // Excel parsing
 // ---------------------------------------------------------------------------
 
+// Builds the column-index → section name map for the sectioned format.
+function buildColSectionMap(sectionLabelRow: string[]): Record<number, 'door' | 'frame' | 'hardware'> {
+  const map: Record<number, 'door' | 'frame' | 'hardware'> = {};
+  let current: 'door' | 'frame' | 'hardware' = 'door';
+  sectionLabelRow.forEach((cell, idx) => {
+    const val = cell.toUpperCase();
+    if (val === 'DOOR')     current = 'door';
+    if (val === 'FRAME')    current = 'frame';
+    if (val === 'HARDWARE') current = 'hardware';
+    map[idx] = current;
+  });
+  return map;
+}
+
 function parseExcel(buffer: Buffer): { rows: DoorScheduleRow[]; warnings: string[] } {
   const warnings: string[] = [];
   const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -235,15 +293,30 @@ function parseExcel(buffer: Buffer): { rows: DoorScheduleRow[]; warnings: string
 
   const { targetSheet, skipped, confident } = selectTargetSheet(workbook);
 
-  // Only warn about skipped sheets when we weren't confident (uncertain fallback)
   if (!confident && skipped.length > 0) {
     warnings.push(`Could not auto-detect door schedule sheet — used "${targetSheet}". Skipped: ${skipped.join(', ')}`);
   }
 
   const ws = workbook.Sheets[targetSheet];
+
+  // Detect the 2-row sectioned header format by inspecting raw rows.
+  const allRawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][];
+  let sectionLabelRowIdx = -1;
+  for (let i = 0; i < allRawRows.length; i++) {
+    const cells = (allRawRows[i] as unknown[]).map((c) => String(c ?? '').trim());
+    if (!cells.some((c) => c !== '')) continue;
+    if (isSectionLabelRow(cells)) { sectionLabelRowIdx = i; break; }
+    break; // first non-empty row is not a section label → single-row header format
+  }
+
+  const isSectioned = sectionLabelRowIdx !== -1;
+  // When sectioned, data starts 2 rows after the section-label row (1 for field names, then data).
+  const dataRange = isSectioned ? sectionLabelRowIdx + 1 : 0;
+
   const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
     defval: '',
-    raw: false, // coerce all values to strings first; we coerce ourselves
+    raw: false,
+    range: dataRange, // skip section-label row; use field-name row as header
   });
 
   if (rawRows.length === 0) return { rows: [], warnings };
@@ -251,10 +324,46 @@ function parseExcel(buffer: Buffer): { rows: DoorScheduleRow[]; warnings: string
   const headers = Object.keys(rawRows[0]);
   const headerMap = buildHeaderMap(headers);
 
+  // For sectioned format, build the column→section mapping to populate `sections`.
+  const sectionLabelCells = isSectioned
+    ? (allRawRows[sectionLabelRowIdx] as unknown[]).map((c) => String(c ?? '').trim())
+    : [];
+  const colSectionMap = isSectioned ? buildColSectionMap(sectionLabelCells) : {};
+  const fieldNameCells = isSectioned
+    ? (allRawRows[sectionLabelRowIdx + 1] as unknown[]).map((c) => String(c ?? '').trim())
+    : [];
+
   const rows: DoorScheduleRow[] = [];
   for (const rawRow of rawRows) {
-    const row = mapRow(rawRow, headerMap);
-    if (row) rows.push(row);
+    if (isSectioned) {
+      // --- Sectioned format: emit ONLY doorTag + hwSet at top level, rest goes into sections ---
+      const doorSec: Record<string, string | undefined> = {};
+      const frameSec: Record<string, string | undefined> = {};
+      const hwSec: Record<string, string | undefined> = {};
+
+      fieldNameCells.forEach((fieldName, colIdx) => {
+        if (!fieldName) return;
+        const section = colSectionMap[colIdx] ?? 'door';
+        const rawVal = rawRow[fieldName];
+        const val = rawVal !== undefined && rawVal !== null && rawVal !== '' ? String(rawVal).trim() : undefined;
+        // Store using the original Excel column name so keys are consistent within each section.
+        if (section === 'door')          doorSec[fieldName] = val;
+        else if (section === 'frame')    frameSec[fieldName] = val;
+        else                             hwSec[fieldName] = val;
+      });
+
+      // doorTag and hwSet are the only join/identity keys kept at the top level.
+      const doorTag = coerceString(rawRow['DOOR TAG'] ?? rawRow['door tag'] ?? rawRow['Door Tag']);
+      if (!doorTag) continue; // skip rows without a door tag
+
+      const hwSet = coerceString(rawRow['HARDWARE SET'] ?? rawRow['hardware set'] ?? rawRow['Hardware Set'] ?? '');
+
+      rows.push({ doorTag, hwSet, sections: { door: doorSec, frame: frameSec, hardware: hwSec } });
+    } else {
+      // --- Legacy flat format ---
+      const row = mapRow(rawRow, headerMap);
+      if (row) rows.push(row);
+    }
   }
 
   return { rows, warnings };

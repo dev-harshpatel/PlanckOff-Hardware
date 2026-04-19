@@ -123,13 +123,13 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-[var(--bg)] rounded-lg shadow-sm border border-[var(--border)]">
             {/* Header */}
-            <div className="border-b border-gray-200 p-6">
+            <div className="border-b border-[var(--border)] p-6">
                 <div className="flex justify-between items-center mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Manufacturer Cut Sheet Library</h2>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Manufacturer Cut Sheet Library</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">
                             Upload and manage product documentation
                         </p>
                     </div>
@@ -144,13 +144,13 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                 {/* Filters */}
                 <div className="grid grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Manufacturer
                         </label>
                         <select
                             value={filterManufacturer}
                             onChange={(e) => setFilterManufacturer(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
                         >
                             <option value="">All Manufacturers</option>
                             {manufacturers.map(mfr => (
@@ -160,13 +160,13 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Category
                         </label>
                         <select
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
                         >
                             <option value="">All Categories</option>
                             <option value="Door">Door</option>
@@ -177,7 +177,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Search
                         </label>
                         <input
@@ -185,7 +185,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Product name, model..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
                         />
                     </div>
                 </div>
@@ -194,7 +194,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
             {/* Drag & Drop Zone */}
             {cutSheets.length === 0 && (
                 <div
-                    className={`m-6 border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'
+                    className={`m-6 border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive ? 'border-blue-500 bg-[var(--primary-bg)]' : 'border-[var(--border-strong)] bg-[var(--bg-subtle)]'
                         }`}
                     onDragEnter={handleDrag}
                     onDragLeave={handleDrag}
@@ -202,10 +202,10 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                     onDrop={handleDrop}
                 >
                     <div className="text-6xl mb-4">📄</div>
-                    <div className="text-lg font-semibold text-gray-900 mb-2">
+                    <div className="text-lg font-semibold text-[var(--text)] mb-2">
                         Drag & Drop PDF Cut Sheets Here
                     </div>
-                    <div className="text-sm text-gray-600 mb-4">
+                    <div className="text-sm text-[var(--text-muted)] mb-4">
                         or click the button above to upload
                     </div>
                     <input
@@ -230,7 +230,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                     {filteredCutSheets.map(cutSheet => (
                         <div
                             key={cutSheet.id}
-                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                            className="border border-[var(--border)] rounded-lg p-4 hover:shadow-md transition-shadow"
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="text-3xl">{getCategoryIcon(cutSheet.category)}</div>
@@ -250,17 +250,17 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                 </div>
                             </div>
 
-                            <h3 className="font-semibold text-gray-900 mb-1">{cutSheet.productName}</h3>
-                            <div className="text-sm text-gray-600 mb-2">{cutSheet.manufacturer}</div>
+                            <h3 className="font-semibold text-[var(--text)] mb-1">{cutSheet.productName}</h3>
+                            <div className="text-sm text-[var(--text-muted)] mb-2">{cutSheet.manufacturer}</div>
 
                             {cutSheet.modelNumber && (
-                                <div className="text-xs font-mono text-gray-500 mb-2">
+                                <div className="text-xs font-mono text-[var(--text-muted)] mb-2">
                                     Model: {cutSheet.modelNumber}
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
-                                <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border)]">
+                                <span className="text-xs px-2 py-1 bg-[var(--bg-muted)] text-[var(--text-secondary)] rounded">
                                     {cutSheet.category}
                                 </span>
                                 {cutSheet.csiSection && (
@@ -271,7 +271,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                             </div>
 
                             {(cutSheet.linkedDoorIds?.length || cutSheet.linkedHardwareItemIds?.length) ? (
-                                <div className="mt-2 text-xs text-gray-500">
+                                <div className="mt-2 text-xs text-[var(--text-muted)]">
                                     Linked: {cutSheet.linkedDoorIds?.length || 0} doors, {cutSheet.linkedHardwareItemIds?.length || 0} items
                                 </div>
                             ) : null}
@@ -281,7 +281,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
             )}
 
             {filteredCutSheets.length === 0 && cutSheets.length > 0 && (
-                <div className="p-12 text-center text-gray-500">
+                <div className="p-12 text-center text-[var(--text-muted)]">
                     <div className="text-4xl mb-2">🔍</div>
                     <div className="font-medium">No cut sheets found</div>
                     <div className="text-sm">Try adjusting your filters</div>
@@ -291,60 +291,60 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
             {/* Upload Modal */}
             {showUploadModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-xl font-bold text-gray-900">Add Cut Sheet</h3>
+                    <div className="bg-[var(--bg)] rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-[var(--border)]">
+                            <h3 className="text-xl font-bold text-[var(--text)]">Add Cut Sheet</h3>
                         </div>
 
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Manufacturer <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={newCutSheet.manufacturer}
                                     onChange={(e) => setNewCutSheet(prev => ({ ...prev, manufacturer: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="e.g., Schlage, LCN, McKinney"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Product Name <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={newCutSheet.productName}
                                     onChange={(e) => setNewCutSheet(prev => ({ ...prev, productName: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="e.g., ND80 Mortise Lock"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Model Number
                                 </label>
                                 <input
                                     type="text"
                                     value={newCutSheet.modelNumber}
                                     onChange={(e) => setNewCutSheet(prev => ({ ...prev, modelNumber: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="e.g., ND80PD RHO 626"
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                         Category
                                     </label>
                                     <select
                                         value={newCutSheet.category}
                                         onChange={(e) => setNewCutSheet(prev => ({ ...prev, category: e.target.value as any }))}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     >
                                         <option value="Door">Door</option>
                                         <option value="Frame">Frame</option>
@@ -354,14 +354,14 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                         CSI Section
                                     </label>
                                     <input
                                         type="text"
                                         value={newCutSheet.csiSection}
                                         onChange={(e) => setNewCutSheet(prev => ({ ...prev, csiSection: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
+                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] font-mono"
                                         placeholder="08 71 00"
                                     />
                                 </div>
@@ -377,7 +377,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                             )}
                         </div>
 
-                        <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                        <div className="p-6 border-t border-[var(--border)] flex justify-end gap-3">
                             <button
                                 onClick={() => {
                                     setShowUploadModal(false);
@@ -390,7 +390,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                         file: null
                                     });
                                 }}
-                                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="px-4 py-2 border border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-subtle)] text-[var(--text)]"
                             >
                                 Cancel
                             </button>
@@ -408,15 +408,15 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
             {/* Preview Modal */}
             {previewCutSheet && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                    <div className="bg-[var(--bg)] rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-[var(--border)] flex justify-between items-center">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">{previewCutSheet.productName}</h3>
-                                <p className="text-sm text-gray-600">{previewCutSheet.manufacturer}</p>
+                                <h3 className="text-xl font-bold text-[var(--text)]">{previewCutSheet.productName}</h3>
+                                <p className="text-sm text-[var(--text-muted)]">{previewCutSheet.manufacturer}</p>
                             </div>
                             <button
                                 onClick={() => setPreviewCutSheet(null)}
-                                className="text-gray-400 hover:text-gray-600"
+                                className="text-[var(--text-faint)] hover:text-[var(--text-muted)]"
                             >
                                 ✕
                             </button>
@@ -425,7 +425,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                         <div className="p-6">
                             <iframe
                                 src={previewCutSheet.fileUrl}
-                                className="w-full h-[600px] border border-gray-300 rounded"
+                                className="w-full h-[600px] border border-[var(--border-strong)] rounded"
                                 title="Cut Sheet Preview"
                             />
                         </div>

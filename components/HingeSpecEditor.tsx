@@ -57,7 +57,7 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="text-lg font-semibold text-gray-800">Hinge Specification</h3>
+                <h3 className="text-lg font-semibold text-[var(--text)]">Hinge Specification</h3>
                 <div className="flex items-center gap-2">
                     {value && (
                         <button
@@ -67,7 +67,7 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                             Clear Spec
                         </button>
                     )}
-                    <span className="text-xs text-gray-500">🚪 Hardware</span>
+                    <span className="text-xs text-[var(--text-muted)]">🚪 Hardware</span>
                 </div>
             </div>
 
@@ -89,7 +89,7 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
             {/* Hinge Count */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Hinge Count <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -99,21 +99,21 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                         value={value?.count || getSuggestedHingeCount()}
                         onChange={(e) => updateField('count', parseInt(e.target.value) || 3)}
                         placeholder={`Suggested: ${getSuggestedHingeCount()}`}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
                         Typically 3-5 hinges per door
                     </p>
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Hinge Size <span className="text-red-500">*</span>
                     </label>
                     <select
                         value={value?.size || '4.5" x 4.5"'}
                         onChange={(e) => updateField('size', e.target.value as HingeSpec['size'])}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                     >
                         <option value='4.5" x 4.5"'>4.5" x 4.5" (Standard)</option>
                         <option value='5" x 5"'>5" x 5" (Heavy Duty)</option>
@@ -126,13 +126,13 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
             {/* Hinge Type & Material */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Hinge Type <span className="text-red-500">*</span>
                     </label>
                     <select
                         value={value?.type || 'Full Mortise'}
                         onChange={(e) => updateField('type', e.target.value as HingeSpec['type'])}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                     >
                         <option value="Full Mortise">Full Mortise (Most Common)</option>
                         <option value="Half Mortise">Half Mortise</option>
@@ -143,13 +143,13 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Material <span className="text-red-500">*</span>
                     </label>
                     <select
                         value={value?.material || 'Steel'}
                         onChange={(e) => updateField('material', e.target.value as HingeSpec['material'])}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                     >
                         <option value="Steel">Steel (Standard)</option>
                         <option value="Stainless Steel">Stainless Steel (Exterior/Moisture)</option>
@@ -161,13 +161,13 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
 
             {/* Finish */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Finish / Color</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Finish / Color</label>
                 <input
                     type="text"
                     value={value?.finish || ''}
                     onChange={(e) => updateField('finish', e.target.value || undefined)}
                     placeholder="e.g., US26D (Satin Chrome), US32D (Satin Stainless)"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                     Use ANSI/BHMA finish codes (e.g., US26D, US32D) or color names
@@ -176,7 +176,7 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
 
             {/* Special Features */}
             <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">Special Features</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border-subtle)] pb-1">Special Features</h4>
 
                 <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center">
@@ -185,11 +185,11 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                             id="ballBearing"
                             checked={value?.ballBearing || false}
                             onChange={(e) => updateField('ballBearing', e.target.checked)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                         />
-                        <label htmlFor="ballBearing" className="ml-2 text-sm text-gray-700">
+                        <label htmlFor="ballBearing" className="ml-2 text-sm text-[var(--text-secondary)]">
                             Ball Bearing
-                            <span className="text-xs text-gray-500 block">Recommended for heavy/high-traffic doors</span>
+                            <span className="text-xs text-[var(--text-muted)] block">Recommended for heavy/high-traffic doors</span>
                         </label>
                     </div>
 
@@ -199,11 +199,11 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                             id="nrp"
                             checked={value?.nrp || false}
                             onChange={(e) => updateField('nrp', e.target.checked)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                         />
-                        <label htmlFor="nrp" className="ml-2 text-sm text-gray-700">
+                        <label htmlFor="nrp" className="ml-2 text-sm text-[var(--text-secondary)]">
                             Non-Removable Pin (NRP)
-                            <span className="text-xs text-gray-500 block">Security feature for outswing doors</span>
+                            <span className="text-xs text-[var(--text-muted)] block">Security feature for outswing doors</span>
                         </label>
                     </div>
 
@@ -213,11 +213,11 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                             id="electricWire"
                             checked={value?.electricWire || false}
                             onChange={(e) => updateField('electricWire', e.target.checked)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                         />
-                        <label htmlFor="electricWire" className="ml-2 text-sm text-gray-700">
+                        <label htmlFor="electricWire" className="ml-2 text-sm text-[var(--text-secondary)]">
                             Electric Wire Through Hinge
-                            <span className="text-xs text-gray-500 block">For electrified hardware (EPT alternative)</span>
+                            <span className="text-xs text-[var(--text-muted)] block">For electrified hardware (EPT alternative)</span>
                         </label>
                     </div>
                 </div>

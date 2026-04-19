@@ -29,7 +29,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
             case 'Submitted': return 'bg-blue-100 text-blue-800 border-blue-200';
             case 'Reviewed': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
             case 'Rejected': return 'bg-red-100 text-red-800 border-red-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            default: return 'bg-[var(--bg-muted)] text-[var(--text-secondary)] border-[var(--border)]';
         }
     };
 
@@ -84,13 +84,13 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
     const sortedRevisions = [...revisions].sort((a, b) => b.revisionNumber - a.revisionNumber);
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-[var(--bg)] rounded-lg shadow-sm border border-[var(--border)]">
             {/* Header */}
-            <div className="border-b border-gray-200 p-6">
+            <div className="border-b border-[var(--border)] p-6">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Revision History</h2>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Revision History</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">
                             Track changes and approval workflow
                         </p>
                     </div>
@@ -106,7 +106,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
             {/* Timeline */}
             <div className="p-6">
                 {sortedRevisions.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
+                    <div className="text-center py-12 text-[var(--text-muted)]">
                         <div className="text-4xl mb-2">📋</div>
                         <div className="font-medium">No revisions yet</div>
                         <div className="text-sm">Create your first revision to get started</div>
@@ -120,12 +120,12 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                             return (
                                 <div
                                     key={revision.revisionNumber}
-                                    className={`border rounded-lg ${isCurrent ? 'border-blue-500 shadow-md' : 'border-gray-200'
+                                    className={`border rounded-lg ${isCurrent ? 'border-blue-500 shadow-md' : 'border-[var(--border)]'
                                         }`}
                                 >
                                     {/* Revision Header */}
                                     <div
-                                        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                        className="p-4 cursor-pointer hover:bg-[var(--bg-subtle)] transition-colors"
                                         onClick={() => setExpandedRevision(isExpanded ? null : revision.revisionNumber)}
                                     >
                                         <div className="flex items-start justify-between">
@@ -134,19 +134,19 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                                                 <div className="relative">
                                                     <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold ${isCurrent ? 'bg-blue-500 text-white border-blue-600' :
                                                             revision.status === 'Approved' ? 'bg-green-500 text-white border-green-600' :
-                                                                'bg-white text-gray-700 border-gray-300'
+                                                                'bg-[var(--bg)] text-[var(--text-secondary)] border-[var(--border-strong)]'
                                                         }`}>
                                                         {revision.revisionNumber}
                                                     </div>
                                                     {index < sortedRevisions.length - 1 && (
-                                                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 w-0.5 h-8 bg-gray-300"></div>
+                                                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 w-0.5 h-8 bg-[var(--border-strong)]"></div>
                                                     )}
                                                 </div>
 
                                                 {/* Revision Info */}
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-3 mb-2">
-                                                        <h3 className="text-lg font-semibold text-gray-900">
+                                                        <h3 className="text-lg font-semibold text-[var(--text)]">
                                                             Rev {revision.revisionNumber}
                                                             {isCurrent && (
                                                                 <span className="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
@@ -159,23 +159,23 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                                                         </span>
                                                     </div>
 
-                                                    <div className="text-sm text-gray-600 mb-1">
+                                                    <div className="text-sm text-[var(--text-muted)] mb-1">
                                                         <strong>{revision.changedBy}</strong> • {new Date(revision.revisionDate).toLocaleDateString()}
                                                     </div>
 
-                                                    <div className="text-sm text-gray-700">
+                                                    <div className="text-sm text-[var(--text-secondary)]">
                                                         {revision.changeDescription}
                                                     </div>
 
                                                     {revision.affectedDoors && revision.affectedDoors.length > 0 && (
-                                                        <div className="mt-2 text-xs text-gray-500">
+                                                        <div className="mt-2 text-xs text-[var(--text-muted)]">
                                                             Affected doors: {revision.affectedDoors.join(', ')}
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* Expand/Collapse Icon */}
-                                                <button className="text-gray-400 hover:text-gray-600">
+                                                <button className="text-[var(--text-faint)] hover:text-[var(--text-muted)]">
                                                     {isExpanded ? '▼' : '▶'}
                                                 </button>
                                             </div>
@@ -184,7 +184,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
 
                                     {/* Expanded Details */}
                                     {isExpanded && (
-                                        <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
+                                        <div className="border-t border-[var(--border)] bg-[var(--bg-subtle)] p-4 space-y-4">
                                             {/* Review Comments */}
                                             {revision.reviewComments && (
                                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -270,43 +270,43 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
             {/* New Revision Modal */}
             {showNewRevisionModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-                        <div className="p-6 border-b border-gray-200">
-                            <h3 className="text-xl font-bold text-gray-900">Create New Revision</h3>
-                            <p className="text-sm text-gray-600 mt-1">
+                    <div className="bg-[var(--bg)] rounded-lg shadow-xl max-w-2xl w-full mx-4">
+                        <div className="p-6 border-b border-[var(--border)]">
+                            <h3 className="text-xl font-bold text-[var(--text)]">Create New Revision</h3>
+                            <p className="text-sm text-[var(--text-muted)] mt-1">
                                 Rev {currentRevision + 1}
                             </p>
                         </div>
 
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Changed By <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={newRevisionData.changedBy}
                                     onChange={(e) => setNewRevisionData(prev => ({ ...prev, changedBy: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="Your name"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Change Description <span className="text-red-500">*</span>
                                 </label>
                                 <textarea
                                     value={newRevisionData.changeDescription}
                                     onChange={(e) => setNewRevisionData(prev => ({ ...prev, changeDescription: e.target.value }))}
                                     rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="Describe what changed in this revision..."
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Affected Doors (Optional)
                                 </label>
                                 <input
@@ -316,19 +316,19 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                                         ...prev,
                                         affectedDoors: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                                     }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                     placeholder="e.g., 101, 102, 103"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Initial Status
                                 </label>
                                 <select
                                     value={newRevisionData.status}
                                     onChange={(e) => setNewRevisionData(prev => ({ ...prev, status: e.target.value as SubmittalStatus }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
                                 >
                                     <option value="Draft">Draft</option>
                                     <option value="Submitted">Submitted</option>
@@ -336,7 +336,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                        <div className="p-6 border-t border-[var(--border)] flex justify-end gap-3">
                             <button
                                 onClick={() => {
                                     setShowNewRevisionModal(false);
@@ -347,7 +347,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                                         status: 'Draft'
                                     });
                                 }}
-                                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="px-4 py-2 border border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-subtle)] text-[var(--text)]"
                             >
                                 Cancel
                             </button>

@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemeProvider } from 'next-themes';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProjectProvider } from '@/contexts/ProjectContext';
@@ -13,16 +14,18 @@ interface ProvidersProps {
 /** Wraps the entire app in all global context providers. */
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <ProjectProvider>
-          <BackgroundUploadProvider>
-            <AnnouncementProvider>
-              {children}
-            </AnnouncementProvider>
-          </BackgroundUploadProvider>
-        </ProjectProvider>
-      </AuthProvider>
-    </ToastProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ToastProvider>
+        <AuthProvider>
+          <ProjectProvider>
+            <BackgroundUploadProvider>
+              <AnnouncementProvider>
+                {children}
+              </AnnouncementProvider>
+            </BackgroundUploadProvider>
+          </ProjectProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

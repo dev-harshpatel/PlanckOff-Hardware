@@ -51,13 +51,13 @@ const ProcurementSummaryView: React.FC<ProcurementSummaryViewProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-[var(--bg)] rounded-lg shadow-sm border border-[var(--border)]">
             {/* Header */}
-            <div className="border-b border-gray-200 p-6">
+            <div className="border-b border-[var(--border)] p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Procurement Summary</h2>
-                        <p className="text-gray-600 mt-1">Hardware grouped for efficient ordering</p>
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Procurement Summary</h2>
+                        <p className="text-[var(--text-muted)] mt-1">Hardware grouped for efficient ordering</p>
                     </div>
                     <button
                         onClick={handleExportExcel}
@@ -90,13 +90,13 @@ const ProcurementSummaryView: React.FC<ProcurementSummaryViewProps> = ({
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-[var(--border)]">
                 <div className="flex gap-4 px-6">
                     <button
                         onClick={() => setCurrentTab('manufacturer')}
                         className={`py-3 px-4 font-medium border-b-2 transition-colors ${currentTab === 'manufacturer'
                                 ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
                             }`}
                     >
                         By Manufacturer
@@ -105,7 +105,7 @@ const ProcurementSummaryView: React.FC<ProcurementSummaryViewProps> = ({
                         onClick={() => setCurrentTab('leadtime')}
                         className={`py-3 px-4 font-medium border-b-2 transition-colors ${currentTab === 'leadtime'
                                 ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
                             }`}
                     >
                         By Lead Time
@@ -114,7 +114,7 @@ const ProcurementSummaryView: React.FC<ProcurementSummaryViewProps> = ({
                         onClick={() => setCurrentTab('critical')}
                         className={`py-3 px-4 font-medium border-b-2 transition-colors ${currentTab === 'critical'
                                 ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
                             }`}
                     >
                         Critical Path
@@ -157,15 +157,15 @@ const ManufacturerView: React.FC<{
             {groups.map(group => {
                 const isExpanded = expandedGroups.has(group.manufacturer);
                 return (
-                    <div key={group.manufacturer} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div key={group.manufacturer} className="border border-[var(--border)] rounded-lg overflow-hidden">
                         {/* Group Header */}
                         <div
                             onClick={() => onToggleGroup(group.manufacturer)}
-                            className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
+                            className="bg-[var(--bg-subtle)] p-4 cursor-pointer hover:bg-[var(--bg-muted)] transition-colors flex items-center justify-between"
                         >
                             <div className="flex items-center gap-3">
                                 <svg
-                                    className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                    className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -173,26 +173,26 @@ const ManufacturerView: React.FC<{
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
                                 <div>
-                                    <h3 className="font-bold text-gray-900">{group.manufacturer}</h3>
-                                    <p className="text-sm text-gray-600">
+                                    <h3 className="font-bold text-[var(--text)]">{group.manufacturer}</h3>
+                                    <p className="text-sm text-[var(--text-muted)]">
                                         {group.items.length} items • {group.totalQuantity} total qty
                                     </p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="font-bold text-gray-900">
+                                <div className="font-bold text-[var(--text)]">
                                     ${group.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </div>
-                                <div className="text-sm text-gray-600">Lead: {group.longestLeadTime}</div>
+                                <div className="text-sm text-[var(--text-muted)]">Lead: {group.longestLeadTime}</div>
                             </div>
                         </div>
 
                         {/* Group Items */}
                         {isExpanded && (
-                            <div className="p-4 bg-white">
+                            <div className="p-4 bg-[var(--bg)]">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="text-left text-sm text-gray-600 border-b">
+                                        <tr className="text-left text-sm text-[var(--text-muted)] border-b border-[var(--border)]">
                                             <th className="pb-2">Product</th>
                                             <th className="pb-2">Model</th>
                                             <th className="pb-2">Qty</th>
@@ -205,14 +205,14 @@ const ManufacturerView: React.FC<{
                                         {group.items.map((item, idx) => (
                                             <tr key={idx} className="border-b last:border-0">
                                                 <td className="py-2 font-medium">{item.name}</td>
-                                                <td className="py-2 text-gray-600">{item.model}</td>
+                                                <td className="py-2 text-[var(--text-muted)]">{item.model}</td>
                                                 <td className="py-2">{item.quantity}</td>
-                                                <td className="py-2 text-gray-600">{item.leadTime}</td>
+                                                <td className="py-2 text-[var(--text-muted)]">{item.leadTime}</td>
                                                 <td className="py-2">
                                                     {item.ansiGrade && (
                                                         <span className={`px-2 py-1 rounded text-xs font-medium ${item.ansiGrade === 'Grade 1' ? 'bg-green-100 text-green-800' :
                                                                 item.ansiGrade === 'Grade 2' ? 'bg-yellow-100 text-yellow-800' :
-                                                                    'bg-gray-100 text-gray-800'
+                                                                    'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
                                                             }`}>
                                                             {item.ansiGrade}
                                                         </span>
@@ -245,15 +245,15 @@ const LeadTimeView: React.FC<{
             {groups.map(group => {
                 const isExpanded = expandedGroups.has(group.leadTime);
                 return (
-                    <div key={group.leadTime} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div key={group.leadTime} className="border border-[var(--border)] rounded-lg overflow-hidden">
                         {/* Group Header */}
                         <div
                             onClick={() => onToggleGroup(group.leadTime)}
-                            className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
+                            className="bg-[var(--bg-subtle)] p-4 cursor-pointer hover:bg-[var(--bg-muted)] transition-colors flex items-center justify-between"
                         >
                             <div className="flex items-center gap-3">
                                 <svg
-                                    className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                    className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -261,23 +261,23 @@ const LeadTimeView: React.FC<{
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
                                 <div>
-                                    <h3 className="font-bold text-gray-900">{group.leadTime}</h3>
-                                    <p className="text-sm text-gray-600">
+                                    <h3 className="font-bold text-[var(--text)]">{group.leadTime}</h3>
+                                    <p className="text-sm text-[var(--text-muted)]">
                                         {group.items.length} items • {group.manufacturers.length} manufacturers
                                     </p>
                                 </div>
                             </div>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-[var(--text-muted)]">
                                 {group.manufacturers.join(', ')}
                             </div>
                         </div>
 
                         {/* Group Items */}
                         {isExpanded && (
-                            <div className="p-4 bg-white">
+                            <div className="p-4 bg-[var(--bg)]">
                                 <table className="w-full">
                                     <thead>
-                                        <tr className="text-left text-sm text-gray-600 border-b">
+                                        <tr className="text-left text-sm text-[var(--text-muted)] border-b border-[var(--border)]">
                                             <th className="pb-2">Product</th>
                                             <th className="pb-2">Model</th>
                                             <th className="pb-2">Qty</th>
@@ -289,10 +289,10 @@ const LeadTimeView: React.FC<{
                                         {group.items.map((item, idx) => (
                                             <tr key={idx} className="border-b last:border-0">
                                                 <td className="py-2 font-medium">{item.name}</td>
-                                                <td className="py-2 text-gray-600">{item.model}</td>
+                                                <td className="py-2 text-[var(--text-muted)]">{item.model}</td>
                                                 <td className="py-2">{item.quantity}</td>
-                                                <td className="py-2 text-gray-600">{item.setName}</td>
-                                                <td className="py-2 text-gray-600">{item.csiSection}</td>
+                                                <td className="py-2 text-[var(--text-muted)]">{item.setName}</td>
+                                                <td className="py-2 text-[var(--text-muted)]">{item.csiSection}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -328,7 +328,7 @@ const CriticalPathView: React.FC<{
 
             <table className="w-full">
                 <thead>
-                    <tr className="text-left text-sm text-gray-600 border-b">
+                    <tr className="text-left text-sm text-[var(--text-muted)] border-b border-[var(--border)]">
                         <th className="pb-2">Product</th>
                         <th className="pb-2">Manufacturer</th>
                         <th className="pb-2">Model</th>
@@ -342,8 +342,8 @@ const CriticalPathView: React.FC<{
                     {items.map((item, idx) => (
                         <tr key={idx} className="border-b last:border-0">
                             <td className="py-3 font-medium">{item.name}</td>
-                            <td className="py-3 text-gray-600">{item.manufacturer}</td>
-                            <td className="py-3 text-gray-600">{item.model}</td>
+                            <td className="py-3 text-[var(--text-muted)]">{item.manufacturer}</td>
+                            <td className="py-3 text-[var(--text-muted)]">{item.model}</td>
                             <td className="py-3">{item.quantity}</td>
                             <td className="py-3">
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.leadTimeWeeks >= 8 ? 'bg-red-100 text-red-800' :
@@ -357,7 +357,7 @@ const CriticalPathView: React.FC<{
                                 {item.ansiGrade && (
                                     <span className={`px-2 py-1 rounded text-xs font-medium ${item.ansiGrade === 'Grade 1' ? 'bg-green-100 text-green-800' :
                                             item.ansiGrade === 'Grade 2' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800'
+                                                'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
                                         }`}>
                                         {item.ansiGrade}
                                     </span>
@@ -372,7 +372,7 @@ const CriticalPathView: React.FC<{
             </table>
 
             {items.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
+                <div className="text-center py-12 text-[var(--text-muted)]">
                     No critical path items found. All items have standard lead times.
                 </div>
             )}

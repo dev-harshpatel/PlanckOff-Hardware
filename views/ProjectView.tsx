@@ -7,18 +7,18 @@ import HardwareSetsManager from '../components/HardwareSetsManager';
 import DoorScheduleManager from '../components/DoorScheduleManager';
 import { generateReport } from '../utils/reportGenerator';
 // process... imports removed from direct use, but types might be needed
-import { CheckCircleIcon, ExclamationCircleIcon, ArrowLeftIcon, CameraIcon } from '../components/icons';
+import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
-import ImageAnalysisModal from '../components/ImageAnalysisModal';
 import { captureTrainingExample } from '../services/mlOpsService';
 import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
 import UploadConfirmationModal from '../components/UploadConfirmationModal';
-import ProcessingIndicator, { type ProcessingTask } from '../components/ProcessingIndicator';
+import { type ProcessingTask } from '../components/ProcessingIndicator';
 import ErrorModal from '../components/ErrorModal';
 import ValidationReportModal from '../components/ValidationReportModal';
 import ResizablePanels from '../components/ResizablePanels';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
-import UploadProgressWidget from '../components/UploadProgressWidget';
+
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -26,31 +26,28 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus; onRetry: () => void }>
     switch (status) {
         case 'saving':
             return (
-                <div className="flex items-center text-sm text-gray-500 animate-pulse">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
+                <div className="flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Saving…
                 </div>
             );
         case 'saved':
             return (
-                <div className="flex items-center text-sm text-green-600 font-semibold">
-                    <CheckCircleIcon className="w-5 h-5 mr-1.5" />
-                    All changes saved
+                <div className="flex items-center gap-1.5 text-xs text-green-600">
+                    <Check className="h-3.5 w-3.5" />
+                    Saved
                 </div>
             );
         case 'error':
             return (
-                <div className="flex items-center text-sm text-red-600 font-semibold">
-                    <ExclamationCircleIcon className="w-5 h-5 mr-1.5" />
-                    Save Failed.
-                    <button onClick={onRetry} className="ml-2 underline hover:text-red-800">Retry</button>
+                <div className="flex items-center gap-1.5 text-xs text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Save failed
+                    <button onClick={onRetry} className="underline hover:text-red-800 ml-1">Retry</button>
                 </div>
             );
         default:
-            return <div className="h-6" />;
+            return <div className="h-5" />;
     }
 };
 
@@ -132,7 +129,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     };
 
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-    const [isImageAnalysisOpen, setIsImageAnalysisOpen] = useState(false);
     const [isElevationManagerOpen, setIsElevationManagerOpen] = useState(false);
     const isInitialMount = useRef(true);
 
@@ -467,12 +463,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setHardwareSets(current => current.filter(s => !setIds.has(s.id)));
     };
 
-    const handleSplitSetAndReassign = (newSetData: HardwareSet, doorIds: string[]) => {
+    const handleSplitSetAndReassign = (newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
         const newSet: HardwareSet = {
             ...newSetData,
             id: `hs-variant-${Date.now()}`,
         };
-        setHardwareSets(prevSets => [...prevSets, newSet]);
+        setHardwareSets(prevSets => {
+            const idx = prevSets.findIndex(s => s.id === sourceSetId);
+            if (idx === -1) return [...prevSets, newSet];
+            const updated = [...prevSets];
+            updated.splice(idx + 1, 0, newSet);
+            return updated;
+        });
         setDoors(prevDoors => {
             return prevDoors.map(door => {
                 if (doorIds.includes(door.id)) {
@@ -526,94 +528,111 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setDoors(updatedDoors);
     };
 
+    const hardwareActiveTask = processingTasks.find(t => t.type === 'hardware-pdf');
+    const doorActiveTask = processingTasks.find(t => t.type === 'door-schedule');
+
     const hardwareSetsPanel = (
-        <div className="h-full p-5">
+        <div className="h-full min-h-0 p-5 flex flex-col">
             <HardwareSetsManager
                 hardwareSets={hardwareSets}
                 doors={doors}
-                isLoading={false} // Loading handled by widget
+                isLoading={false}
                 onProcessUploads={handleHardwareUploads}
                 onSaveSet={handleSaveSet}
                 onDeleteSet={handleDeleteSet}
                 onBulkDeleteSets={handleBulkDeleteSets}
                 onCreateVariant={handleSplitSetAndReassign}
+                activeTask={hardwareActiveTask}
             />
         </div>
     );
 
     const doorSchedulePanel = (
-        <div className="h-full p-5">
+        <div className="h-full min-h-0 p-5 flex flex-col">
             <DoorScheduleManager
                 doors={doors}
                 onDoorsUpdate={handleDoorsUpdate}
                 hardwareSets={hardwareSets}
-                isLoading={false} // Loading handled by widget
+                isLoading={false}
                 onUploadClick={() => doorScheduleInputRef.current?.click()}
                 appSettings={appSettings}
                 onProvidedSetChange={handleProvidedSetChange}
                 elevationTypes={project.elevationTypes || []}
                 onManageElevations={() => setIsElevationManagerOpen(true)}
                 addToast={addToast}
+                activeTask={doorActiveTask}
             />
         </div>
     );
 
     return (
-        <main className="flex-grow flex flex-col overflow-hidden">
+        <main className="h-full min-h-0 flex flex-col overflow-hidden">
             {/* Top Navigation Bar */}
-            <div className="bg-white border-b border-gray-200 flex-shrink-0">
-                <div className="px-5 py-3 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBackToDashboard} className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-700 transition-colors">
-                            <ArrowLeftIcon className="w-5 h-5" />
-                            Back to Dashboard
+            <div className="bg-[var(--bg)] border-b border-[var(--border)] flex-shrink-0">
+                <div className="px-4 h-12 flex items-center justify-between gap-4">
+
+                    {/* Left — back + actions */}
+                    <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={onBackToDashboard} className="gap-1.5 text-[var(--text-muted)]">
+                            <ArrowLeft className="h-4 w-4" />
+                            <span className="hidden sm:inline">Dashboard</span>
+                        </Button>
+
+                        <div className="w-px h-4 bg-[var(--border)] mx-1" />
+
+                        <Button variant="ghost" size="sm" onClick={() => router.push(`/project/${project.id}/reports`)} className="gap-1.5 text-[var(--text-muted)]">
+                            <BarChart2 className="h-4 w-4" />
+                            <span className="hidden md:inline">Reports</span>
+                        </Button>
+                    </div>
+
+                    {/* Centre — view mode segmented control */}
+                    <div className="flex items-center bg-[var(--bg-muted)] rounded-lg p-0.5 gap-0.5">
+                        <button
+                            onClick={() => setViewMode('hardware')}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'hardware' ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                        >
+                            <PanelLeft className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Hardware</span>
                         </button>
-                        <button onClick={() => setIsImageAnalysisOpen(true)} className="flex items-center gap-2 text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors bg-primary-50 px-3 py-1.5 rounded-full border border-primary-200">
-                            <CameraIcon className="w-4 h-4" />
-                            Analyze Image
+                        <button
+                            onClick={() => setViewMode('split')}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'split' ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                        >
+                            <Columns2 className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Split</span>
                         </button>
-                        <button onClick={() => router.push(`/project/${project.id}/reports`)} className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Reports
+                        <button
+                            onClick={() => setViewMode('doors')}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'doors' ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                        >
+                            <PanelRight className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Doors</span>
                         </button>
                     </div>
 
-                    <div className="bg-gray-100 p-1 rounded-lg border border-gray-200 flex items-center">
-                        <button onClick={() => setViewMode('hardware')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'hardware' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-                            Hardware Only
-                        </button>
-                        <button onClick={() => setViewMode('split')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'split' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-                            Split View
-                        </button>
-                        <button onClick={() => setViewMode('doors')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'doors' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-                            Doors Only
-                        </button>
-                    </div>
-
-                    <div className="w-48 flex justify-end">
+                    {/* Right — save status */}
+                    <div className="flex justify-end min-w-[90px]">
                         <SaveStatusIndicator status={saveStatus} onRetry={performSave} />
                     </div>
+
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-grow overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-hidden">
                 {viewMode === 'hardware' && (
-                    <div className="h-full w-full overflow-hidden bg-gray-50 relative">
+                    <div className="h-full min-h-0 w-full overflow-hidden bg-[var(--bg-subtle)] relative">
                         {hardwareSetsPanel}
-                        <UploadProgressWidget />
                     </div>
                 )}
                 {viewMode === 'doors' && (
-                    <div className="h-full w-full overflow-hidden bg-gray-50 relative">
+                    <div className="h-full min-h-0 w-full overflow-hidden bg-[var(--bg-subtle)] relative">
                         {doorSchedulePanel}
-                        <UploadProgressWidget />
                     </div>
                 )}
                 {viewMode === 'split' && (
-                    <div className="relative h-full">
+                    <div className="relative h-full min-h-0">
                         <ResizablePanels
                             defaultSplit={60}
                             minLeftWidth={40}
@@ -622,19 +641,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             leftPanel={hardwareSetsPanel}
                             rightPanel={doorSchedulePanel}
                         />
-                        <UploadProgressWidget />
                     </div>
                 )}
             </div>
 
             <input type="file" ref={doorScheduleInputRef} onChange={handleDoorScheduleUpload} className="hidden" accept=".csv,.xlsx" />
-
-            <ImageAnalysisModal
-                isOpen={isImageAnalysisOpen}
-                onClose={() => setIsImageAnalysisOpen(false)}
-                appSettings={appSettings}
-                addToast={addToast}
-            />
 
             <UploadConfirmationModal
                 isOpen={isDoorUploadModalOpen}
@@ -655,8 +666,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 title="Confirm Hardware PDF Upload"
                 entityName="hardware sets"
             />
-
-            <ProcessingIndicator tasks={processingTasks} />
 
             <ErrorModal
                 isOpen={isErrorModalOpen}

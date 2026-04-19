@@ -14,8 +14,8 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
-      <body className="bg-gray-100 dark:bg-gray-900">
+    <html lang="en" suppressHydrationWarning>
+      <body className="h-screen overflow-hidden bg-[var(--bg-muted)]">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

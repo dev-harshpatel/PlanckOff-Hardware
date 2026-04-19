@@ -21,31 +21,61 @@ export interface ExtractedHardwareSet {
 export interface DoorScheduleRow {
   doorTag: string;
   hwSet: string;
+  // Identity
+  buildingTag?: string;
   buildingArea?: string;
+  buildingLocation?: string;
   roomNumber?: string;
   doorLocation?: string;
   interiorExterior?: string;
   quantity?: number;
-  wallType?: string;
-  throatThickness?: string;
-  excludeReason?: string;
-  fireRating?: string;
+  handOfOpenings?: string;
+  doorOperation?: string;
   leafCount?: string;
-  doorType?: string;
+  excludeReason?: string;
+  // Dimensions
   doorWidth?: string;
   doorHeight?: string;
   thickness?: string;
   doorWidthMm?: string;
   doorHeightMm?: string;
+  // Door material & finish
+  fireRating?: string;
+  doorType?: string;
+  doorElevationType?: string;
   doorMaterial?: string;
+  doorCore?: string;
+  doorFace?: string;
+  doorEdge?: string;
+  doorGauge?: string;
   doorFinish?: string;
+  stcRating?: string;
+  doorUndercut?: string;
+  doorIncludeExclude?: string;
   glazingType?: string;
+  // Frame
+  wallType?: string;
+  throatThickness?: string;
   frameType?: string;
   frameMaterial?: string;
+  frameAnchor?: string;
+  baseAnchor?: string;
+  numberOfAnchors?: string;
+  frameProfile?: string;
+  frameElevationType?: string;
+  frameAssembly?: string;
+  frameGauge?: string;
   frameFinish?: string;
+  prehung?: string;
+  frameHead?: string;
+  casing?: string;
+  frameIncludeExclude?: string;
+  // Hardware
   hardwareSet?: string;
+  hardwareIncludeExclude?: string;
   hardwarePrep?: string;
   hardwareOnDoor?: string;
+  // Accessories (boolean flags)
   hasCardReader?: boolean;
   hasKeyPad?: boolean;
   hasAutoOperator?: boolean;
@@ -57,6 +87,13 @@ export interface DoorScheduleRow {
   hasFrameProtection?: boolean;
   hasDoorCloser?: boolean;
   comments?: string;
+  // Sectioned representation from structured Excel uploads.
+  // Keys are the original Excel column names (e.g. "DOOR TAG", "FRAME MATERIAL", "HARDWARE SET").
+  sections?: {
+    door: Record<string, string | undefined>;
+    frame: Record<string, string | undefined>;
+    hardware: Record<string, string | undefined>;
+  };
 }
 
 export interface HardwarePdfExtraction {

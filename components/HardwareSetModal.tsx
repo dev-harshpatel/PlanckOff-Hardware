@@ -21,7 +21,7 @@ const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
 const SuggestionBox: React.FC<{ suggestions: string[]; onSelect: (suggestion: string) => void }> = ({ suggestions, onSelect }) => {
   if (suggestions.length === 0) return null;
   return (
-    <ul className="absolute z-20 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+    <ul className="absolute z-20 w-full bg-[var(--bg)] border border-[var(--border-strong)] rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
       {suggestions.map(suggestion => (
         <li
           key={suggestion}
@@ -29,7 +29,7 @@ const SuggestionBox: React.FC<{ suggestions: string[]; onSelect: (suggestion: st
             e.preventDefault(); // Prevents the input from losing focus before selection
             onSelect(suggestion);
           }}
-          className="px-3 py-2 text-sm cursor-pointer hover:bg-primary-50"
+          className="px-3 py-2 text-sm cursor-pointer hover:bg-[var(--primary-bg)]"
         >
           {suggestion}
         </li>
@@ -263,11 +263,11 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
       role="dialog"
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scaleIn"
+        className="bg-[var(--bg)] rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-scaleIn"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-800">
+        <div className="p-6 border-b border-[var(--border)]">
+          <h2 className="text-2xl font-bold text-[var(--text)]">
             {setToEdit ? 'Edit Hardware Set' : variantSource ? 'Create Variant Set' : 'Create New Hardware Set'}
           </h2>
         </div>
@@ -279,9 +279,9 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                 type="checkbox"
                 checked={formData.isAvailable}
                 onChange={handleAvailabilityToggle}
-                className="form-checkbox h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500 transition duration-150 ease-in-out"
+                className="form-checkbox h-5 w-5 text-[var(--primary-action)] rounded border-[var(--border-strong)] focus:ring-[var(--primary-ring)] transition duration-150 ease-in-out"
               />
-              <span className="ml-2 text-sm font-medium text-gray-700 select-none">
+              <span className="ml-2 text-sm font-medium text-[var(--text-secondary)] select-none">
                 Mark as Available
               </span>
             </label>
@@ -289,14 +289,14 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">Set Name</label>
+              <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary)]">Set Name</label>
               <input
                 type="text"
                 name="name"
                 id="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${formErrors.name ? 'border-red-500' : 'border-gray-300'}`}
+                className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)] ${formErrors.name ? 'border-red-500' : 'border-[var(--border-strong)]'}`}
               />
               {formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
             </div>
@@ -308,7 +308,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                 id="division"
                 value={formData.division}
                 onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${formErrors.division ? 'border-red-500' : 'border-gray-300'}`}
+                className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)] ${formErrors.division ? 'border-red-500' : 'border-[var(--border-strong)]'}`}
               />
               {formErrors.division && <p className="mt-1 text-xs text-red-600">{formErrors.division}</p>}
             </div>
@@ -322,13 +322,13 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
               value={formData.doorTags || ''}
               onChange={handleInputChange}
               placeholder="e.g., P350-02, P250-02, P150-02"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
+              className="mt-1 block w-full rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)]"
             />
-            <p className="mt-1 text-xs text-gray-500">Comma-separated list of doors this set applies to.</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Comma-separated list of doors this set applies to.</p>
           </div>
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700">Set Description / Notes</label>
-            <textarea name="description" id="description" rows={2} value={formData.description} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm" />
+            <textarea name="description" id="description" rows={2} value={formData.description} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)] focus:border-[var(--primary-ring)] focus:ring-[var(--primary-ring)]" />
           </div>
 
           <div className="pt-4">
@@ -337,7 +337,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
               {formData.items.map((item, index) => {
                 const hasError = itemErrors[item.id]?.quantity;
                 return (
-                  <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-2 bg-gray-50 rounded-md">
+                  <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-2 bg-[var(--bg-subtle)] rounded-md">
                     <div className="col-span-2 md:col-span-1">
                       <input
                         type="number"
@@ -346,7 +346,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                         onChange={e => handleItemChange(index, 'quantity', e.target.value)}
                         className={`w-full rounded-md shadow-sm sm:text-sm ${hasError
                             ? 'border-red-500 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                            : 'border-[var(--border-strong)] focus:border-[var(--primary-ring)] focus:ring-[var(--primary-ring)]'
                           }`}
                       />
                       {hasError && (
@@ -362,7 +362,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                         onChange={e => handleItemChange(index, 'name', e.target.value)}
                         onFocus={() => setActiveSuggestionBox(`name-${index}`)}
                         onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        className="w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
+                        className="w-full rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)]"
                         autoComplete="off"
                       />
                       {activeSuggestionBox === `name-${index}` && item.name && (
@@ -376,7 +376,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                       )}
                     </div>
 
-                    <input type="text" placeholder="Description" value={item.description} onChange={e => handleItemChange(index, 'description', e.target.value)} className="col-span-12 md:col-span-3 rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                    <input type="text" placeholder="Description" value={item.description} onChange={e => handleItemChange(index, 'description', e.target.value)} className="col-span-12 md:col-span-3 rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)]" />
 
                     <div className="col-span-6 md:col-span-2 relative">
                       <input
@@ -386,7 +386,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                         onChange={e => handleItemChange(index, 'manufacturer', e.target.value)}
                         onFocus={() => setActiveSuggestionBox(`manufacturer-${index}`)}
                         onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        className="w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
+                        className="w-full rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)]"
                         autoComplete="off"
                       />
                       {activeSuggestionBox === `manufacturer-${index}` && item.manufacturer && (
@@ -407,7 +407,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                         onChange={e => handleItemChange(index, 'finish', e.target.value)}
                         onFocus={() => setActiveSuggestionBox(`finish-${index}`)}
                         onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        className="w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
+                        className="w-full rounded-md border-[var(--border-strong)] shadow-sm sm:text-sm bg-[var(--bg)] text-[var(--text)]"
                         autoComplete="off"
                       />
                       {activeSuggestionBox === `finish-${index}` && item.finish && (
@@ -421,28 +421,28 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({ isOpen, onClose, on
                       )}
                     </div>
 
-                    <button onClick={() => handleRemoveItem(index)} className="col-span-12 md:col-span-1 flex justify-center items-center text-gray-400 hover:text-red-500">
+                    <button onClick={() => handleRemoveItem(index)} className="col-span-12 md:col-span-1 flex justify-center items-center text-[var(--text-faint)] hover:text-red-500">
                       <TrashIcon className="w-5 h-5" />
                     </button>
                   </div>
                 )
               })}
-              {formData.items.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No items in this set. Add one to get started.</p>}
+              {formData.items.length === 0 && <p className="text-sm text-[var(--text-muted)] text-center py-4">No items in this set. Add one to get started.</p>}
             </div>
-            <button onClick={handleAddItem} className="mt-3 text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">
+            <button onClick={handleAddItem} className="mt-3 text-sm font-semibold text-[var(--primary-text-muted)] hover:text-[var(--primary-text)] transition-colors">
               + Add Item
             </button>
           </div>
         </div>
 
-        <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 text-sm font-semibold">
+        <div className="p-6 bg-[var(--bg-subtle)] border-t border-[var(--border)] flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 bg-[var(--bg)] border border-[var(--border-strong)] text-[var(--text-secondary)] rounded-md hover:bg-[var(--bg-muted)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-ring)] text-sm font-semibold">
             Cancel
           </button>
           <button
             onClick={handleSaveClick}
             disabled={!isFormValid}
-            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-[var(--primary-action)] text-white rounded-md hover:bg-[var(--primary-action-hover)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-ring)] text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {variantSource ? 'Create Variant' : 'Save Changes'}
           </button>

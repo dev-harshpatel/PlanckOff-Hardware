@@ -3,16 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Project, ProjectStatus, NewProjectData, Toast, Role } from '../types';
 import NewProjectModal from '../components/NewProjectModal';
-import {
-    CalendarDaysIcon,
-    MagnifyingGlassIcon,
-    TrashIcon,
-    UserPlusIcon,
-    FunnelIcon,
-    ListBulletIcon,
-    Squares2X2Icon,
-    PlusIcon,
-} from '../components/icons';
 import { TeamMember } from '../types';
 import SelectDropdown from '@/components/ui/select-dropdown';
 import { Button } from '@/components/ui/button';
@@ -28,6 +18,19 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+    Search,
+    Filter,
+    Plus,
+    Trash2,
+    UserPlus,
+    Calendar,
+    Hash,
+    LayoutGrid,
+    List,
+    FolderOpen,
+    ChevronRight,
+} from 'lucide-react';
 
 interface DashboardProps {
     projects: Project[];
@@ -46,23 +49,26 @@ const formatDate = (isoDate?: string): string => {
     return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-// Kanban Code
-const KANBAN_COLUMNS: { id: ProjectStatus; label: string; countColor: string; icon?: React.ReactNode }[] = [
-    { id: 'Active', label: 'Working Project Progress', countColor: 'text-green-600' },
-    { id: 'Under Review', label: 'Under Review', countColor: 'text-amber-600' },
-    { id: 'Submitted', label: 'Submitted', countColor: 'text-blue-600' },
-    { id: 'On Hold', label: 'Hold', countColor: 'text-gray-600' },
-    { id: 'Archived', label: 'Archive', countColor: 'text-purple-600' }
+const KANBAN_COLUMNS: {
+    id: ProjectStatus;
+    label: string;
+    dot: string;
+    countBg: string;
+    countText: string;
+}[] = [
+    { id: 'Active',       label: 'Active',        dot: 'bg-[var(--success-dot)]',    countBg: 'bg-[var(--success-bg)]',  countText: 'text-[var(--success-text)]' },
+    { id: 'Under Review', label: 'Under Review',  dot: 'bg-[var(--warning-dot)]',    countBg: 'bg-[var(--warning-bg)]',  countText: 'text-[var(--warning-text)]' },
+    { id: 'Submitted',    label: 'Submitted',     dot: 'bg-[var(--primary-action)]', countBg: 'bg-[var(--primary-bg)]',  countText: 'text-[var(--primary-text)]' },
+    { id: 'On Hold',      label: 'On Hold',       dot: 'bg-[var(--text-faint)]',     countBg: 'bg-[var(--bg-muted)]',    countText: 'text-[var(--text-muted)]' },
+    { id: 'Archived',     label: 'Archived',      dot: 'bg-purple-400',              countBg: 'bg-purple-50',            countText: 'text-purple-700' },
 ];
 
-const statusOptions: ProjectStatus[] = ['Active', 'Under Review', 'Submitted', 'On Hold', 'Complete', 'Archived'];
-const statusColors: { [key in ProjectStatus]: { bg: string, text: string, border?: string } } = {
-    Active: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300' },
-    'Under Review': { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
-    Submitted: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
-    'On Hold': { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300' },
-    Complete: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
-    Archived: { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' },
+const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
+    Active:         { text: 'text-[var(--success-text)]', bg: 'bg-[var(--success-bg)]', dot: 'bg-[var(--success-dot)]' },
+    'Under Review': { text: 'text-[var(--warning-text)]', bg: 'bg-[var(--warning-bg)]', dot: 'bg-[var(--warning-dot)]' },
+    Submitted:      { text: 'text-[var(--primary-text)]', bg: 'bg-[var(--primary-bg)]', dot: 'bg-[var(--primary-action)]' },
+    'On Hold':      { text: 'text-[var(--text-muted)]',   bg: 'bg-[var(--bg-muted)]',   dot: 'bg-[var(--text-faint)]' },
+    Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
 };
 
 const ProjectCard: React.FC<{
@@ -79,9 +85,8 @@ const ProjectCard: React.FC<{
     const [isAssigning, setIsAssigning] = useState(false);
     const assignMenuRef = useRef<HTMLDivElement | null>(null);
 
-    // Check permissions
-    const canDelete = (userRole === Role.Administrator || userRole === Role.SeniorEstimator);
-    const canAssign = (userRole === Role.Administrator || userRole === Role.SeniorEstimator);
+    const canDelete = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
+    const canAssign = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
 
@@ -91,11 +96,8 @@ const ProjectCard: React.FC<{
                 setShowAssignMenu(false);
             }
         };
-
         document.addEventListener('mousedown', handlePointerDown);
-        return () => {
-            document.removeEventListener('mousedown', handlePointerDown);
-        };
+        return () => document.removeEventListener('mousedown', handlePointerDown);
     }, []);
 
     const handleAssign = async (memberId: string) => {
@@ -120,95 +122,91 @@ const ProjectCard: React.FC<{
         setDeleteConfirmation('');
     };
 
+    const statusStyle = STAT_COLORS[project.status || 'Active'] ?? STAT_COLORS['Active'];
+
     return (
         <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow p-4 mb-3 group relative">
-                <div className="flex justify-between items-start mb-2">
-                    <div>
-                        <h4 onClick={onSelect} className="font-bold text-gray-900 leading-tight cursor-pointer hover:text-primary-600 text-base">{project.name}</h4>
-                        <p className="text-xs text-gray-500 mt-1 font-medium">{project.client}</p>
+            <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] hover:border-[var(--primary-border)] hover:shadow-sm transition-all p-4 group relative cursor-pointer" onClick={onSelect}>
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="min-w-0 flex-1">
+                        <h4 className="font-semibold text-[var(--text)] text-sm leading-tight truncate">{project.name}</h4>
+                        {project.client && (
+                            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{project.client}</p>
+                        )}
                     </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-600 mt-3">
-                    <div className="flex items-center gap-1.5">
-                        <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400" />
-                        <span>{formatDate(project.dueDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 justify-end">
-                        <span className="text-gray-400">#</span>
-                        <span>{project.projectNumber || 'N/A'}</span>
-                    </div>
-                    <div className="col-span-2 flex items-center gap-1.5 mt-1">
-                        {assignedMember ? (
-                            <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 max-w-full">
-                                <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
-                                    {assignedMember.name.charAt(0)}
-                                </div>
-                                <span className="truncate">{assignedMember.name}</span>
+                    {/* Hover actions */}
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" ref={assignMenuRef}>
+                        {canAssign && (
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
+                                    disabled={isAssigning}
+                                    title="Assign"
+                                    className={`p-1 rounded text-[var(--text-faint)] hover:text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)]' : ''}`}
+                                >
+                                    <UserPlus className="w-3.5 h-3.5" />
+                                </button>
+                                {showAssignMenu && (
+                                    <div className="absolute right-0 mt-1 w-52 bg-[var(--bg)] rounded-md shadow-lg z-50 border border-[var(--border)] py-1" onClick={(e) => e.stopPropagation()}>
+                                        <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">Assign To</div>
+                                        {teamMembers.map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => handleAssign(m.id)}
+                                                disabled={isAssigning}
+                                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${project.assignedTo === m.id ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] font-medium' : 'text-[var(--text-secondary)]'}`}
+                                            >
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => handleAssign('')}
+                                            disabled={isAssigning}
+                                            className="block w-full text-left px-3 py-2 text-sm text-[var(--error-text)] hover:bg-[var(--error-bg)] border-t border-[var(--border-subtle)] disabled:opacity-50 transition-colors"
+                                        >
+                                            Unassign
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        ) : (
-                            <span className="text-gray-400 italic">Unassigned</span>
+                        )}
+                        {canDelete && (
+                            <button onClick={handleDeleteClick} className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                         )}
                     </div>
                 </div>
 
-                {/* Hover Actions */}
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" ref={assignMenuRef}>
-                    {canAssign && (
-                        <div className="relative">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowAssignMenu(!showAssignMenu);
-                                }}
-                                disabled={isAssigning}
-                                className={`p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${project.assignedTo ? 'text-blue-500' : ''} disabled:opacity-50`}
-                                title="Assign"
-                            >
-                                <UserPlusIcon className="w-4 h-4" />
-                            </button>
-                            {showAssignMenu && (
-                                <div className="absolute right-0 mt-1 w-52 bg-white rounded-md shadow-lg z-50 border border-gray-200 py-1" onClick={(e) => e.stopPropagation()}>
-                                    <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">Assign To</div>
-                                    {teamMembers.map(m => (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => handleAssign(m.id)}
-                                            disabled={isAssigning}
-                                            className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 ${project.assignedTo === m.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
-                                        >
-                                            {m.name}
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() => handleAssign('')}
-                                        disabled={isAssigning}
-                                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100 disabled:opacity-50"
-                                    >
-                                        Unassign
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {canDelete && (
-                        <button onClick={handleDeleteClick} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50">
-                            <TrashIcon className="w-4 h-4" />
-                        </button>
+                {/* Meta row */}
+                <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mb-3">
+                    <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-[var(--text-faint)]" />
+                        {formatDate(project.dueDate)}
+                    </span>
+                    {project.projectNumber && (
+                        <span className="flex items-center gap-1">
+                            <Hash className="w-3 h-3 text-[var(--text-faint)]" />
+                            <span className="font-mono">{project.projectNumber}</span>
+                        </span>
                     )}
                 </div>
 
-                <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
-                    <button onClick={onSelect} className="text-xs font-semibold text-primary-600 hover:text-primary-800 flex items-center gap-1">
-                        Open Project
-                    </button>
-                    {/* Status Badge - Optional if strictly column based, but good for clarity */}
-                    <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${project.status === 'Active' ? 'bg-green-50 text-green-700' :
-                        project.status === 'Under Review' ? 'bg-amber-50 text-amber-700' :
-                            project.status === 'Submitted' ? 'bg-blue-50 text-blue-700' :
-                                project.status === 'On Hold' ? 'bg-gray-100 text-gray-600' : 'bg-purple-50 text-purple-700'
-                        }`}>
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
+                    {assignedMember ? (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                {assignedMember.name.charAt(0)}
+                            </div>
+                            <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
+                        </div>
+                    ) : (
+                        <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
+                    )}
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
                         {project.status || 'Active'}
                     </span>
                 </div>
@@ -219,7 +217,7 @@ const ProjectCard: React.FC<{
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete project</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will move <span className="font-medium text-gray-900">{project.name}</span> to trash. Type <span className="font-medium text-gray-900">confirm</span> to enable deletion.
+                            This will permanently delete <span className="font-medium text-[var(--text)]">{project.name}</span>. Type <span className="font-medium text-[var(--text)]">confirm</span> to proceed.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="space-y-2">
@@ -232,17 +230,8 @@ const ProjectCard: React.FC<{
                         />
                     </div>
                     <AlertDialogFooter>
-                        <AlertDialogCancel
-                            onClick={() => {
-                                setDeleteConfirmation('');
-                            }}
-                        >
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteConfirm}
-                            disabled={deleteConfirmation.trim().toLowerCase() !== 'confirm'}
-                        >
+                        <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleteConfirmation.trim().toLowerCase() !== 'confirm'}>
                             Delete project
                         </AlertDialogAction>
                     </AlertDialogFooter>
@@ -259,44 +248,31 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('All Members');
 
-    // Stats
     const stats = useMemo(() => {
         const counts: Record<string, number> = {};
-        KANBAN_COLUMNS.forEach(col => counts[col.id] = 0);
+        KANBAN_COLUMNS.forEach(col => { counts[col.id] = 0; });
         projects.forEach(p => {
-            const status = p.status || 'Active'; // Default to Active
-            // Need to map legacy status or handle discrepancies if any
-            // For now assume perfect match or fallback
-            if (counts[status] !== undefined) {
-                counts[status]++;
-            } else {
-                // Map unknowns if necessary, or count as Active?
-                // Let's count 'Active' as 'Active'
-                counts['Active']++;
-            }
+            const status = p.status || 'Active';
+            if (counts[status] !== undefined) counts[status]++;
+            else counts['Active']++;
         });
         return counts;
     }, [projects]);
 
-
     const filteredProjects = useMemo(() => {
         return projects.filter(project => {
-            const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            const matchesSearch =
+                project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (project.client && project.client.toLowerCase().includes(searchQuery.toLowerCase()));
             const matchesMember = selectedMemberFilter === 'All Members' || project.assignedTo === selectedMemberFilter;
             return matchesSearch && matchesMember;
         });
     }, [projects, searchQuery, selectedMemberFilter]);
 
-    const memberFilterOptions = useMemo(() => {
-        return [
-            { value: 'All Members', label: 'All Members' },
-            ...teamMembers.map(member => ({
-                value: member.id,
-                label: member.name,
-            })),
-        ];
-    }, [teamMembers]);
+    const memberFilterOptions = useMemo(() => [
+        { value: 'All Members', label: 'All Members' },
+        ...teamMembers.map(m => ({ value: m.id, label: m.name })),
+    ], [teamMembers]);
 
     const handleSaveNewProject = async (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => {
         setIsCreatingProject(true);
@@ -304,135 +280,132 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
             await onAddNewProject(projectData, doorScheduleFile, hardwareSetFile);
             setIsModalOpen(false);
         } catch (error) {
-            console.error("Project Creation Error:", error);
-            const message = error instanceof Error ? error.message : "An unknown error occurred.";
+            const message = error instanceof Error ? error.message : 'An unknown error occurred.';
             addToast({ type: 'error', message: 'Project creation failed', details: message });
         } finally {
             setIsCreatingProject(false);
         }
     };
 
-    // Check create permission (Lead Estimator only - assumed SeniorEstimator)
-    const canCreate = (userRole === Role.Administrator || userRole === Role.SeniorEstimator);
+    const canCreate = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
 
     return (
         <>
-            <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
-                {/* Top Stats Bar */}
-                <div className="bg-white border-b border-gray-200 px-6 py-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-5">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Projects Dashboard</h1>
-                            <p className="text-sm text-gray-500 mt-1">Manage your estimates and proposals</p>
+            <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
+
+                {/* Page header */}
+                <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-6 py-4 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-md bg-[var(--primary-bg-hover)] flex items-center justify-center">
+                                <FolderOpen className="w-4 h-4 text-[var(--primary-text-muted)]" />
+                            </div>
+                            <div>
+                                <h1 className="text-base font-semibold text-[var(--text)] leading-tight">Projects Dashboard</h1>
+                                <p className="text-xs text-[var(--primary-text-muted)]">Manage your estimates and proposals</p>
+                            </div>
                         </div>
                         {canCreate && (
-                            <button
+                            <Button
+                                size="sm"
                                 onClick={() => setIsModalOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all shadow-md hover:shadow-lg font-semibold"
+                                className="gap-1.5"
                             >
-                                <PlusIcon className="w-5 h-5" />
+                                <Plus className="w-4 h-4" />
                                 New Project
-                            </button>
+                            </Button>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-5 gap-4">
+                    {/* Stat pills */}
+                    <div className="flex items-center gap-2 mt-4 flex-wrap">
                         {KANBAN_COLUMNS.map(col => {
-                            const count = stats[col.id] || 0;
+                            const count = stats[col.id] ?? 0;
                             return (
-                                <div key={col.id} className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{col.label}</p>
-                                            <p className={`text-3xl font-bold mt-1 ${col.countColor}`}>{count}</p>
-                                        </div>
-                                        <div className={`w-12 h-12 rounded-full ${col.countColor.replace('text-', 'bg-').replace('-600', '-100')} flex items-center justify-center`}>
-                                            <span className={`text-xl font-bold ${col.countColor}`}>{count}</span>
-                                        </div>
-                                    </div>
+                                <div key={col.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]`}>
+                                    <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
+                                    <span className="text-xs text-[var(--text-muted)] font-medium">{col.label}</span>
+                                    <span className={`text-xs font-bold ${col.countText}`}>{count}</span>
                                 </div>
                             );
                         })}
+                        <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]">
+                            <span className="text-xs text-[var(--text-muted)] font-medium">Total</span>
+                            <span className="text-xs font-bold text-[var(--text)]">{projects.length}</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Filter Bar */}
-                <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-                    <div className="flex items-center gap-4 flex-1">
-                        <div className="relative flex-1 max-w-md">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search projects..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                            />
-                        </div>
-                        <div className="relative min-w-[220px]">
-                            <FunnelIcon className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            <SelectDropdown
-                                value={selectedMemberFilter}
-                                onChange={setSelectedMemberFilter}
-                                options={memberFilterOptions}
-                                className="w-full"
-                                triggerClassName="border-gray-300 bg-white pl-9 pr-3 hover:bg-gray-50"
-                                contentClassName="mt-1"
-                            />
-                        </div>
+                {/* Filter bar */}
+                <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-3 flex items-center gap-3 flex-shrink-0">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-faint)] pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Search projects or clients…"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)]"
+                        />
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
-                        <button className="p-2 rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors">
-                            <Squares2X2Icon className="w-5 h-5" />
+                    <div className="relative min-w-[200px]">
+                        <Filter className="absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" />
+                        <SelectDropdown
+                            value={selectedMemberFilter}
+                            onChange={setSelectedMemberFilter}
+                            options={memberFilterOptions}
+                            className="w-full"
+                            triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm"
+                            contentClassName="mt-1"
+                        />
+                    </div>
+                    <div className="ml-auto flex items-center gap-1">
+                        <button className="p-1.5 rounded-md bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border border-[var(--primary-border)]" title="Grid view">
+                            <LayoutGrid className="w-4 h-4" />
                         </button>
-                        <button className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                            <ListBulletIcon className="w-5 h-5" />
+                        <button className="p-1.5 rounded-md text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] transition-colors border border-transparent" title="List view">
+                            <List className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
 
-                {/* Kanban Board Area */}
-                <div className="flex-grow overflow-x-auto overflow-y-hidden px-6 py-6">
-                    <div className="flex gap-5 h-full min-w-[1400px]">
+                {/* Kanban board */}
+                <div className="flex-grow overflow-x-auto overflow-y-hidden px-6 py-5">
+                    <div className="flex gap-4 h-full min-w-[1200px]">
                         {KANBAN_COLUMNS.map(col => {
                             const colProjects = filteredProjects.filter(p => (p.status || 'Active') === col.id);
                             return (
-                                <div key={col.id} className="flex-1 min-w-[280px] flex flex-col h-full">
-                                    {/* Column Header */}
-                                    <div className="px-4 py-3 flex items-center justify-between bg-white rounded-t-xl border-b-2 border-gray-200 shadow-sm">
+                                <div key={col.id} className="flex-1 min-w-[240px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
+                                    {/* Column header */}
+                                    <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${col.countColor.replace('text-', 'bg-')}`}></div>
-                                            <h3 className="font-bold text-gray-900 text-sm">{col.label}</h3>
+                                            <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
+                                            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{col.label}</span>
                                         </div>
-                                        <span className={`${col.countColor} font-bold text-sm px-2.5 py-1 rounded-full ${col.countColor.replace('text-', 'bg-').replace('-600', '-100')}`}>
+                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.countBg} ${col.countText}`}>
                                             {colProjects.length}
                                         </span>
                                     </div>
 
-                                    {/* Column Content (Scrollable) */}
-                                    <div className="flex-grow overflow-y-auto bg-gray-50 rounded-b-xl border-l border-r border-b border-gray-200 shadow-sm">
-                                        <div className="p-3 space-y-3">
-                                            {colProjects.length > 0 ? (
-                                                colProjects.map(project => (
-                                                    <ProjectCard
-                                                        key={project.id}
-                                                        project={project}
-                                                        onSelect={() => onSelectProject(project.id)}
-                                                        onSave={onProjectUpdate}
-                                                        onDelete={onDeleteProject}
-                                                        userRole={userRole}
-                                                        teamMembers={teamMembers}
-                                                    />
-                                                ))
-                                            ) : (
-                                                <div className="h-32 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-white/50 hover:bg-white transition-colors">
-                                                    <div className={`w-10 h-10 rounded-full ${col.countColor.replace('text-', 'bg-').replace('-600', '-100')} flex items-center justify-center mb-2`}>
-                                                        <span className={`text-xl ${col.countColor}`}>0</span>
-                                                    </div>
-                                                    <span className="text-gray-400 text-xs text-center font-medium">No projects<br />in {col.label}</span>
-                                                </div>
-                                            )}
-                                        </div>
+                                    {/* Column cards (scrollable) */}
+                                    <div className="flex-grow overflow-y-auto bg-[var(--bg-subtle)] p-2.5 space-y-2">
+                                        {colProjects.length > 0 ? (
+                                            colProjects.map(project => (
+                                                <ProjectCard
+                                                    key={project.id}
+                                                    project={project}
+                                                    onSelect={() => onSelectProject(project.id)}
+                                                    onSave={onProjectUpdate}
+                                                    onDelete={onDeleteProject}
+                                                    userRole={userRole}
+                                                    teamMembers={teamMembers}
+                                                />
+                                            ))
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center h-24 border border-dashed border-[var(--border)] rounded-md bg-[var(--bg)]/60 text-center">
+                                                <span className="text-xs text-[var(--text-faint)]">No projects</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );

@@ -1,38 +1,44 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Toast } from '../types';
 
 interface ToastContextType {
-    toasts: Toast[];
-    addToast: (toast: Omit<Toast, 'id'>) => void;
-    removeToast: (id: number) => void;
+  addToast: (toast: Omit<Toast, 'id'>) => void;
+  // Kept for backward compat — AppShell no longer renders ToastContainer
+  toasts: Toast[];
+  removeToast: (id: number) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = useCallback((t: Omit<Toast, 'id'>) => {
+    const opts = {
+      description: t.details,
+      // Errors stay until dismissed; others auto-dismiss
+      duration: t.type === 'error' ? Infinity : 4000,
+    };
 
-    const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-        setToasts(prev => [...prev, { ...toast, id: Date.now() }]);
-    }, []);
+    if (t.type === 'success') toast.success(t.message, opts);
+    else if (t.type === 'error')   toast.error(t.message, opts);
+    else if (t.type === 'warning') toast.warning(t.message, opts);
+    else                           toast.info(t.message, opts);
+  }, []);
 
-    const removeToast = useCallback((id: number) => {
-        setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, []);
+  // No-ops kept so nothing that destructures { toasts, removeToast } breaks
+  const removeToast = useCallback((_id: number) => {}, []);
 
-    return (
-        <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
-            {children}
-        </ToastContext.Provider>
-    );
+  return (
+    <ToastContext.Provider value={{ addToast, toasts: [], removeToast }}>
+      {children}
+    </ToastContext.Provider>
+  );
 };
 
 export const useToast = () => {
-    const context = useContext(ToastContext);
-    if (context === undefined) {
-        throw new Error('useToast must be used within a ToastProvider');
-    }
-    return context;
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error('useToast must be used within a ToastProvider');
+  return ctx;
 };

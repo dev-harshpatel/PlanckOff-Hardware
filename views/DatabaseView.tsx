@@ -1,21 +1,22 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { HardwareItem, Role, HardwareSet } from '../types';
-import { 
-    MagnifyingGlassIcon, 
-    ChevronDownIcon, 
-    ChevronUpIcon,
-    TableCellsIcon,
-    ArrowDownTrayIcon,
-    ArrowUpTrayIcon,
-    TrashIcon,
-    PencilSquareIcon,
-    CheckCircleIcon
-} from '../components/icons';
+import { HardwareItem, Role } from '../types';
 import { exportInventoryToCSV } from '../utils/csvExporter';
 import UploadConfirmationModal from '../components/UploadConfirmationModal';
 import { processHardwareSetFile } from '../services/fileUploadService';
+import { Button } from '@/components/ui/button';
+import {
+    Search,
+    Download,
+    Upload,
+    Trash2,
+    Plus,
+    ChevronUp,
+    ChevronDown,
+    ChevronsUpDown,
+    Database,
+} from 'lucide-react';
 
 interface DatabaseViewProps {
   inventory: HardwareItem[];
@@ -23,363 +24,370 @@ interface DatabaseViewProps {
   onUpdateInventory: (items: HardwareItem[]) => void;
   onAddToInventory: (items: HardwareItem[]) => void;
   onOverwriteInventory: (items: HardwareItem[]) => void;
-  addToast: (toast: any) => void;
+  addToast: (toast: unknown) => void;
 }
 
-const DatabaseView: React.FC<DatabaseViewProps> = ({ 
-    inventory, 
-    userRole, 
-    onUpdateInventory, 
-    onAddToInventory, 
+const DatabaseView: React.FC<DatabaseViewProps> = ({
+    inventory,
+    userRole,
+    onUpdateInventory,
+    onAddToInventory,
     onOverwriteInventory,
-    addToast
+    addToast,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof HardwareItem; direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof HardwareItem; direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [editingCell, setEditingCell] = useState<{ id: string; field: keyof HardwareItem } | null>(null);
+    const [tempValue, setTempValue] = useState<string | number>('');
+    const inputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Inline Editing State
-  const [editingCell, setEditingCell] = useState<{ id: string, field: keyof HardwareItem } | null>(null);
-  const [tempValue, setTempValue] = useState<string | number>('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+    const canEdit = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
 
-  const canEdit = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
+    useEffect(() => {
+        if (editingCell && inputRef.current) inputRef.current.focus();
+    }, [editingCell]);
 
-  // Focus input when editing starts
-  useEffect(() => {
-      if (editingCell && inputRef.current) {
-          inputRef.current.focus();
-      }
-  }, [editingCell]);
+    const handleSort = (key: keyof HardwareItem) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+        }));
+    };
 
-  const handleSort = (key: keyof HardwareItem) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
+    const filteredInventory = useMemo(() => {
+        let result = [...inventory];
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(item =>
+                item.name.toLowerCase().includes(q) ||
+                item.manufacturer.toLowerCase().includes(q) ||
+                item.description.toLowerCase().includes(q) ||
+                item.finish.toLowerCase().includes(q)
+            );
+        }
+        result.sort((a, b) => {
+            const valA = a[sortConfig.key];
+            const valB = b[sortConfig.key];
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+            }
+            const strA = String(valA).toLowerCase();
+            const strB = String(valB).toLowerCase();
+            if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return result;
+    }, [inventory, searchQuery, sortConfig]);
 
-  const filteredInventory = useMemo(() => {
-      let result = [...inventory];
+    const handleDownload = () => {
+        exportInventoryToCSV(inventory);
+        (addToast as (t: { type: string; message: string }) => void)({ type: 'success', message: 'Database exported to CSV.' });
+    };
 
-      if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase();
-          result = result.filter(item => 
-             item.name.toLowerCase().includes(query) || 
-             item.manufacturer.toLowerCase().includes(query) || 
-             item.description.toLowerCase().includes(query) ||
-             item.finish.toLowerCase().includes(query)
-          );
-      }
+    const handleUploadClick = () => fileInputRef.current?.click();
 
-      result.sort((a, b) => {
-          const valA = a[sortConfig.key];
-          const valB = b[sortConfig.key];
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setUploadFiles(Array.from(e.target.files));
+            setIsUploadModalOpen(true);
+        }
+        e.target.value = '';
+    };
 
-          if (typeof valA === 'number' && typeof valB === 'number') {
-              return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
-          }
-          
-          const strA = String(valA).toLowerCase();
-          const strB = String(valB).toLowerCase();
-          
-          if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
-          if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
-          return 0;
-      });
+    const handleUploadConfirm = async (mode: 'add' | 'overwrite') => {
+        if (uploadFiles.length === 0) return;
+        setIsProcessing(true);
+        try {
+            const allItems: HardwareItem[] = [];
+            for (const file of uploadFiles) {
+                const report = await processHardwareSetFile(file);
+                allItems.push(...report.data.flatMap(s => s.items));
+            }
+            if (allItems.length === 0) throw new Error('No valid items found in the uploaded files.');
+            if (mode === 'overwrite') {
+                onOverwriteInventory(allItems);
+                (addToast as (t: { type: string; message: string }) => void)({ type: 'success', message: `Database overwritten with ${allItems.length} items.` });
+            } else {
+                onAddToInventory(allItems);
+                (addToast as (t: { type: string; message: string }) => void)({ type: 'success', message: `Merged ${allItems.length} items into database.` });
+            }
+            setIsUploadModalOpen(false);
+            setUploadFiles([]);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            (addToast as (t: { type: string; message: string; details?: string }) => void)({ type: 'error', message: 'Upload failed', details: message });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
-      return result;
-  }, [inventory, searchQuery, sortConfig]);
+    const handleAddRow = () => {
+        const newItem: HardwareItem = {
+            id: `inv-new-${Date.now()}`,
+            name: 'New Item',
+            manufacturer: '',
+            description: '',
+            finish: '',
+            quantity: 0,
+        };
+        onUpdateInventory([...inventory, newItem]);
+        setEditingCell({ id: newItem.id, field: 'name' });
+        setTempValue('New Item');
+    };
 
-  // --- Actions ---
+    const handleDeleteRow = (id: string) => {
+        if (confirm('Are you sure you want to delete this item?')) {
+            onUpdateInventory(inventory.filter(item => item.id !== id));
+        }
+    };
 
-  const handleDownload = () => {
-      exportInventoryToCSV(inventory);
-      addToast({ type: 'success', message: 'Database downloaded successfully.' });
-  };
+    const startEditing = (item: HardwareItem, field: keyof HardwareItem) => {
+        if (!canEdit) return;
+        setEditingCell({ id: item.id, field });
+        const val = item[field];
+        setTempValue(typeof val === 'boolean' ? String(val) : val ?? '');
+    };
 
-  const handleUploadClick = () => {
-      if (fileInputRef.current) {
-          fileInputRef.current.click();
-      }
-  };
+    const saveEdit = () => {
+        if (!editingCell) return;
+        onUpdateInventory(inventory.map(item =>
+            item.id === editingCell.id ? { ...item, [editingCell.field]: tempValue } : item
+        ));
+        setEditingCell(null);
+        setTempValue('');
+    };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-          setUploadFiles(Array.from(e.target.files));
-          setIsUploadModalOpen(true);
-      }
-      e.target.value = ''; // Reset input
-  };
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') saveEdit();
+        if (e.key === 'Escape') { setEditingCell(null); setTempValue(''); }
+    };
 
-  const handleUploadConfirm = async (mode: 'add' | 'overwrite') => {
-      if (uploadFiles.length === 0) return;
-      setIsProcessing(true);
+    const SortIcon: React.FC<{ columnKey: keyof HardwareItem }> = ({ columnKey }) => {
+        if (sortConfig.key !== columnKey) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-40 flex-shrink-0" />;
+        return sortConfig.direction === 'asc'
+            ? <ChevronUp className="w-3 h-3 ml-1 text-[var(--primary-text-muted)] flex-shrink-0" />
+            : <ChevronDown className="w-3 h-3 ml-1 text-[var(--primary-text-muted)] flex-shrink-0" />;
+    };
 
-      try {
-          const allItems: HardwareItem[] = [];
-          for (const file of uploadFiles) {
-               // Reuse the hardware set parser logic as it extracts items correctly
-               const sets = await processHardwareSetFile(file); 
-               const items = sets.flatMap(s => s.items);
-               allItems.push(...items);
-          }
-
-          if (allItems.length === 0) {
-              throw new Error("No valid items found in the uploaded files.");
-          }
-
-          if (mode === 'overwrite') {
-              onOverwriteInventory(allItems);
-              addToast({ type: 'success', message: `Database overwritten with ${allItems.length} items.` });
-          } else {
-              onAddToInventory(allItems);
-              addToast({ type: 'success', message: `Merged ${allItems.length} items into database.` });
-          }
-          
-          setIsUploadModalOpen(false);
-          setUploadFiles([]);
-
-      } catch (error: any) {
-          console.error("Upload failed:", error);
-          addToast({ type: 'error', message: 'Upload failed', details: error.message });
-      } finally {
-          setIsProcessing(false);
-      }
-  };
-
-  const handleAddRow = () => {
-      const newItem: HardwareItem = {
-          id: `inv-new-${Date.now()}`,
-          name: 'New Item',
-          manufacturer: '',
-          description: '',
-          finish: '',
-          quantity: 0
-      };
-      onUpdateInventory([...inventory, newItem]);
-      // Automatically start editing the name of the new item
-      setEditingCell({ id: newItem.id, field: 'name' });
-      setTempValue('New Item');
-  };
-
-  const handleDeleteRow = (id: string) => {
-      if (confirm('Are you sure you want to delete this item?')) {
-          onUpdateInventory(inventory.filter(item => item.id !== id));
-      }
-  };
-
-  // --- Inline Editing ---
-
-  const startEditing = (item: HardwareItem, field: keyof HardwareItem) => {
-      if (!canEdit) return;
-      setEditingCell({ id: item.id, field });
-      setTempValue(item[field]);
-  };
-
-  const saveEdit = () => {
-      if (!editingCell) return;
-
-      const updatedInventory = inventory.map(item => {
-          if (item.id === editingCell.id) {
-              return { ...item, [editingCell.field]: tempValue };
-          }
-          return item;
-      });
-
-      onUpdateInventory(updatedInventory);
-      setEditingCell(null);
-      setTempValue('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') saveEdit();
-      if (e.key === 'Escape') {
-          setEditingCell(null);
-          setTempValue('');
-      }
-  };
-
-  // --- Render Helpers ---
-
-  const SortIcon: React.FC<{ columnKey: keyof HardwareItem }> = ({ columnKey }) => {
-    if (sortConfig.key !== columnKey) {
-        return <div className="w-4 h-4 ml-1 inline-block opacity-0 group-hover:opacity-30"><ChevronDownIcon className="w-4 h-4" /></div>;
-    }
-    return sortConfig.direction === 'asc' ? (
-        <ChevronUpIcon className="w-4 h-4 ml-1 inline-block text-primary-600" />
-    ) : (
-        <ChevronDownIcon className="w-4 h-4 ml-1 inline-block text-primary-600" />
-    );
-  };
-
-  const renderHeader = (label: string, key: keyof HardwareItem) => (
-    <th 
-        scope="col" 
-        className="px-6 py-3 cursor-pointer hover:bg-gray-200 group select-none sticky top-0 bg-gray-100 z-10"
-        onClick={() => handleSort(key)}
-    >
-        <div className="flex items-center">
-            {label}
-            <SortIcon columnKey={key} />
-        </div>
-    </th>
-  );
-
-  const renderCell = (item: HardwareItem, field: keyof HardwareItem) => {
-      const isEditing = editingCell?.id === item.id && editingCell?.field === field;
-      
-      if (isEditing) {
-          return (
-              <input
-                  ref={inputRef}
-                  type={field === 'quantity' ? 'number' : 'text'}
-                  value={tempValue}
-                  onChange={(e) => setTempValue(field === 'quantity' ? Number(e.target.value) : e.target.value)}
-                  onBlur={saveEdit}
-                  onKeyDown={handleKeyDown}
-                  className="w-full p-1 text-sm border-2 border-blue-500 rounded focus:outline-none shadow-sm"
-              />
-          );
-      }
-
-      return (
-          <div 
-            onClick={() => startEditing(item, field)}
-            className={`p-1 rounded truncate ${canEdit ? 'cursor-text hover:bg-gray-100' : ''}`}
-            title={canEdit ? 'Click to edit' : undefined}
-          >
-              {item[field] || <span className="text-gray-300 italic">Empty</span>}
-          </div>
-      );
-  };
-
-  return (
-    <div className="p-5 h-full flex flex-col">
-      <div className="flex flex-wrap items-center justify-between mb-6 gap-4 flex-shrink-0">
-        <div>
-            <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-                <TableCellsIcon className="w-8 h-8 text-primary-600" />
-                Master Database
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">Centralized repository of unique hardware items from all projects.</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-            <div className="relative w-full sm:w-64">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                    type="text"
-                    placeholder="Search inventory..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
+    const renderHeader = (label: string, key: keyof HardwareItem) => (
+        <th
+            key={key}
+            scope="col"
+            className="px-4 py-2.5 cursor-pointer hover:bg-blue-100 group select-none border-b border-[var(--primary-border)]"
+            onClick={() => handleSort(key)}
+        >
+            <div className="flex items-center text-xs font-semibold text-[var(--primary-text)] uppercase tracking-wide">
+                {label}
+                <SortIcon columnKey={key} />
             </div>
-            
-            <button 
-                onClick={handleDownload}
-                className="p-2 text-gray-600 hover:text-primary-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                title="Download Database (CSV)"
+        </th>
+    );
+
+    const renderCell = (item: HardwareItem, field: keyof HardwareItem) => {
+        const isEditing = editingCell?.id === item.id && editingCell?.field === field;
+        if (isEditing) {
+            return (
+                <input
+                    ref={inputRef}
+                    type={field === 'quantity' ? 'number' : 'text'}
+                    value={tempValue}
+                    onChange={e => setTempValue(field === 'quantity' ? Number(e.target.value) : e.target.value)}
+                    onBlur={saveEdit}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-2 py-1 text-sm border-2 border-[var(--primary-ring)] rounded focus:outline-none bg-[var(--bg)]"
+                />
+            );
+        }
+        return (
+            <div
+                onClick={() => startEditing(item, field)}
+                className={`truncate ${canEdit ? 'cursor-text hover:bg-[var(--bg-muted)] rounded px-1 -mx-1' : ''}`}
+                title={canEdit ? 'Click to edit' : undefined}
             >
-                <ArrowDownTrayIcon className="w-5 h-5" />
-            </button>
+                {item[field] !== undefined && item[field] !== '' ? String(item[field]) : <span className="text-[var(--text-faint)] italic text-xs">—</span>}
+            </div>
+        );
+    };
 
-            {canEdit && (
-                <>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept=".csv,.xlsx,.xls,.pdf" 
-                        onChange={handleFileChange} 
-                        multiple
+    return (
+        <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
+
+            {/* Page header */}
+            <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-6 py-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                        <Database className="w-4 h-4 text-[var(--primary-text-muted)]" />
+                    </div>
+                    <div>
+                        <h1 className="text-base font-semibold text-[var(--text)] leading-tight">Master Database</h1>
+                        <p className="text-xs text-[var(--primary-text-muted)]">Centralized repository of unique hardware items from all projects</p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]">
+                            <span className="text-xs text-[var(--text-muted)] font-medium">Items</span>
+                            <span className="text-xs font-bold text-[var(--primary-text)]">{inventory.length}</span>
+                        </div>
+                        {!canEdit && (
+                            <span className="text-[10px] font-medium text-[var(--text-faint)] italic px-2 py-1 bg-[var(--bg)] border border-[var(--border)] rounded-md">Read-only</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-3 flex items-center gap-3 flex-shrink-0">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-faint)] pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search by name, manufacturer, finish…"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)]"
                     />
-                    <button 
-                        onClick={handleUploadClick}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-semibold text-sm transition-colors"
-                    >
-                        <ArrowUpTrayIcon className="w-4 h-4" />
-                        Upload Data
-                    </button>
-                    <button 
-                        onClick={handleAddRow}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 font-semibold text-sm transition-colors shadow-sm"
-                    >
-                        + Add Item
-                    </button>
-                </>
-            )}
-        </div>
-      </div>
+                </div>
 
-      <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex-grow flex flex-col overflow-hidden">
-        <div className="overflow-auto flex-grow">
-            <table className="w-full text-sm text-left text-gray-500">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200 sticky top-0 z-10">
-                    <tr>
-                        {renderHeader('Item Name', 'name')}
-                        {renderHeader('Manufacturer', 'manufacturer')}
-                        {renderHeader('Description', 'description')}
-                        {renderHeader('Finish', 'finish')}
-                        {canEdit && <th scope="col" className="px-6 py-3 text-center w-24 bg-gray-100 sticky top-0 z-10">Actions</th>}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                    {filteredInventory.map(item => (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
-                            <td className="px-6 py-3 font-medium text-gray-900 align-middle">{renderCell(item, 'name')}</td>
-                            <td className="px-6 py-3 align-middle">{renderCell(item, 'manufacturer')}</td>
-                            <td className="px-6 py-3 align-middle">{renderCell(item, 'description')}</td>
-                            <td className="px-6 py-3 align-middle">
-                                <div className={canEdit ? "" : "inline-block bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded border border-gray-300"}>
-                                    {renderCell(item, 'finish')}
-                                </div>
-                            </td>
-                            {canEdit && (
-                                <td className="px-6 py-3 text-center align-middle">
-                                    <button 
-                                        onClick={() => handleDeleteRow(item.id)}
-                                        className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100"
-                                        title="Delete Row"
-                                    >
-                                        <TrashIcon className="w-5 h-5" />
-                                    </button>
-                                </td>
-                            )}
-                        </tr>
-                    ))}
-                    {filteredInventory.length === 0 && (
-                        <tr>
-                            <td colSpan={canEdit ? 5 : 4} className="text-center py-12 text-gray-400">
-                                No items found in the master database.
-                            </td>
-                        </tr>
+                <div className="ml-auto flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownload}
+                        className="border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] gap-1.5"
+                        title="Export CSV"
+                    >
+                        <Download className="w-3.5 h-3.5" />
+                        Export CSV
+                    </Button>
+
+                    {canEdit && (
+                        <>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept=".csv,.xlsx,.xls,.pdf"
+                                onChange={handleFileChange}
+                                multiple
+                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleUploadClick}
+                                className="border-[var(--primary-border)] text-[var(--text-muted)] hover:bg-[var(--primary-bg)] bg-[var(--bg)] gap-1.5"
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                                Upload Data
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={handleAddRow}
+                                className="gap-1.5"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                Add Item
+                            </Button>
+                        </>
                     )}
-                </tbody>
-            </table>
-        </div>
-        <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center flex-shrink-0">
-            <span>Showing {filteredInventory.length} unique items</span>
-            {!canEdit && <span className="italic text-gray-400">Read-Only View</span>}
-        </div>
-      </div>
+                </div>
+            </div>
 
-      <UploadConfirmationModal 
-          isOpen={isUploadModalOpen}
-          onClose={() => { setIsUploadModalOpen(false); setUploadFiles([]); }}
-          onConfirm={handleUploadConfirm}
-          files={uploadFiles}
-          isLoading={isProcessing}
-      />
-    </div>
-  );
+            {/* Table */}
+            <div className="flex-grow overflow-hidden flex flex-col mx-6 my-5 rounded-md border border-[var(--border)] bg-[var(--bg)]">
+                <div className="overflow-auto flex-grow">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-[var(--primary-bg)] sticky top-0 z-10">
+                            <tr>
+                                {renderHeader('Item Name', 'name')}
+                                {renderHeader('Manufacturer', 'manufacturer')}
+                                {renderHeader('Description', 'description')}
+                                {renderHeader('Finish', 'finish')}
+                                {canEdit && (
+                                    <th scope="col" className="px-4 py-2.5 text-center w-16 border-b border-[var(--primary-border)] bg-[var(--primary-bg)]">
+                                        <span className="text-xs font-semibold text-[var(--primary-text)] uppercase tracking-wide">Actions</span>
+                                    </th>
+                                )}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border-subtle)]">
+                            {filteredInventory.map(item => (
+                                <tr key={item.id} className="hover:bg-[var(--bg-subtle)] transition-colors group">
+                                    <td className="px-4 py-2.5 font-medium text-[var(--text)] align-middle">
+                                        {renderCell(item, 'name')}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-[var(--text-muted)] align-middle">
+                                        {renderCell(item, 'manufacturer')}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-[var(--text-muted)] align-middle max-w-xs">
+                                        {renderCell(item, 'description')}
+                                    </td>
+                                    <td className="px-4 py-2.5 align-middle">
+                                        {canEdit ? (
+                                            renderCell(item, 'finish')
+                                        ) : (
+                                            item.finish
+                                                ? <span className="font-mono text-xs bg-[var(--bg-muted)] px-1.5 py-0.5 rounded border border-[var(--border)] text-[var(--text-secondary)]">{item.finish}</span>
+                                                : <span className="text-[var(--text-faint)] italic text-xs">—</span>
+                                        )}
+                                    </td>
+                                    {canEdit && (
+                                        <td className="px-4 py-2.5 text-center align-middle">
+                                            <button
+                                                onClick={() => handleDeleteRow(item.id)}
+                                                className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Delete item"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                            {filteredInventory.length === 0 && (
+                                <tr>
+                                    <td colSpan={canEdit ? 5 : 4} className="text-center py-16 text-[var(--text-faint)]">
+                                        <Database className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                        <p className="text-sm">
+                                            {searchQuery ? `No items match "${searchQuery}"` : 'No items in the master database yet.'}
+                                        </p>
+                                        {searchQuery && (
+                                            <button onClick={() => setSearchQuery('')} className="mt-1 text-xs text-[var(--primary-text-muted)] hover:underline">
+                                                Clear search
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Table footer */}
+                <div className="bg-[var(--bg-subtle)] border-t border-[var(--border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+                    <span className="text-xs text-[var(--text-muted)]">
+                        Showing <span className="font-medium text-[var(--text-secondary)]">{filteredInventory.length}</span> of <span className="font-medium text-[var(--text-secondary)]">{inventory.length}</span> items
+                    </span>
+                    {searchQuery && filteredInventory.length !== inventory.length && (
+                        <button onClick={() => setSearchQuery('')} className="text-xs text-[var(--primary-text-muted)] hover:underline">
+                            Clear filter
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <UploadConfirmationModal
+                isOpen={isUploadModalOpen}
+                onClose={() => { setIsUploadModalOpen(false); setUploadFiles([]); }}
+                onConfirm={handleUploadConfirm}
+                files={uploadFiles}
+                isLoading={isProcessing}
+            />
+        </div>
+    );
 };
 
 export default DatabaseView;

@@ -154,7 +154,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) onClose(); }}>
       <DialogContent className="max-w-3xl overflow-hidden p-0">
-        <DialogHeader className="border-b border-gray-100 px-6 py-5">
+        <DialogHeader className="border-b border-[var(--border-subtle)] px-6 py-5">
           <DialogTitle className="text-xl">New Project</DialogTitle>
           <DialogDescription>
             Capture the core project details before moving into estimating.
@@ -164,7 +164,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
           {/* Project Name */}
           <div>
-            <Label htmlFor="name" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            <Label htmlFor="name" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Project Name <span className="text-red-500">*</span>
             </Label>
             <div className="relative">
@@ -186,7 +186,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           </div>
 
           <div>
-            <Label htmlFor="client" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            <Label htmlFor="client" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Client / Company <span className="text-red-500">*</span>
             </Label>
             <div className="relative">
@@ -208,7 +208,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="country" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              <Label htmlFor="country" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Project Location <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -231,7 +231,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             </div>
 
             <div>
-              <Label htmlFor="province" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              <Label htmlFor="province" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Project Province <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -257,7 +257,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           {/* Project Number and Due Date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="projectNumber" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              <Label htmlFor="projectNumber" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Project #
               </Label>
               <div className="relative">
@@ -278,7 +278,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             </div>
 
             <div>
-              <Label htmlFor="dueDate" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              <Label htmlFor="dueDate" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Due Date <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -301,7 +301,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           {/* Assign To */}
           {teamMembers.length > 0 && (
             <div>
-              <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Assign To <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -326,10 +326,10 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
           {/* Status Selector */}
           <div>
-            <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Status <span className="text-red-500">*</span>
             </Label>
-            <div className="grid grid-cols-5 gap-2 rounded-lg bg-gray-100 p-1.5">
+            <div className="grid grid-cols-5 gap-2 rounded-lg bg-[var(--bg-muted)] p-1.5">
               {statusOptions.map(option => (
                 <Button
                   key={option.id}
@@ -338,7 +338,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                   disabled={isLoading}
                   variant={projectData.status === option.id ? 'outline' : 'ghost'}
                   size="sm"
-                  className={projectData.status === option.id ? 'border-gray-200 bg-white text-primary-700 shadow-sm' : 'text-gray-600'}
+                  className={projectData.status === option.id ? 'border-[var(--border)] bg-[var(--bg)] text-primary-700 shadow-sm' : 'text-[var(--text-muted)]'}
                 >
                   {option.label}
                 </Button>
@@ -347,7 +347,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           </div>
         </div>
 
-        <DialogFooter className="border-t border-gray-100 bg-gray-50 px-6 py-4 sm:justify-between">
+        <DialogFooter className="border-t border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-6 py-4 sm:justify-between">
           <Button
             onClick={onClose}
             disabled={isLoading}

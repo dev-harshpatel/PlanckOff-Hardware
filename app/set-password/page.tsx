@@ -87,7 +87,7 @@ export default function SetPasswordPage() {
 
   if (isValidating) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     );
@@ -95,9 +95,9 @@ export default function SetPasswordPage() {
 
   if (tokenError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
         <div className="w-full max-w-md text-center">
-          <div className="bg-white shadow-sm rounded-lg border border-red-200 p-8">
+          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-red-200 p-8">
             <p className="text-red-700 font-medium">{tokenError}</p>
             <button
               onClick={() => router.push('/login')}
@@ -113,9 +113,9 @@ export default function SetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
         <div className="w-full max-w-md text-center">
-          <div className="bg-white shadow-sm rounded-lg border border-green-200 p-8">
+          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-green-200 p-8">
             <p className="text-green-700 font-medium">Password set successfully! Redirecting to login…</p>
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function SetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <Image
@@ -134,24 +134,24 @@ export default function SetPasswordPage() {
             height={48}
             priority
           />
-          <p className="mt-3 text-sm text-gray-500">Accept your invitation</p>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">Accept your invitation</p>
         </div>
 
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-8">
+        <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-[var(--border)] p-8">
           {inviteInfo && (
-            <div className="mb-6 rounded-md bg-blue-50 border border-blue-200 px-4 py-3">
-              <p className="text-sm text-blue-800">
+            <div className="mb-6 rounded-md bg-[var(--primary-bg)] border border-[var(--primary-border)] px-4 py-3">
+              <p className="text-sm text-[var(--primary-text)]">
                 Setting password for <strong>{inviteInfo.name}</strong> ({inviteInfo.email}) —{' '}
                 <span className="font-medium">{inviteInfo.role}</span>
               </p>
             </div>
           )}
 
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Set your password</h2>
+          <h2 className="text-xl font-semibold text-[var(--text-secondary)] mb-6">Set your password</h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Password
               </label>
               <input
@@ -161,13 +161,13 @@ export default function SetPasswordPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="Min 8 chars, uppercase, lowercase, number"
               />
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Confirm password
               </label>
               <input
@@ -177,7 +177,7 @@ export default function SetPasswordPage() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="••••••••"
               />
             </div>

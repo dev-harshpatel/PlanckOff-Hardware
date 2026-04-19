@@ -254,7 +254,7 @@ const ReportDataPreview: React.FC<ReportDataPreviewProps> = ({
             ></div>
 
             {/* Modal */}
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full mx-4 max-h-[90vh] overflow-hidden" style={{ maxWidth: '1400px' }}>
+            <div className="relative bg-[var(--bg)] rounded-2xl shadow-2xl w-full mx-4 max-h-[90vh] overflow-hidden" style={{ maxWidth: '1400px' }}>
                 {/* Enhanced Header */}
                 <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-8 py-6 flex items-center justify-between">
                     <div>
@@ -282,7 +282,7 @@ const ReportDataPreview: React.FC<ReportDataPreviewProps> = ({
                 </div>
 
                 {/* Content - Table Preview */}
-                <div className="p-6 overflow-auto max-h-[calc(90vh-200px)] bg-gradient-to-br from-gray-50 to-gray-100">
+                <div className="p-6 overflow-auto max-h-[calc(90vh-200px)] bg-[var(--bg-subtle)]">
                     {reportType === 'submittal-package' ? (
                         <div className="flex justify-center p-8">
                             <div className="bg-white shadow-lg border border-gray-200 w-[800px] min-h-[1000px] p-16 relative rounded-xl">
@@ -326,36 +326,36 @@ const ReportDataPreview: React.FC<ReportDataPreviewProps> = ({
                             </div>
                         </div>
                     ) : rows.length === 0 ? (
-                        <div className="text-center py-12 text-gray-500 bg-white rounded-xl shadow-sm">
-                            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="text-center py-12 text-[var(--text-muted)] bg-[var(--bg)] rounded-xl shadow-sm">
+                            <svg className="w-16 h-16 mx-auto mb-4 text-[var(--text-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             <p className="text-lg font-medium">No data to preview</p>
                             <p className="text-sm mt-2">Add some {reportType === 'door-schedule' ? 'doors' : 'hardware items'} to see the preview</p>
                         </div>
                     ) : (
-                        <div className="border-2 border-gray-300 rounded-xl overflow-hidden shadow-lg bg-white">
+                        <div className="border-2 border-[var(--border-strong)] rounded-xl overflow-hidden shadow-lg bg-[var(--bg)]">
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y-2 divide-gray-300">
-                                    <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                                <table className="min-w-full divide-y-2 divide-[var(--border-strong)]">
+                                    <thead className="bg-[var(--bg-muted)]">
                                         <tr>
                                             {headers.map((header, idx) => (
                                                 <th
                                                     key={idx}
-                                                    className="px-4 py-4 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-r-2 border-gray-300 last:border-r-0 whitespace-nowrap"
+                                                    className="px-4 py-4 text-left text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider border-r-2 border-[var(--border-strong)] last:border-r-0 whitespace-nowrap"
                                                 >
                                                     {header}
                                                 </th>
                                             ))}
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody className="bg-[var(--bg)] divide-y divide-[var(--border)]">
                                         {rows.map((row, rowIdx) => (
-                                            <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-100'}>
+                                            <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-[var(--bg)] hover:bg-[var(--primary-bg)]' : 'bg-[var(--bg-subtle)] hover:bg-[var(--primary-bg-hover)]'}>
                                                 {row.map((cell, cellIdx) => (
                                                     <td
                                                         key={cellIdx}
-                                                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-200 last:border-r-0 whitespace-nowrap font-medium"
+                                                        className="px-4 py-3 text-sm text-[var(--text)] border-r border-[var(--border)] last:border-r-0 whitespace-nowrap font-medium"
                                                     >
                                                         {cell}
                                                     </td>
@@ -387,12 +387,12 @@ const ReportDataPreview: React.FC<ReportDataPreviewProps> = ({
                 </div>
 
                 {/* Enhanced Footer */}
-                <div className="bg-gradient-to-r from-gray-100 to-gray-200 px-8 py-5 flex justify-between items-center border-t-2 border-gray-300">
-                    <div className="text-sm text-gray-700 flex items-center space-x-4">
-                        <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-300">
+                <div className="bg-[var(--bg-muted)] px-8 py-5 flex justify-between items-center border-t-2 border-[var(--border-strong)]">
+                    <div className="text-sm text-[var(--text-secondary)] flex items-center space-x-4">
+                        <div className="bg-[var(--bg)] px-4 py-2 rounded-lg shadow-sm border border-[var(--border-strong)]">
                             <strong className="text-indigo-600">Total Records:</strong> <span className="font-semibold">{totalRecords}</span>
                         </div>
-                        <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-300">
+                        <div className="bg-[var(--bg)] px-4 py-2 rounded-lg shadow-sm border border-[var(--border-strong)]">
                             <strong className="text-indigo-600">Columns:</strong> <span className="font-semibold">{headers.length}</span>
                         </div>
                     </div>

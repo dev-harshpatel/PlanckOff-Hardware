@@ -58,13 +58,13 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-[var(--bg)] rounded-lg shadow-sm border border-[var(--border)]">
             {/* Header */}
-            <div className="border-b border-gray-200 p-6">
+            <div className="border-b border-[var(--border)] p-6">
                 <div className="flex justify-between items-center mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Hardware Schedule</h2>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Hardware Schedule</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">
                             Procurement-focused hardware specification by set
                         </p>
                     </div>
@@ -79,13 +79,13 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                 {/* Filters */}
                 <div className="flex gap-4">
                     <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Filter by Manufacturer
                         </label>
                         <select
                             value={filterManufacturer}
                             onChange={(e) => setFilterManufacturer(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
                         >
                             <option value="">All Manufacturers</option>
                             {manufacturers.map(mfr => (
@@ -95,13 +95,13 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                     </div>
 
                     <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Sort By
                         </label>
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value as any)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
                         >
                             <option value="name">Set Name</option>
                             <option value="leadTime">Lead Time</option>
@@ -112,9 +112,9 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
             </div>
 
             {/* Hardware Sets */}
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-[var(--border)]">
                 {filteredSets.length === 0 ? (
-                    <div className="p-12 text-center text-gray-500">
+                    <div className="p-12 text-center text-[var(--text-muted)]">
                         <div className="text-4xl mb-2">🔧</div>
                         <div className="font-medium">No hardware sets found</div>
                         <div className="text-sm">Try adjusting your filters</div>
@@ -126,39 +126,39 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                         const csiSection = set.division || '08 71 00';
 
                         return (
-                            <div key={set.id} className="bg-white">
+                            <div key={set.id} className="bg-[var(--bg)]">
                                 {/* Set Header */}
                                 <div
-                                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                                    className="p-4 hover:bg-[var(--bg-subtle)] cursor-pointer transition-colors"
                                     onClick={() => toggleSetExpansion(set.id)}
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3 flex-1">
-                                            <button className="text-gray-400 hover:text-gray-600">
+                                            <button className="text-[var(--text-faint)] hover:text-[var(--text-muted)]">
                                                 {isExpanded ? '▼' : '▶'}
                                             </button>
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3">
-                                                    <h3 className="text-lg font-semibold text-gray-900">
+                                                    <h3 className="text-lg font-semibold text-[var(--text)]">
                                                         {set.name}
                                                     </h3>
-                                                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                                                    <span className="px-2 py-1 bg-[var(--primary-bg-hover)] text-[var(--primary-text)] text-xs font-medium rounded">
                                                         {csiSection}
                                                     </span>
                                                 </div>
-                                                <div className="text-sm text-gray-600 mt-1">
+                                                <div className="text-sm text-[var(--text-muted)] mt-1">
                                                     {getCSISectionDescription(csiSection)}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-6 text-sm">
                                             <div className="text-center">
-                                                <div className="text-gray-500">Items</div>
-                                                <div className="font-semibold text-gray-900">{set.items.length}</div>
+                                                <div className="text-[var(--text-muted)]">Items</div>
+                                                <div className="font-semibold text-[var(--text)]">{set.items.length}</div>
                                             </div>
                                             <div className="text-center">
-                                                <div className="text-gray-500">Doors</div>
-                                                <div className="font-semibold text-gray-900">{doorCount}</div>
+                                                <div className="text-[var(--text-muted)]">Doors</div>
+                                                <div className="font-semibold text-[var(--text)]">{doorCount}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -166,10 +166,10 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
 
                                 {/* Set Items (Expanded) */}
                                 {isExpanded && (
-                                    <div className="bg-gray-50 border-t border-gray-200">
+                                    <div className="bg-[var(--bg-subtle)] border-t border-[var(--border)]">
                                         <table className="w-full">
-                                            <thead className="bg-gray-100">
-                                                <tr className="text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            <thead className="bg-[var(--bg-muted)]">
+                                                <tr className="text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
                                                     <th className="px-4 py-3">Item</th>
                                                     <th className="px-4 py-3">Manufacturer</th>
                                                     <th className="px-4 py-3">Model</th>
@@ -180,36 +180,36 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                                                     <th className="px-4 py-3">Lead Time</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-200">
+                                            <tbody className="divide-y divide-[var(--border)]">
                                                 {set.items.map(item => {
                                                     const totalQty = item.quantity * doorCount;
 
                                                     return (
-                                                        <tr key={item.id} className="hover:bg-white transition-colors">
+                                                        <tr key={item.id} className="hover:bg-[var(--bg)] transition-colors">
                                                             <td className="px-4 py-3">
-                                                                <div className="font-medium text-gray-900">{item.name}</div>
+                                                                <div className="font-medium text-[var(--text)]">{item.name}</div>
                                                                 {item.description && (
-                                                                    <div className="text-xs text-gray-500 mt-1">{item.description}</div>
+                                                                    <div className="text-xs text-[var(--text-muted)] mt-1">{item.description}</div>
                                                                 )}
                                                             </td>
-                                                            <td className="px-4 py-3 text-gray-700">{item.manufacturer}</td>
-                                                            <td className="px-4 py-3 text-gray-700 font-mono text-sm">
+                                                            <td className="px-4 py-3 text-[var(--text-secondary)]">{item.manufacturer}</td>
+                                                            <td className="px-4 py-3 text-[var(--text-secondary)] font-mono text-sm">
                                                                 {item.modelNumber || '-'}
                                                             </td>
-                                                            <td className="px-4 py-3 text-gray-700">{item.finish}</td>
+                                                            <td className="px-4 py-3 text-[var(--text-secondary)]">{item.finish}</td>
                                                             <td className="px-4 py-3">
                                                                 {item.ansiGrade ? (
                                                                     <span className={`px-2 py-1 rounded text-xs font-medium ${item.ansiGrade === 'Grade 1' ? 'bg-green-100 text-green-800' :
                                                                             item.ansiGrade === 'Grade 2' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                'bg-gray-100 text-gray-800'
+                                                                                'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
                                                                         }`}>
                                                                         {item.ansiGrade}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-gray-400">-</span>
+                                                                    <span className="text-[var(--text-faint)]">-</span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-4 py-3 text-center font-semibold text-gray-900">
+                                                            <td className="px-4 py-3 text-center font-semibold text-[var(--text)]">
                                                                 {item.quantity}
                                                             </td>
                                                             <td className="px-4 py-3 text-center font-bold text-blue-600">
@@ -223,7 +223,7 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                                                                         {item.leadTime}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-gray-400">-</span>
+                                                                    <span className="text-[var(--text-faint)]">-</span>
                                                                 )}
                                                             </td>
                                                         </tr>
@@ -233,14 +233,14 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                                         </table>
 
                                         {/* Set Footer */}
-                                        <div className="bg-gray-100 px-4 py-3 border-t border-gray-200">
+                                        <div className="bg-[var(--bg-muted)] px-4 py-3 border-t border-[var(--border)]">
                                             <div className="flex justify-between items-center text-sm">
-                                                <div className="text-gray-600">
+                                                <div className="text-[var(--text-muted)]">
                                                     {set.description && (
                                                         <span><strong>Notes:</strong> {set.description}</span>
                                                     )}
                                                 </div>
-                                                <div className="font-semibold text-gray-900">
+                                                <div className="font-semibold text-[var(--text)]">
                                                     Total Items: {set.items.length} | Total Doors: {doorCount}
                                                 </div>
                                             </div>
@@ -254,21 +254,21 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
             </div>
 
             {/* Summary Footer */}
-            <div className="border-t border-gray-200 bg-gray-50 p-6">
+            <div className="border-t border-[var(--border)] bg-[var(--bg-subtle)] p-6">
                 <div className="grid grid-cols-3 gap-6 text-center">
                     <div>
                         <div className="text-2xl font-bold text-blue-600">{filteredSets.length}</div>
-                        <div className="text-sm text-gray-600">Hardware Sets</div>
+                        <div className="text-sm text-[var(--text-muted)]">Hardware Sets</div>
                     </div>
                     <div>
                         <div className="text-2xl font-bold text-green-600">
                             {filteredSets.reduce((sum, set) => sum + set.items.length, 0)}
                         </div>
-                        <div className="text-sm text-gray-600">Total Items</div>
+                        <div className="text-sm text-[var(--text-muted)]">Total Items</div>
                     </div>
                     <div>
                         <div className="text-2xl font-bold text-purple-600">{doors.length}</div>
-                        <div className="text-sm text-gray-600">Total Doors</div>
+                        <div className="text-sm text-[var(--text-muted)]">Total Doors</div>
                     </div>
                 </div>
             </div>

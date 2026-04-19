@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { DocumentChartBarIcon, TableCellsIcon } from './icons';
+import { FileText, Table2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 export interface ProcessingTask {
   id: string;
@@ -19,35 +20,33 @@ const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ tasks }) => {
   if (tasks.length === 0) return null;
 
   return (
-    <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-2 animate-fadeIn">
+    <div className="absolute bottom-5 right-5 z-50 flex flex-col gap-2 animate-fadeIn">
       {tasks.map((task) => {
-        const Icon = task.type === 'hardware-pdf' ? DocumentChartBarIcon : TableCellsIcon;
+        const Icon = task.type === 'hardware-pdf' ? FileText : Table2;
+        const isDone = task.progress === 100;
         return (
           <div
             key={task.id}
-            className="bg-white/95 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-xl w-80 overflow-hidden ring-1 ring-black/5"
+            className="bg-white border border-gray-200 shadow-lg rounded-xl w-72 overflow-hidden"
           >
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Icon className="w-4 h-4 text-blue-600" />
+            <div className="px-4 pt-3 pb-2 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-4 h-4 text-primary-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{task.fileName}</p>
-                <p className="text-xs text-blue-600 font-medium">{task.stage}</p>
+                <p className="text-xs font-semibold text-gray-800 truncate">{task.fileName}</p>
+                <p className="text-xs text-primary-600 mt-0.5">{task.stage}</p>
               </div>
-              {/* Spinner */}
-              <svg className="animate-spin h-4 w-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              {!isDone && (
+                <svg className="animate-spin h-4 w-4 text-primary-500 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
             </div>
-            {/* Progress bar */}
-            <div className="h-1.5 w-full bg-gray-100">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
-                style={{ width: `${task.progress}%` }}
-              />
+            <div className="px-4 pb-3">
+              <Progress value={task.progress} className="h-1.5" />
+              <p className="text-right text-[10px] text-gray-400 mt-1">{task.progress}%</p>
             </div>
           </div>
         );

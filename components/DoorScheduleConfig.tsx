@@ -145,7 +145,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
     return (
         <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-[var(--bg)] rounded-2xl shadow-lg border border-[var(--border)] overflow-hidden">
                 {/* Gradient Header */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-6">
                     <div className="flex justify-between items-center">
@@ -160,7 +160,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                 <select
                                     value={exportFormat}
                                     onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
-                                    className="bg-white/90 text-gray-900 text-sm font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer"
+                                    className="bg-white/90 text-gray-900 dark:text-gray-900 text-sm font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer"
                                 >
                                     <option value="excel">Excel (.xlsx)</option>
                                     <option value="pdf">PDF (.pdf)</option>
@@ -208,25 +208,25 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 {!showPreview && (
                     <div className="p-8 space-y-6">
                         {/* Preset Buttons */}
-                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200">
+                        <div className="bg-[var(--bg-subtle)] rounded-xl p-5 border border-[var(--border)]">
                             <div className="flex items-center space-x-4">
                                 <div className="flex items-center space-x-2">
                                     <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                                     </svg>
-                                    <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Quick Presets:</span>
+                                    <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wide">Quick Presets:</span>
                                 </div>
                                 <div className="flex space-x-2">
-                                    <button onClick={() => handlePreset('basic')} className="px-4 py-2 text-sm bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-blue-50 hover:border-blue-500 hover:text-blue-700 font-medium transition-all duration-200 shadow-sm">
+                                    <button onClick={() => handlePreset('basic')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-blue-50 hover:border-blue-500 hover:text-blue-700 font-medium transition-all duration-200 shadow-sm">
                                         📋 Basic
                                     </button>
-                                    <button onClick={() => handlePreset('pricing')} className="px-4 py-2 text-sm bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-green-50 hover:border-green-500 hover:text-green-700 font-medium transition-all duration-200 shadow-sm">
+                                    <button onClick={() => handlePreset('pricing')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-green-50 hover:border-green-500 hover:text-green-700 font-medium transition-all duration-200 shadow-sm">
                                         💰 Pricing
                                     </button>
-                                    <button onClick={() => handlePreset('frame-schedule')} className="px-4 py-2 text-sm bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-purple-50 hover:border-purple-500 hover:text-purple-700 font-medium transition-all duration-200 shadow-sm">
+                                    <button onClick={() => handlePreset('frame-schedule')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-purple-50 hover:border-purple-500 hover:text-purple-700 font-medium transition-all duration-200 shadow-sm">
                                         🖼️ Frame Schedule
                                     </button>
-                                    <button onClick={() => handlePreset('all')} className="px-4 py-2 text-sm bg-white border-2 border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 hover:border-indigo-600 font-medium transition-all duration-200 shadow-sm">
+                                    <button onClick={() => handlePreset('all')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 hover:border-indigo-600 font-medium transition-all duration-200 shadow-sm">
                                         ✅ Select All
                                     </button>
                                 </div>
@@ -238,9 +238,9 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                             {Object.entries(COLUMN_GROUPS).map(([group, columns]) => {
                                 const selectedInGroup = columns.filter(col => selectedColumns.includes(col.id)).length;
                                 return (
-                                    <div key={group} className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border-2 border-gray-200 hover:border-indigo-300 transition-all duration-200 shadow-sm hover:shadow-md">
-                                        <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-gray-200">
-                                            <h4 className="font-bold text-base text-gray-900">{group}</h4>
+                                    <div key={group} className="bg-[var(--bg)] rounded-xl p-5 border-2 border-[var(--border)] hover:border-indigo-300 transition-all duration-200 shadow-sm hover:shadow-md">
+                                        <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-[var(--border)]">
+                                            <h4 className="font-bold text-base text-[var(--text)]">{group}</h4>
                                             <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-xs font-semibold">
                                                 {selectedInGroup}/{columns.length}
                                             </span>
@@ -252,9 +252,9 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                                         type="checkbox"
                                                         checked={selectedColumns.includes(col.id)}
                                                         onChange={() => toggleColumn(col.id)}
-                                                        className="rounded border-2 border-gray-400 text-indigo-600 focus:ring-2 focus:ring-indigo-500 w-5 h-5 cursor-pointer transition-all duration-150"
+                                                        className="rounded border-2 border-[var(--border-strong)] text-indigo-600 focus:ring-2 focus:ring-indigo-500 w-5 h-5 cursor-pointer transition-all duration-150"
                                                     />
-                                                    <span className="text-sm text-gray-700 group-hover:text-indigo-900 font-medium">{col.label}</span>
+                                                    <span className="text-sm text-[var(--text-secondary)] group-hover:text-indigo-900 font-medium">{col.label}</span>
                                                 </label>
                                             ))}
                                         </div>

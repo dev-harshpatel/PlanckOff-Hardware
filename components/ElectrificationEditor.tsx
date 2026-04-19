@@ -46,25 +46,25 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="text-lg font-semibold text-gray-800">Electrification</h3>
-                <span className="text-xs text-gray-500">⚡ Power & Access Control</span>
+                <h3 className="text-lg font-semibold text-[var(--text)]">Electrification</h3>
+                <span className="text-xs text-[var(--text-muted)]">⚡ Power & Access Control</span>
             </div>
 
             {/* Main Toggle */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4">
                 <div className="flex items-center">
                     <input
                         type="checkbox"
                         id="isElectrified"
                         checked={value?.isElectrified || false}
                         onChange={(e) => handleElectrifiedToggle(e.target.checked)}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-5 h-5 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                     />
                     <label htmlFor="isElectrified" className="ml-3">
-                        <span className="text-base font-semibold text-gray-900">
+                        <span className="text-base font-semibold text-[var(--text)]">
                             This door is electrified
                         </span>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
                             Requires power for locks, strikes, access control, or monitoring
                         </p>
                     </label>
@@ -76,17 +76,17 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                 <>
                     {/* Power Requirements */}
                     <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">Power Requirements</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border-subtle)] pb-1">Power Requirements</h4>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                                     Voltage <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     value={value.voltage || ''}
                                     onChange={(e) => updateField('voltage', e.target.value as ElectrificationSpec['voltage'])}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                                 >
                                     <option value="">Select...</option>
                                     <option value="12V DC">12V DC</option>
@@ -97,11 +97,11 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Wiring Method</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Wiring Method</label>
                                 <select
                                     value={value.wiringMethod || ''}
                                     onChange={(e) => updateField('wiringMethod', e.target.value as ElectrificationSpec['wiringMethod'])}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                                 >
                                     <option value="">Select...</option>
                                     <option value="EPT">EPT (Electric Power Transfer)</option>
@@ -117,25 +117,25 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                                 id="eptRequired"
                                 checked={value.eptRequired || false}
                                 onChange={(e) => updateField('eptRequired', e.target.checked)}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                             />
-                            <label htmlFor="eptRequired" className="ml-2 text-sm text-gray-700">
+                            <label htmlFor="eptRequired" className="ml-2 text-sm text-[var(--text-secondary)]">
                                 EPT (Electric Power Transfer) Required
-                                <span className="text-xs text-gray-500 ml-1">(for continuous hinges with power)</span>
+                                <span className="text-xs text-[var(--text-muted)] ml-1">(for continuous hinges with power)</span>
                             </label>
                         </div>
                     </div>
 
                     {/* Access Control */}
                     <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">Access Control</h4>
+                        <h4 className="text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border-subtle)] pb-1">Access Control</h4>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Access Control Type</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Access Control Type</label>
                             <select
                                 value={value.accessControlType || 'None'}
                                 onChange={(e) => updateField('accessControlType', e.target.value as ElectrificationSpec['accessControlType'])}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                             >
                                 <option value="None">None / Mechanical Only</option>
                                 <option value="Card Reader">Card Reader (Proximity/RFID)</option>
@@ -152,9 +152,9 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                                     id="requestToExit"
                                     checked={value.requestToExit || false}
                                     onChange={(e) => updateField('requestToExit', e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                 />
-                                <label htmlFor="requestToExit" className="ml-2 text-sm text-gray-700">
+                                <label htmlFor="requestToExit" className="ml-2 text-sm text-[var(--text-secondary)]">
                                     Request to Exit (REX)
                                 </label>
                             </div>
@@ -165,9 +165,9 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                                     id="doorContact"
                                     checked={value.doorContact || false}
                                     onChange={(e) => updateField('doorContact', e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                 />
-                                <label htmlFor="doorContact" className="ml-2 text-sm text-gray-700">
+                                <label htmlFor="doorContact" className="ml-2 text-sm text-[var(--text-secondary)]">
                                     Door Contact / Position Switch
                                 </label>
                             </div>
@@ -192,11 +192,11 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
             )}
 
             {/* Live Summary Preview */}
-            <div className={`border rounded-lg p-3 ${value?.isElectrified ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
-                <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${value?.isElectrified ? 'text-yellow-700' : 'text-gray-600'}`}>
+            <div className={`border rounded-lg p-3 ${value?.isElectrified ? 'bg-yellow-50 border-yellow-200' : 'bg-[var(--bg-subtle)] border-[var(--border)]'}`}>
+                <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${value?.isElectrified ? 'text-yellow-700' : 'text-[var(--text-muted)]'}`}>
                     Electrification Summary
                 </div>
-                <div className={`text-sm font-medium ${value?.isElectrified ? 'text-yellow-900' : 'text-gray-700'}`}>
+                <div className={`text-sm font-medium ${value?.isElectrified ? 'text-yellow-900' : 'text-[var(--text-secondary)]'}`}>
                     {getSummary()}
                 </div>
             </div>

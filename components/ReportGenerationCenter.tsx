@@ -65,23 +65,23 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
             tabIndex={-1}
         >
             <div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col animate-slideIn"
+                className="bg-[var(--bg)] rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col animate-slideIn"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
                     <div className="flex items-center space-x-3">
                         <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <h2 className="text-2xl font-bold text-gray-900">Report Generation Center</h2>
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Report Generation Center</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        className="p-2 hover:bg-[var(--bg-muted)] rounded-full transition-colors"
                         aria-label="Close"
                     >
-                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-6 h-6 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -153,43 +153,43 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
     return (
         <div className="max-w-5xl mx-auto">
             <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">Select Report Type</h3>
-                <p className="text-gray-600">Choose the type of report you want to generate and customize</p>
+                <h3 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">Select Report Type</h3>
+                <p className="text-[var(--text-muted)]">Choose the type of report you want to generate and customize</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                 {/* Door Schedule Card */}
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer group">
+                <div className="bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl p-8 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer group">
                     <div className="flex items-start justify-between mb-4">
                         <div className="p-3 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
                             <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </div>
-                        <span className="px-3 py-1 bg-blue-50 text-blue-700 text-sm font-semibold rounded-full">
+                        <span className="px-3 py-1 bg-[var(--primary-bg)] text-[var(--primary-text)] text-sm font-semibold rounded-full">
                             {doorCount} doors
                         </span>
                     </div>
 
-                    <h4 className="text-xl font-bold text-gray-900 mb-3">Door Schedule Report</h4>
-                    <p className="text-gray-600 mb-6">
+                    <h4 className="text-xl font-bold text-[var(--text)] mb-3">Door Schedule Report</h4>
+                    <p className="text-[var(--text-muted)] mb-6">
                         Export comprehensive door data with full customization. Choose from 30+ fields including dimensions, materials, fire ratings, and hardware assignments.
                     </p>
 
                     <ul className="space-y-2 mb-6">
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                             Customizable columns
                         </li>
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                             Multiple export formats
                         </li>
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
@@ -206,7 +206,7 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
                 </div>
 
                 {/* Hardware Set Card */}
-                <div className="bg-white border-2 border-gray-200 rounded-xl p-8 hover:border-purple-500 hover:shadow-lg transition-all cursor-pointer group">
+                <div className="bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl p-8 hover:border-purple-500 hover:shadow-lg transition-all cursor-pointer group">
                     {/* ... existing Hardware Set content ... */}
                     <div className="flex items-start justify-between mb-4">
                         <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
@@ -220,25 +220,25 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
                         </span>
                     </div>
 
-                    <h4 className="text-xl font-bold text-gray-900 mb-3">Hardware Set Report</h4>
-                    <p className="text-gray-600 mb-6">
+                    <h4 className="text-xl font-bold text-[var(--text)] mb-3">Hardware Set Report</h4>
+                    <p className="text-[var(--text-muted)] mb-6">
                         Export hardware items with usage tracking. See exactly which door tags use each item, perfect for procurement and cost analysis.
                     </p>
 
                     <ul className="space-y-2 mb-6">
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                             Usage/location tracking
                         </li>
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                             Cross-referencing
                         </li>
-                        <li className="flex items-center text-sm text-gray-700">
+                        <li className="flex items-center text-sm text-[var(--text-secondary)]">
                             <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
@@ -256,7 +256,7 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
             </div>
 
             {/* Submittal Package Card - Full Width */}
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-8 hover:border-indigo-500 hover:shadow-lg transition-all cursor-pointer group mb-12 relative overflow-hidden">
+            <div className="bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl p-8 hover:border-indigo-500 hover:shadow-lg transition-all cursor-pointer group mb-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                     <svg className="w-64 h-64" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
@@ -276,22 +276,22 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
                             </span>
                         </div>
 
-                        <h4 className="text-2xl font-bold text-gray-900 mb-2">Submittal Package & Frame Reports</h4>
-                        <p className="text-gray-600 mb-6 max-w-2xl">
+                        <h4 className="text-2xl font-bold text-[var(--text)] mb-2">Submittal Package & Frame Reports</h4>
+                        <p className="text-[var(--text-muted)] mb-6 max-w-2xl">
                             Generate a complete submittal package including Cover Page, Door Schedule, Hardware Sets, Frame Details, and Elevation Drawings. This is your all-in-one documentation solution.
                         </p>
 
                         <div className="flex flex-wrap gap-4 mb-6">
-                            <div className="flex items-center text-sm text-gray-700 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
+                            <div className="flex items-center text-sm text-[var(--text-secondary)] bg-[var(--bg-subtle)] px-3 py-1 rounded-full border border-[var(--border)]">
                                 <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span> Door Schedule
                             </div>
-                            <div className="flex items-center text-sm text-gray-700 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
+                            <div className="flex items-center text-sm text-[var(--text-secondary)] bg-[var(--bg-subtle)] px-3 py-1 rounded-full border border-[var(--border)]">
                                 <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span> Hardware Sets
                             </div>
-                            <div className="flex items-center text-sm text-gray-700 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
+                            <div className="flex items-center text-sm text-[var(--text-secondary)] bg-[var(--bg-subtle)] px-3 py-1 rounded-full border border-[var(--border)]">
                                 <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span> Elevations
                             </div>
-                            <div className="flex items-center text-sm text-gray-700 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
+                            <div className="flex items-center text-sm text-[var(--text-secondary)] bg-[var(--bg-subtle)] px-3 py-1 rounded-full border border-[var(--border)]">
                                 <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span> Frames
                             </div>
                         </div>
@@ -307,9 +307,9 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
             </div>
 
             {/* Recent Exports Section */}
-            <div className="bg-gray-50 rounded-lg p-6">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Recent Exports</h4>
-                <p className="text-sm text-gray-500">No recent exports yet. Generate your first report above.</p>
+            <div className="bg-[var(--bg-subtle)] rounded-lg p-6">
+                <h4 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">Recent Exports</h4>
+                <p className="text-sm text-[var(--text-muted)]">No recent exports yet. Generate your first report above.</p>
             </div>
         </div>
     );

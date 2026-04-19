@@ -73,12 +73,12 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ doors, elevatio
     });
 
     return (
-        <div className="flex flex-col h-full bg-gray-50">
+        <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
             {/* Toolbar */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm">
+            <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-4 flex justify-between items-center shadow-sm">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-800">Submittal Package Preview</h2>
-                    <p className="text-sm text-gray-500">{groupedData.length} Unique Door Types Generated</p>
+                    <h2 className="text-xl font-bold text-[var(--text-secondary)]">Submittal Package Preview</h2>
+                    <p className="text-sm text-[var(--text-muted)]">{groupedData.length} Unique Door Types Generated</p>
                 </div>
                 <button
                     onClick={handlePrint}

@@ -305,7 +305,9 @@ export const assignHardwareWithAI = async (
     apiKey?: string
 ): Promise<{ assignedSet: HardwareSet; confidence: 'high' | 'medium' | 'low'; reason: string }> => {
     
-    const provided = door.providedHardwareSet?.trim();
+    // For structured Excel uploads the hardware set lives in sections.hardware.hardwareSet;
+    // fall back to the legacy flat field for PDF-extracted doors and older uploads.
+    const provided = (door.sections?.hardware?.hardwareSet || door.providedHardwareSet)?.trim();
 
     if (provided) {
         const providedLower = provided.toLowerCase();
@@ -340,7 +342,7 @@ export const assignHardwareWithAI = async (
         ${learnedExamples}
         **Door to Estimate:**
         - Door Tag: ${door.doorTag}
-        - Provided: ${door.providedHardwareSet}
+        - Provided: ${door.sections?.hardware?.hardwareSet || door.providedHardwareSet}
         - Type: ${door.type}
         ...
     `;

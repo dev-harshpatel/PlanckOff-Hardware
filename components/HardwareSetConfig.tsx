@@ -143,8 +143,8 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                         </svg>
                         Back to Reports
                     </button>
-                    <h3 className="text-2xl font-bold text-gray-900">Hardware Set Report</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-2xl font-bold text-[var(--text)]">Hardware Set Report</h3>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
                         {getTotalItems()} unique items • {getTotalColumns()} columns • {hardwareSets.length} sets
                     </p>
                 </div>
@@ -155,9 +155,9 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                     {/* Configuration - Left 2/3 */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Required Columns */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-6">
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">Required Columns</h4>
-                            <p className="text-sm text-gray-600 mb-4">These columns are always included in the report</p>
+                        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-6">
+                            <h4 className="text-lg font-semibold text-[var(--text)] mb-4">Required Columns</h4>
+                            <p className="text-sm text-[var(--text-muted)] mb-4">These columns are always included in the report</p>
 
                             <div className="space-y-2">
                                 {[
@@ -167,13 +167,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                     { id: 'finish', label: 'Finish', desc: 'Color/coating specification' },
                                     { id: 'usage', label: 'Usage/Location', desc: 'Door tags using this item' }
                                 ].map(col => (
-                                    <div key={col.id} className="flex items-start p-3 bg-blue-50 rounded-lg">
+                                    <div key={col.id} className="flex items-start p-3 bg-[var(--primary-bg)] rounded-lg">
                                         <svg className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                         </svg>
                                         <div className="flex-grow">
-                                            <div className="font-medium text-gray-900">{col.label}</div>
-                                            <div className="text-xs text-gray-600">{col.desc}</div>
+                                            <div className="font-medium text-[var(--text)]">{col.label}</div>
+                                            <div className="text-xs text-[var(--text-muted)]">{col.desc}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -181,29 +181,29 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                         </div>
 
                         {/* Optional Columns */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-6">
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">Optional Columns</h4>
-                            <p className="text-sm text-gray-600 mb-4">Select additional columns to include</p>
+                        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-6">
+                            <h4 className="text-lg font-semibold text-[var(--text)] mb-4">Optional Columns</h4>
+                            <p className="text-sm text-[var(--text-muted)] mb-4">Select additional columns to include</p>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {OPTIONAL_COLUMNS.map(col => (
-                                    <label key={col.id} className="flex items-center cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                    <label key={col.id} className="flex items-center cursor-pointer p-3 border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
                                         <input
                                             type="checkbox"
                                             checked={optionalColumns.includes(col.id)}
                                             onChange={() => handleOptionalColumnToggle(col.id)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-3 text-sm text-gray-700">{col.label}</span>
+                                        <span className="ml-3 text-sm text-[var(--text-secondary)]">{col.label}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
 
                         {/* Grouping Options */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-6">
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">Grouping Options</h4>
-                            <p className="text-sm text-gray-600 mb-4">How to organize items in the report</p>
+                        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-6">
+                            <h4 className="text-lg font-semibold text-[var(--text)] mb-4">Grouping Options</h4>
+                            <p className="text-sm text-[var(--text-muted)] mb-4">How to organize items in the report</p>
 
                             <div className="space-y-2">
                                 {[
@@ -212,18 +212,18 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                     { id: 'manufacturer', label: 'By Manufacturer', desc: 'Group by brand/supplier' },
                                     { id: 'flat', label: 'Flat List', desc: 'No grouping, simple list' }
                                 ].map(option => (
-                                    <label key={option.id} className="flex items-start cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                    <label key={option.id} className="flex items-start cursor-pointer p-3 border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
                                         <input
                                             type="radio"
                                             name="groupBy"
                                             value={option.id}
                                             checked={groupBy === option.id}
                                             onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 mt-0.5"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] focus:ring-[var(--primary-ring)] mt-0.5"
                                         />
                                         <div className="ml-3 flex-grow">
-                                            <div className="text-sm font-medium text-gray-900">{option.label}</div>
-                                            <div className="text-xs text-gray-600">{option.desc}</div>
+                                            <div className="text-sm font-medium text-[var(--text)]">{option.label}</div>
+                                            <div className="text-xs text-[var(--text-muted)]">{option.desc}</div>
                                         </div>
                                     </label>
                                 ))}
@@ -231,9 +231,9 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                         </div>
 
                         {/* Usage Display Options */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-6">
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">Usage/Location Display</h4>
-                            <p className="text-sm text-gray-600 mb-4">How to show which doors use each item</p>
+                        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-6">
+                            <h4 className="text-lg font-semibold text-[var(--text)] mb-4">Usage/Location Display</h4>
+                            <p className="text-sm text-[var(--text-muted)] mb-4">How to show which doors use each item</p>
 
                             <div className="space-y-2">
                                 {[
@@ -241,19 +241,19 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                     { id: 'count', label: 'Show count only', desc: 'e.g., "Used in 24 doors"', example: 'Used in 6 doors' },
                                     { id: 'preview', label: 'Show first 5 + count', desc: 'e.g., "101, 102... +22 more"', example: '101, 102, 103... +3 more' }
                                 ].map(option => (
-                                    <label key={option.id} className="flex items-start cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                    <label key={option.id} className="flex items-start cursor-pointer p-3 border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
                                         <input
                                             type="radio"
                                             name="usageDisplay"
                                             value={option.id}
                                             checked={usageDisplay === option.id}
                                             onChange={(e) => setUsageDisplay(e.target.value as typeof usageDisplay)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 mt-0.5"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] focus:ring-[var(--primary-ring)] mt-0.5"
                                         />
                                         <div className="ml-3 flex-grow">
-                                            <div className="text-sm font-medium text-gray-900">{option.label}</div>
-                                            <div className="text-xs text-gray-600 mb-1">{option.desc}</div>
-                                            <div className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded">{option.example}</div>
+                                            <div className="text-sm font-medium text-[var(--text)]">{option.label}</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">{option.desc}</div>
+                                            <div className="text-xs font-mono bg-[var(--bg-muted)] text-[var(--text-secondary)] px-2 py-1 rounded">{option.example}</div>
                                         </div>
                                     </label>
                                 ))}
@@ -263,12 +263,12 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
 
                     {/* Export Options - Right 1/3 */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-0">
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">Export Options</h4>
+                        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-6 sticky top-0">
+                            <h4 className="text-lg font-semibold text-[var(--text)] mb-4">Export Options</h4>
 
                             {/* Format Selection */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Format</label>
                                 <div className="space-y-2">
                                     <label className="flex items-center cursor-pointer">
                                         <input
@@ -277,9 +277,9 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                             value="xlsx"
                                             checked={format === 'xlsx'}
                                             onChange={(e) => setFormat(e.target.value as 'xlsx')}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">Excel (.xlsx)</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">Excel (.xlsx)</span>
                                     </label>
                                     <label className="flex items-center cursor-pointer">
                                         <input
@@ -288,9 +288,9 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                             value="pdf"
                                             checked={format === 'pdf'}
                                             onChange={(e) => setFormat(e.target.value as 'pdf')}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">PDF</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">PDF</span>
                                     </label>
                                     <label className="flex items-center cursor-pointer">
                                         <input
@@ -299,43 +299,43 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                             value="csv"
                                             checked={format === 'csv'}
                                             onChange={(e) => setFormat(e.target.value as 'csv')}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">CSV</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">CSV</span>
                                     </label>
                                 </div>
                             </div>
 
                             {/* Include Options */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Include</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Include</label>
                                 <div className="space-y-2">
                                     <label className="flex items-center cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={includeSetSummary}
                                             onChange={(e) => setIncludeSetSummary(e.target.checked)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">Hardware Set Summary</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">Hardware Set Summary</span>
                                     </label>
                                     <label className="flex items-center cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={includeCostSummary}
                                             onChange={(e) => setIncludeCostSummary(e.target.checked)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">Total Cost Summary</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">Total Cost Summary</span>
                                     </label>
                                     <label className="flex items-center cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={includeProcurement}
                                             onChange={(e) => setIncludeProcurement(e.target.checked)}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                                         />
-                                        <span className="ml-2 text-sm text-gray-700">Procurement Checklist</span>
+                                        <span className="ml-2 text-sm text-[var(--text-secondary)]">Procurement Checklist</span>
                                     </label>
                                 </div>
                             </div>
@@ -367,7 +367,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                 </button>
                                 <button
                                     onClick={() => setIsPreviewOpen(true)}
-                                    className="w-full px-4 py-2 bg-white text-gray-700 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                    className="w-full px-4 py-2 bg-[var(--bg)] text-[var(--text-secondary)] font-medium border border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
                                 >
                                     Preview
                                 </button>

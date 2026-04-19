@@ -44,9 +44,9 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
                 <div className="flex items-start justify-between">
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-gray-900">Door {result.doorTag}</span>
+                            <span className="font-bold text-[var(--text)]">Door {result.doorTag}</span>
                             {result.field && (
-                                <span className="text-xs px-2 py-0.5 bg-white rounded border border-gray-300 text-gray-600">
+                                <span className="text-xs px-2 py-0.5 bg-[var(--bg)] rounded border border-[var(--border-strong)] text-[var(--text-muted)]">
                                     {result.field}
                                 </span>
                             )}
@@ -55,7 +55,7 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
                             {result.message}
                         </p>
                         {result.suggestion && (
-                            <p className="text-xs text-gray-600 flex items-start gap-1">
+                            <p className="text-xs text-[var(--text-muted)] flex items-start gap-1">
                                 <span className="mt-0.5">💡</span>
                                 <span>{result.suggestion}</span>
                             </p>
@@ -86,18 +86,18 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
             <div className="mb-4">
                 <button
                     onClick={() => toggleSection(sectionKey)}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                    className="w-full flex items-center justify-between p-4 bg-[var(--bg-subtle)] hover:bg-[var(--bg-muted)] rounded-lg transition-colors border border-[var(--border)]"
                 >
                     <div className="flex items-center gap-3">
                         <span className="text-2xl">{icon}</span>
                         <div className="text-left">
-                            <div className="font-semibold text-gray-900">
+                            <div className="font-semibold text-[var(--text)]">
                                 {title} ({count})
                             </div>
-                            <div className="text-xs text-gray-500">{description}</div>
+                            <div className="text-xs text-[var(--text-muted)]">{description}</div>
                         </div>
                     </div>
-                    <span className="text-gray-400 text-xl">
+                    <span className="text-[var(--text-faint)] text-xl">
                         {isExpanded ? '▼' : '▶'}
                     </span>
                 </button>
@@ -109,7 +109,7 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
                 )}
 
                 {isExpanded && results.length === 0 && (
-                    <div className="mt-3 pl-4 text-sm text-gray-500 italic">
+                    <div className="mt-3 pl-4 text-sm text-[var(--text-muted)] italic">
                         No issues in this category ✓
                     </div>
                 )}
@@ -119,34 +119,34 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="bg-[var(--bg)] rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between p-6 border-b border-[var(--border)]">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Validation Report</h2>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <h2 className="text-2xl font-bold text-[var(--text)]">Validation Report</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">
                             Review data quality - you can export at any time
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
                     >
                         <XCircleIcon className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Completeness Score */}
-                <div className="p-6 border-b border-gray-200 bg-gray-50">
+                <div className="p-6 border-b border-[var(--border)] bg-[var(--bg-subtle)]">
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-lg font-semibold text-gray-700">Completeness Score</span>
+                        <span className="text-lg font-semibold text-[var(--text-secondary)]">Completeness Score</span>
                         <span className={`text-3xl font-bold ${getScoreTextColor(report.completenessScore)}`}>
                             {report.completenessScore}%
                         </span>
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div className="w-full bg-[var(--bg-emphasis)] rounded-full h-3 overflow-hidden">
                         <div
                             className={`h-full ${getScoreColor(report.completenessScore)} transition-all duration-500`}
                             style={{ width: `${report.completenessScore}%` }}
@@ -155,12 +155,12 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
 
                     {/* Summary Stats */}
                     <div className="grid grid-cols-2 gap-4 mt-4">
-                        <div className="bg-white rounded-lg p-3 border border-gray-200">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">Total Doors</div>
-                            <div className="text-2xl font-bold text-gray-900 mt-1">{report.totalDoors}</div>
+                        <div className="bg-[var(--bg)] rounded-lg p-3 border border-[var(--border)]">
+                            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Total Doors</div>
+                            <div className="text-2xl font-bold text-[var(--text)] mt-1">{report.totalDoors}</div>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-200">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">Valid Doors</div>
+                        <div className="bg-[var(--bg)] rounded-lg p-3 border border-[var(--border)]">
+                            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Valid Doors</div>
                             <div className="text-2xl font-bold text-green-600 mt-1">{report.validDoors}</div>
                         </div>
                     </div>
@@ -169,15 +169,15 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
                     <div className="mt-4 flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-1">
                             <span className="text-red-600 font-semibold">{report.criticalErrors.length}</span>
-                            <span className="text-gray-600">Critical</span>
+                            <span className="text-[var(--text-muted)]">Critical</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <span className="text-yellow-600 font-semibold">{report.warnings.length}</span>
-                            <span className="text-gray-600">Warnings</span>
+                            <span className="text-[var(--text-muted)]">Warnings</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <span className="text-blue-600 font-semibold">{report.infos.length}</span>
-                            <span className="text-gray-600">Info</span>
+                            <span className="text-[var(--text-muted)]">Info</span>
                         </div>
                     </div>
                 </div>
@@ -224,10 +224,10 @@ const ValidationModal: React.FC<ValidationModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between gap-3 p-6 border-t border-[var(--border)] bg-[var(--bg-subtle)]">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                        className="px-4 py-2 text-[var(--text-secondary)] bg-[var(--bg)] border border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-subtle)] font-medium transition-colors"
                     >
                         Cancel
                     </button>

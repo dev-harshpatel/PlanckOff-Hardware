@@ -45,19 +45,19 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="text-lg font-semibold text-gray-800">Hardware Preparation</h3>
-                <span className="text-xs text-gray-500">🔧 Structured Spec</span>
+                <h3 className="text-lg font-semibold text-[var(--text)]">Hardware Preparation</h3>
+                <span className="text-xs text-[var(--text-muted)]">🔧 Structured Spec</span>
             </div>
 
             {/* Prep Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Prep Type <span className="text-red-500">*</span>
                 </label>
                 <select
                     value={value?.prepType || 'None'}
                     onChange={(e) => handlePrepTypeChange(e.target.value as HardwarePrepSpec['prepType'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                 >
                     <option value="None">None / Not Specified</option>
                     <option value="Cylindrical">Cylindrical Lock</option>
@@ -66,7 +66,7 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                     <option value="Multipoint">Multipoint Lock</option>
                     <option value="Electrified">Electrified Hardware</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1">
                     Select the primary lock/latch preparation type
                 </p>
             </div>
@@ -77,11 +77,11 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                     {/* Backset */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Backset</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Backset</label>
                             <select
                                 value={value.backset || ''}
                                 onChange={(e) => updateField('backset', e.target.value as HardwarePrepSpec['backset'])}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                             >
                                 <option value="">Not Specified</option>
                                 <option value='2-3/4"'>2-3/4" (Standard Mortise)</option>
@@ -93,11 +93,11 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
 
                         {/* Strike Type */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Strike Type</label>
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Strike Type</label>
                             <select
                                 value={value.strikeType || ''}
                                 onChange={(e) => updateField('strikeType', e.target.value as HardwarePrepSpec['strikeType'])}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                             >
                                 <option value="">Not Specified</option>
                                 <option value="Standard">Standard Strike</option>
@@ -123,9 +123,9 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                                         updateField('closerArmType', undefined);
                                     }
                                 }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                className="w-4 h-4 text-[var(--primary-action)] border-[var(--border-strong)] rounded focus:ring-[var(--primary-ring)]"
                             />
-                            <label htmlFor="closerPrep" className="ml-2 text-sm font-medium text-gray-700">
+                            <label htmlFor="closerPrep" className="ml-2 text-sm font-medium text-[var(--text-secondary)]">
                                 Door Closer Preparation Required
                             </label>
                         </div>
@@ -133,11 +133,11 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                         {value.closerPrep && (
                             <div className="grid grid-cols-2 gap-4 ml-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Closer Type</label>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Closer Type</label>
                                     <select
                                         value={value.closerType || ''}
                                         onChange={(e) => updateField('closerType', e.target.value as HardwarePrepSpec['closerType'])}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                                     >
                                         <option value="">Select...</option>
                                         <option value="Surface">Surface Mounted</option>
@@ -148,11 +148,11 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Arm Type</label>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Arm Type</label>
                                     <select
                                         value={value.closerArmType || ''}
                                         onChange={(e) => updateField('closerArmType', e.target.value as HardwarePrepSpec['closerArmType'])}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                                     >
                                         <option value="">Select...</option>
                                         <option value="Regular Arm">Regular Arm</option>
@@ -168,14 +168,14 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
             )}
 
             {/* Live Summary Preview */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
+            <div className="bg-[var(--primary-bg)] border border-[var(--primary-border)] rounded-lg p-3">
+                <div className="text-xs font-semibold text-[var(--primary-text-muted)] uppercase tracking-wide mb-1">
                     Summary Preview
                 </div>
-                <div className="text-sm text-blue-900 font-medium">
+                <div className="text-sm text-[var(--primary-text)] font-medium">
                     {getSummary()}
                 </div>
-                <div className="text-xs text-blue-600 mt-1">
+                <div className="text-xs text-[var(--primary-text-muted)] mt-1">
                     This will auto-populate the legacy "Hardware Prep" field
                 </div>
             </div>

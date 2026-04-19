@@ -213,6 +213,63 @@ export interface ElectrificationSpec {
     latchBoltMonitor?: boolean;
 }
 
+// Sectioned data from structured Excel uploads (mirrors the DOOR / FRAME / HARDWARE column groups)
+export interface DoorSectionData {
+  doorTag?: string;
+  buildingTag?: string;
+  buildingLocation?: string;
+  doorLocation?: string;
+  quantity?: number;
+  handOfOpenings?: string;
+  doorOperation?: string;
+  leafCount?: number;
+  interiorExterior?: string;
+  excludeReason?: string;
+  width?: string;
+  height?: string;
+  thickness?: string;
+  fireRating?: string;
+  doorMaterial?: string;
+  doorElevationType?: string;
+  doorCore?: string;
+  doorFace?: string;
+  doorEdge?: string;
+  doorGauge?: string;
+  doorFinish?: string;
+  stcRating?: string;
+  doorUndercut?: string;
+  doorIncludeExclude?: string;
+}
+
+export interface FrameSectionData {
+  frameMaterial?: string;
+  wallType?: string;
+  throatThickness?: string;
+  frameAnchor?: string;
+  baseAnchor?: string;
+  noOfAnchor?: string;
+  frameProfile?: string;
+  frameElevationType?: string;
+  frameAssembly?: string;
+  frameGauge?: string;
+  frameFinish?: string;
+  prehung?: string;
+  frameHead?: string;
+  casing?: string;
+  frameIncludeExclude?: string;
+}
+
+export interface HardwareSectionData {
+  hardwareSet?: string;
+  hardwareIncludeExclude?: string;
+}
+
+export interface DoorScheduleSections {
+  door: DoorSectionData;
+  frame: FrameSectionData;
+  hardware: HardwareSectionData;
+}
+
 export interface Door {
   id: string; // Required for React keys and identification
   doorTag: string;
@@ -282,11 +339,37 @@ export interface Door {
   
   // Phase 22: CSI MasterFormat
   csiSection?: string; // e.g., "08 11 13"
-  
+
   // Phase 24: Pricing
   pricing?: DoorPricing;
   framePricing?: FramePricing;
   totalUnitCost?: number;
+
+  // Door schedule columns (matched to Excel upload fields)
+  buildingTag?: string;
+  buildingLocation?: string;
+  leafCount?: number;
+  excludeReason?: string;
+  doorCore?: string;
+  doorFace?: string;
+  doorEdge?: string;
+  doorGauge?: string;
+  doorIncludeExclude?: string;
+  wallType?: string;
+  throatThickness?: string;
+  frameAnchor?: string;
+  baseAnchor?: string;
+  numberOfAnchors?: string;
+  frameElevationType?: string;
+  frameAssembly?: string;
+  frameFinish?: string;
+  prehung?: string;
+  frameHead?: string;
+  casing?: string;
+  frameIncludeExclude?: string;
+  hardwareIncludeExclude?: string;
+  // Sectioned representation from structured Excel uploads
+  sections?: DoorScheduleSections;
 }
 
 export interface ElevationType {

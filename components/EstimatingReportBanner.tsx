@@ -88,10 +88,10 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
     };
 
     return (
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-30 shadow-sm">
             {/* Collapsed View */}
             <div
-                className="px-6 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                className="px-6 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--bg-subtle)] transition-colors"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="flex items-center space-x-4">
@@ -99,12 +99,12 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                         <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <h2 className="text-lg font-semibold text-gray-900">Estimating Report</h2>
+                        <h2 className="text-lg font-semibold text-[var(--text)]">Estimating Report</h2>
                     </div>
 
                     {hasData && (
                         <div className="flex items-center space-x-6 text-sm">
-                            <span className="text-gray-600">
+                            <span className="text-[var(--text-muted)]">
                                 {doors.filter(d => d.status === 'complete').length} / {doors.length} doors
                             </span>
                             <span className="text-2xl font-bold text-blue-600">
@@ -115,14 +115,14 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                 </div>
 
                 <button
-                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    className="p-1 hover:bg-[var(--bg-emphasis)] rounded transition-colors"
                     onClick={(e) => {
                         e.stopPropagation();
                         setIsExpanded(!isExpanded);
                     }}
                 >
                     <svg
-                        className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -134,16 +134,16 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
 
             {/* Expanded View */}
             {isExpanded && hasData && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="px-6 py-4 bg-[var(--bg-subtle)] border-t border-[var(--border)]">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                         {/* Material Cost */}
-                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="bg-[var(--bg)] p-4 rounded-lg border border-[var(--border)]">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-600">Material</span>
-                                <span className="text-xs text-gray-500">{calculatePercentage(costs.material, costs.subtotal)}%</span>
+                                <span className="text-sm font-medium text-[var(--text-muted)]">Material</span>
+                                <span className="text-xs text-[var(--text-muted)]">{calculatePercentage(costs.material, costs.subtotal)}%</span>
                             </div>
-                            <div className="text-2xl font-bold text-gray-900">{formatCurrency(costs.material)}</div>
-                            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                            <div className="text-2xl font-bold text-[var(--text)]">{formatCurrency(costs.material)}</div>
+                            <div className="mt-2 w-full bg-[var(--bg-emphasis)] rounded-full h-2">
                                 <div
                                     className="bg-blue-600 h-2 rounded-full"
                                     style={{ width: `${calculatePercentage(costs.material, costs.subtotal)}%` }}
@@ -152,13 +152,13 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                         </div>
 
                         {/* Labor Cost */}
-                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="bg-[var(--bg)] p-4 rounded-lg border border-[var(--border)]">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-600">Labor</span>
-                                <span className="text-xs text-gray-500">{calculatePercentage(costs.labor, costs.subtotal)}%</span>
+                                <span className="text-sm font-medium text-[var(--text-muted)]">Labor</span>
+                                <span className="text-xs text-[var(--text-muted)]">{calculatePercentage(costs.labor, costs.subtotal)}%</span>
                             </div>
-                            <div className="text-2xl font-bold text-gray-900">{formatCurrency(costs.labor)}</div>
-                            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                            <div className="text-2xl font-bold text-[var(--text)]">{formatCurrency(costs.labor)}</div>
+                            <div className="mt-2 w-full bg-[var(--bg-emphasis)] rounded-full h-2">
                                 <div
                                     className="bg-green-600 h-2 rounded-full"
                                     style={{ width: `${calculatePercentage(costs.labor, costs.subtotal)}%` }}
@@ -167,13 +167,13 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                         </div>
 
                         {/* Equipment Cost */}
-                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="bg-[var(--bg)] p-4 rounded-lg border border-[var(--border)]">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-600">Equipment</span>
-                                <span className="text-xs text-gray-500">{calculatePercentage(costs.equipment, costs.subtotal)}%</span>
+                                <span className="text-sm font-medium text-[var(--text-muted)]">Equipment</span>
+                                <span className="text-xs text-[var(--text-muted)]">{calculatePercentage(costs.equipment, costs.subtotal)}%</span>
                             </div>
-                            <div className="text-2xl font-bold text-gray-900">{formatCurrency(costs.equipment)}</div>
-                            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                            <div className="text-2xl font-bold text-[var(--text)]">{formatCurrency(costs.equipment)}</div>
+                            <div className="mt-2 w-full bg-[var(--bg-emphasis)] rounded-full h-2">
                                 <div
                                     className="bg-purple-600 h-2 rounded-full"
                                     style={{ width: `${calculatePercentage(costs.equipment, costs.subtotal)}%` }}
@@ -183,18 +183,18 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                     </div>
 
                     {/* Totals Row */}
-                    <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between bg-[var(--bg)] p-4 rounded-lg border border-[var(--border)]">
                         <div className="flex items-center space-x-8">
                             <div>
-                                <span className="text-sm text-gray-600">Subtotal:</span>
-                                <span className="ml-2 text-lg font-semibold text-gray-900">{formatCurrency(costs.subtotal)}</span>
+                                <span className="text-sm text-[var(--text-muted)]">Subtotal:</span>
+                                <span className="ml-2 text-lg font-semibold text-[var(--text)]">{formatCurrency(costs.subtotal)}</span>
                             </div>
                             <div>
-                                <span className="text-sm text-gray-600">Tax (8.5%):</span>
-                                <span className="ml-2 text-lg font-semibold text-gray-900">{formatCurrency(costs.tax)}</span>
+                                <span className="text-sm text-[var(--text-muted)]">Tax (8.5%):</span>
+                                <span className="ml-2 text-lg font-semibold text-[var(--text)]">{formatCurrency(costs.tax)}</span>
                             </div>
-                            <div className="pl-8 border-l border-gray-300">
-                                <span className="text-sm text-gray-600">TOTAL:</span>
+                            <div className="pl-8 border-l border-[var(--border-strong)]">
+                                <span className="text-sm text-[var(--text-muted)]">TOTAL:</span>
                                 <span className="ml-2 text-2xl font-bold text-blue-600">{formatCurrency(costs.total)}</span>
                             </div>
                         </div>
@@ -204,7 +204,7 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                             {onExportPDF && (
                                 <button
                                     onClick={onExportPDF}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg)] border border-[var(--border-strong)] rounded-md hover:bg-[var(--bg-subtle)] transition-colors"
                                 >
                                     Export PDF
                                 </button>
@@ -212,7 +212,7 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                             {onExportExcel && (
                                 <button
                                     onClick={onExportExcel}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg)] border border-[var(--border-strong)] rounded-md hover:bg-[var(--bg-subtle)] transition-colors"
                                 >
                                     Export Excel
                                 </button>
@@ -220,7 +220,7 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
                             {onPrint && (
                                 <button
                                     onClick={onPrint}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                                    className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg)] border border-[var(--border-strong)] rounded-md hover:bg-[var(--bg-subtle)] transition-colors"
                                 >
                                     Print
                                 </button>
@@ -232,12 +232,12 @@ const EstimatingReportBanner: React.FC<EstimatingReportBannerProps> = ({
 
             {/* No Data State */}
             {isExpanded && !hasData && (
-                <div className="px-6 py-8 bg-gray-50 border-t border-gray-200 text-center">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="px-6 py-8 bg-[var(--bg-subtle)] border-t border-[var(--border)] text-center">
+                    <svg className="mx-auto h-12 w-12 text-[var(--text-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p className="mt-2 text-sm text-gray-600">No doors with assigned hardware yet</p>
-                    <p className="text-xs text-gray-500">Upload a door schedule and assign hardware sets to generate estimates</p>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">No doors with assigned hardware yet</p>
+                    <p className="text-xs text-[var(--text-muted)]">Upload a door schedule and assign hardware sets to generate estimates</p>
                 </div>
             )}
         </div>

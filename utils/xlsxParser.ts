@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Door, HardwareSet, HardwareItem } from '../types';
+import { Door, HardwareSet, HardwareItem, DoorScheduleSections } from '../types';
 
 /**
  * Parses an Excel file buffer into an array of Door objects.
@@ -9,12 +9,45 @@ import { Door, HardwareSet, HardwareItem } from '../types';
  * @returns An array of Door objects.
  * @throws An error if the format is invalid.
  */
+// Detects whether the sheet uses the sectioned 2-row header format:
+//   Row 0: section labels (DOOR, FRAME, HARDWARE — merged cells with blanks)
+//   Row 1: actual column names (DOOR TAG, BUILDING TAG, …)
+// Returns true when row 0 looks like section headers.
+const isSectionedHeaderFormat = (worksheet: XLSX.WorkSheet): boolean => {
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0, defval: '' }) as any[][];
+    const firstRow: any[] = rows[0] ?? [];
+    const normalized = firstRow.map((v: any) => String(v || '').trim().toUpperCase());
+    return normalized.includes('DOOR') && normalized.includes('FRAME') && normalized.includes('HARDWARE');
+};
+
+// Maps column index → section name for the sectioned format.
+// Built by reading row 0 and tracking which section each column falls under.
+const buildColumnSectionMap = (worksheet: XLSX.WorkSheet): Record<number, 'door' | 'frame' | 'hardware'> => {
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0, defval: '' }) as any[][];
+    const firstRow: any[] = rows[0] ?? [];
+    const map: Record<number, 'door' | 'frame' | 'hardware'> = {};
+    let current: 'door' | 'frame' | 'hardware' = 'door';
+    firstRow.forEach((cell: any, idx: number) => {
+        const val = String(cell || '').trim().toUpperCase();
+        if (val === 'DOOR')     current = 'door';
+        if (val === 'FRAME')    current = 'frame';
+        if (val === 'HARDWARE') current = 'hardware';
+        map[idx] = current;
+    });
+    return map;
+};
+
 export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
-    // Read directly using the imported library
     const workbook = XLSX.read(data, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+    // Detect new sectioned 2-row header format vs legacy single-row format.
+    const sectioned = isSectionedHeaderFormat(worksheet);
+    // For the sectioned format, skip row 0 (section labels) so row 1 becomes the header row.
+    const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, sectioned ? { range: 1 } : undefined);
+    // Column→section mapping (only used when sectioned).
+    const colSectionMap = sectioned ? buildColumnSectionMap(worksheet) : {};
 
     if (jsonData.length === 0) {
         throw new Error("Excel file appears to be empty or in an unsupported format.");
@@ -22,23 +55,74 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
 
     // Define mappings from internal property names to possible Excel header names.
     const headerMappings: { [key: string]: string[] } = {
-        doorTag: ['doortag', 'door tag', 'door#', 'tag', 'mark', 'doornumber', 'doorid', 'opening', 'door no', 'door no.'],
-        location: ['location', 'doorlocation', 'room', 'room name'],
-        interiorExterior: ['interiorexterior', 'interior/exterior', 'int/ext', 'position'],
-        quantity: ['quantity', 'qty', 'q', 'count'],
-        liftCount: ['liftcount', 'doorliftcount', 'door lift count'],
-        operation: ['operation', 'dooroperation', 'hand', 'swing'],
-        fireRating: ['firerating', 'fire rating', 'rating', 'fire'],
-        width: ['width', 'doorwidth', 'w', 'rough opening width'],
-        height: ['height', 'doorheight', 'h', 'rough opening height'],
-        thickness: ['thickness', 'doorthickness', 'thick', 'thk'],
-        doorMaterial: ['doormaterial', 'door material', 'material', 'door mat', 'dr mat'],
-        frameMaterial: ['framematerial', 'frame material', 'frame mat', 'frm mat'],
-        hardwarePrep: ['hardwareprep', 'hardware prep', 'hw prep', 'prep', 'function', 'device'],
-        providedHardwareSet: ['hardwareset', 'hwset', 'hw set', 'hardware set', 'set #', 'hws', 'hardware group', 'hw group'],
-        schedule: ['schedule', 'door schedule'],
-        type: ['type', 'doortype', 'description', 'remarks', 'comments']
+        // Core identification
+        doorTag:              ['doortag', 'door tag', 'door#', 'tag', 'mark', 'doornumber', 'doorid', 'opening', 'door no', 'door no.'],
+        buildingTag:          ['buildingtag', 'building tag', 'bldg tag', 'bldgtag', 'building#', 'bldg#'],
+        buildingLocation:     ['buildinglocation', 'building location', 'bldg location', 'bldglocation'],
+        location:             ['location', 'doorlocation', 'door location', 'room', 'room name'],
+        quantity:             ['quantity', 'qty', 'q', 'count'],
+        handing:              ['handofopenings', 'hand of openings', 'handing', 'handofopening'],
+        operation:            ['operation', 'dooroperation', 'door operation', 'swing'],
+        leafCount:            ['leafcount', 'leaf count', 'leaves', 'liftcount', 'lift count'],
+        interiorExterior:     ['interiorexterior', 'interior/exterior', 'int/ext', 'position'],
+        excludeReason:        ['excludereason', 'exclude reason', 'exclusionreason', 'exclusion reason'],
+
+        // Dimensions
+        width:                ['width', 'doorwidth', 'door width', 'w', 'rough opening width'],
+        height:               ['height', 'doorheight', 'door height', 'h', 'rough opening height'],
+        thickness:            ['thickness', 'doorthickness', 'door thickness', 'thick', 'thk'],
+
+        // Door material & finish
+        fireRating:           ['firerating', 'fire rating', 'rating', 'fire'],
+        doorMaterial:         ['doormaterial', 'door material', 'material', 'door mat', 'dr mat'],
+        elevationTypeId:      ['doorelevationtype', 'door elevation type', 'elevationtype', 'elevation type', 'door elev type'],
+        doorCore:             ['doorcore', 'door core', 'core'],
+        doorFace:             ['doorface', 'door face', 'face'],
+        doorEdge:             ['dooredge', 'door edge', 'edge'],
+        doorGauge:            ['doorguage', 'door guage', 'doorgauge', 'door gauge', 'dr gauge', 'dr guage'],
+        doorFinish:           ['doorfinish', 'door finish', 'finish'],
+        stcRating:            ['stcrating', 'stc rating', 'stc'],
+        undercut:             ['doorundercut', 'door undercut', 'undercut'],
+        doorIncludeExclude:   ['doorincludeexclude', 'door include/exclude', 'door includeexclude', 'door include exclude'],
+
+        // Frame
+        frameMaterial:        ['framematerial', 'frame material', 'frame mat', 'frm mat'],
+        wallType:             ['walltype', 'wall type', 'wall'],
+        throatThickness:      ['throatthickness', 'throat thickness', 'throat', 'frame throat'],
+        frameAnchor:          ['frameanchor', 'frame anchor', 'anchor', 'anchor type'],
+        baseAnchor:           ['baseanchor', 'base anchor'],
+        numberOfAnchors:      ['noofanchor', 'no of anchor', 'numberofanchors', 'number of anchors', 'anchor count'],
+        frameProfile:         ['frameprofile', 'frame profile', 'frm profile'],
+        frameElevationType:   ['frameelevationtype', 'frame elevation type', 'frame elev type'],
+        frameAssembly:        ['frameassembly', 'frame assembly'],
+        frameGauge:           ['frameguage', 'frame guage', 'framegauge', 'frame gauge', 'frm gauge', 'frm guage'],
+        frameFinish:          ['framefinish', 'frame finish', 'frm finish'],
+        prehung:              ['prehung', 'pre hung', 'pre-hung'],
+        frameHead:            ['framehead', 'frame head', 'frm head'],
+        casing:               ['casing'],
+        frameIncludeExclude:  ['frameincludeexclude', 'frame include/exclude', 'frame include exclude'],
+
+        // Hardware — "HARDWARE SET" column is in the HARDWARE section of the new format
+        providedHardwareSet:  ['hardwareset', 'hwset', 'hw set', 'hardware set', 'set #', 'hws', 'hardware group', 'hw group'],
+        hardwareIncludeExclude: ['hardwareincludeexclude', 'hardware include/exclude', 'hardware include exclude'],
+
+        // Legacy / misc
+        hardwarePrep:         ['hardwareprep', 'hardware prep', 'hw prep', 'prep', 'function', 'device'],
+        schedule:             ['schedule', 'door schedule'],
+        type:                 ['type', 'doortype', 'description', 'remarks', 'comments'],
     };
+
+    // For the sectioned format, also build a map from normalized column name → column index
+    // so we can reconstruct the section-grouped raw values.
+    let colIndexByNormalizedHeader: Record<string, number> = {};
+    if (sectioned) {
+        const headerRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 1, defval: '' }) as any[][];
+        const headerRow: any[] = headerRows[0] ?? [];
+        headerRow.forEach((h: any, idx: number) => {
+            const norm = (String(h || '')).toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (norm) colIndexByNormalizedHeader[norm] = idx;
+        });
+    }
     
     // Normalize a string for robust matching (lowercase, remove non-alphanumeric).
     const normalizeHeader = (header: string) => (header || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -92,25 +176,119 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
             return isNaN(num) ? defaultValue : num;
         };
 
+        const opt = (key: keyof Door) => getVal(key, undefined) || undefined;
+
         return {
             id: `xlsx-${Date.now()}-${index}`,
-            doorTag: getVal('doorTag', `Row ${index + 2}`),
-            location: getVal('location', 'N/A'),
-            interiorExterior: getVal('interiorExterior', 'N/A') as Door['interiorExterior'],
-            quantity: getNum('quantity', 1),
-            liftCount: getNum('liftCount', 1),
-            operation: getVal('operation', 'Swing'),
-            fireRating: getVal('fireRating', 'N/A'),
-            width: getNum('width', 0),
-            height: getNum('height', 0),
-            thickness: getNum('thickness', 1.75),
-            doorMaterial: getVal('doorMaterial', 'N/A'),
-            frameMaterial: getVal('frameMaterial', 'N/A'),
-            hardwarePrep: getVal('hardwarePrep', 'N/A'),
-            providedHardwareSet: getVal('providedHardwareSet', undefined) || undefined,
-            schedule: getVal('schedule', 'N/A'),
-            type: getVal('type', 'Standard Door'),
             status: 'pending',
+
+            // Identification
+            doorTag:              getVal('doorTag', `Row ${index + 2}`),
+            buildingTag:          opt('buildingTag'),
+            buildingLocation:     opt('buildingLocation'),
+            location:             getVal('location', ''),
+            quantity:             getNum('quantity', 1),
+            handing:              opt('handing') as Door['handing'],
+            operation:            opt('operation'),
+            leafCount:            getNum('leafCount', 1),
+            interiorExterior:     opt('interiorExterior'),
+            excludeReason:        opt('excludeReason'),
+
+            // Dimensions
+            width:                getNum('width', 0),
+            height:               getNum('height', 0),
+            thickness:            getNum('thickness', 1.75),
+
+            // Door material & finish
+            fireRating:           opt('fireRating'),
+            doorMaterial:         getVal('doorMaterial', ''),
+            elevationTypeId:      opt('elevationTypeId'),
+            doorCore:             opt('doorCore'),
+            doorFace:             opt('doorFace'),
+            doorEdge:             opt('doorEdge'),
+            doorGauge:            opt('doorGauge'),
+            doorFinish:           opt('doorFinish'),
+            stcRating:            opt('stcRating'),
+            undercut:             opt('undercut'),
+            doorIncludeExclude:   opt('doorIncludeExclude'),
+
+            // Frame
+            frameMaterial:        getVal('frameMaterial', '') as Door['frameMaterial'],
+            wallType:             opt('wallType'),
+            throatThickness:      opt('throatThickness'),
+            frameAnchor:          opt('frameAnchor'),
+            baseAnchor:           opt('baseAnchor'),
+            numberOfAnchors:      opt('numberOfAnchors'),
+            frameProfile:         opt('frameProfile') as Door['frameProfile'],
+            frameElevationType:   opt('frameElevationType'),
+            frameAssembly:        opt('frameAssembly'),
+            frameGauge:           opt('frameGauge'),
+            frameFinish:          opt('frameFinish'),
+            prehung:              opt('prehung'),
+            frameHead:            opt('frameHead'),
+            casing:               opt('casing'),
+            frameIncludeExclude:  opt('frameIncludeExclude'),
+
+            // Hardware
+            providedHardwareSet:      opt('providedHardwareSet'),
+            hardwareIncludeExclude:   opt('hardwareIncludeExclude'),
+
+            // Legacy
+            hardwarePrep: opt('hardwarePrep'),
+            type:         opt('type'),
+
+            // Sectioned representation — only populated for the new 2-row header format
+            ...(sectioned ? {
+                sections: {
+                    door: {
+                        doorTag:          opt('doorTag'),
+                        buildingTag:      opt('buildingTag'),
+                        buildingLocation: opt('buildingLocation'),
+                        doorLocation:     opt('location'),
+                        quantity:         getNum('quantity', 1),
+                        handOfOpenings:   opt('handing'),
+                        doorOperation:    opt('operation'),
+                        leafCount:        getNum('leafCount', 1),
+                        interiorExterior: opt('interiorExterior'),
+                        excludeReason:    opt('excludeReason'),
+                        width:            getVal('width', ''),
+                        height:           getVal('height', ''),
+                        thickness:        getVal('thickness', ''),
+                        fireRating:       opt('fireRating'),
+                        doorMaterial:     opt('doorMaterial'),
+                        doorElevationType: opt('elevationTypeId'),
+                        doorCore:         opt('doorCore'),
+                        doorFace:         opt('doorFace'),
+                        doorEdge:         opt('doorEdge'),
+                        doorGauge:        opt('doorGauge'),
+                        doorFinish:       opt('doorFinish'),
+                        stcRating:        opt('stcRating'),
+                        doorUndercut:     opt('undercut'),
+                        doorIncludeExclude: opt('doorIncludeExclude'),
+                    },
+                    frame: {
+                        frameMaterial:      opt('frameMaterial'),
+                        wallType:           opt('wallType'),
+                        throatThickness:    opt('throatThickness'),
+                        frameAnchor:        opt('frameAnchor'),
+                        baseAnchor:         opt('baseAnchor'),
+                        noOfAnchor:         opt('numberOfAnchors'),
+                        frameProfile:       opt('frameProfile'),
+                        frameElevationType: opt('frameElevationType'),
+                        frameAssembly:      opt('frameAssembly'),
+                        frameGauge:         opt('frameGauge'),
+                        frameFinish:        opt('frameFinish'),
+                        prehung:            opt('prehung'),
+                        frameHead:          opt('frameHead'),
+                        casing:             opt('casing'),
+                        frameIncludeExclude: opt('frameIncludeExclude'),
+                    },
+                    hardware: {
+                        hardwareSet:            opt('providedHardwareSet'),
+                        hardwareIncludeExclude: opt('hardwareIncludeExclude'),
+                    },
+                } satisfies DoorScheduleSections,
+            } : {}),
         };
     }).filter((door): door is Door => door !== null && !!door.doorTag && door.width > 0 && door.height > 0);
 

@@ -3,11 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/contexts/ToastContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import Header from '@/components/Header';
-import ToastContainer from '@/components/ToastContainer';
+import { Toaster } from '@/components/ui/sonner';
 import UploadProgressWidget from '@/components/UploadProgressWidget';
 import KeyboardShortcutsHelpModal from '@/components/KeyboardShortcutsHelpModal';
 
@@ -22,7 +21,6 @@ export function AppShell({ children }: AppShellProps) {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const { user: currentUser, isAuthenticated, isLoading } = useAuth();
-  const { toasts, removeToast } = useToast();
   const { projects } = useProject();
 
   useEffect(() => {
@@ -61,8 +59,8 @@ export function AppShell({ children }: AppShellProps) {
   // Hydrating session
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-700" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary-action)]" />
       </div>
     );
   }
@@ -77,8 +75,8 @@ export function AppShell({ children }: AppShellProps) {
   const userRoleCompat = (currentUser?.role ?? 'Estimator') as any;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+    <div className="h-full flex flex-col bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
+      <Toaster />
       <UploadProgressWidget />
 
       <Header
@@ -88,7 +86,7 @@ export function AppShell({ children }: AppShellProps) {
         userRole={userRoleCompat}
       />
 
-      <main>{children}</main>
+      <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
 
       <KeyboardShortcutsHelpModal
         isOpen={isHelpOpen}
