@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
@@ -10,7 +10,13 @@ interface InviteInfo {
   role: string;
 }
 
-export default function SetPasswordPage() {
+const spinner = (
+  <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+  </div>
+);
+
+function SetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -24,7 +30,6 @@ export default function SetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
 
-  // Validate token on mount
   useEffect(() => {
     if (!token) {
       setTokenError('No invite token provided.');
@@ -85,24 +90,15 @@ export default function SetPasswordPage() {
     }
   };
 
-  if (isValidating) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
+  if (isValidating) return spinner;
 
   if (tokenError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
         <div className="w-full max-w-md text-center">
-          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-red-200 p-8">
-            <p className="text-red-700 font-medium">{tokenError}</p>
-            <button
-              onClick={() => router.push('/login')}
-              className="mt-4 text-sm text-blue-600 hover:underline"
-            >
+          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-red-500/30 p-8">
+            <p className="text-red-600 dark:text-red-400 font-medium">{tokenError}</p>
+            <button onClick={() => router.push('/login')} className="mt-4 text-sm text-blue-600 hover:underline">
               Go to login
             </button>
           </div>
@@ -115,8 +111,8 @@ export default function SetPasswordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
         <div className="w-full max-w-md text-center">
-          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-green-200 p-8">
-            <p className="text-green-700 font-medium">Password set successfully! Redirecting to login…</p>
+          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-green-500/30 p-8">
+            <p className="text-green-600 dark:text-green-400 font-medium">Password set successfully! Redirecting to login…</p>
           </div>
         </div>
       </div>
@@ -127,13 +123,7 @@ export default function SetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <Image
-            src="/images/logo.svg"
-            alt="PlanckOff"
-            width={180}
-            height={48}
-            priority
-          />
+          <Image src="/images/logo.svg" alt="PlanckOff" width={180} height={48} priority />
           <p className="mt-3 text-sm text-[var(--text-muted)]">Accept your invitation</p>
         </div>
 
@@ -183,8 +173,8 @@ export default function SetPasswordPage() {
             </div>
 
             {error && (
-              <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}
 
@@ -199,5 +189,13 @@ export default function SetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={spinner}>
+      <SetPasswordForm />
+    </Suspense>
   );
 }

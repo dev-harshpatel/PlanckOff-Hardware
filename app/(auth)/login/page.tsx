@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -17,7 +17,6 @@ export default function LoginPage() {
 
   const redirectTo = searchParams.get('redirectTo') ?? '/';
 
-  // Already logged in — redirect immediately
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.replace(redirectTo);
@@ -51,7 +50,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
       <div className="w-full max-w-md">
-        {/* Logo / Branding */}
         <div className="flex flex-col items-center mb-8">
           <Image
             src="/images/logo.svg"
@@ -100,8 +98,8 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}
 
@@ -116,5 +114,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
