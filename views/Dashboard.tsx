@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Project, ProjectStatus, NewProjectData, Toast, Role } from '../types';
+import { Project, ProjectStatus, NewProjectData, Toast } from '../types';
 import NewProjectModal from '../components/NewProjectModal';
+import TrashBin from '../components/TrashBin';
 import { TeamMember } from '../types';
 import SelectDropdown from '@/components/ui/select-dropdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import type { RoleName } from '@/types/auth';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -29,16 +31,18 @@ import {
     LayoutGrid,
     List,
     FolderOpen,
-    ChevronRight,
 } from 'lucide-react';
 
 interface DashboardProps {
     projects: Project[];
+    trash: Project[];
     onSelectProject: (projectId: string) => void;
     onAddNewProject: (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => Promise<void>;
     onProjectUpdate: (updatedProject: Project) => Promise<void> | void;
     onDeleteProject: (projectId: string) => void;
-    userRole: Role;
+    onRestoreProject: (id: string) => Promise<void> | void;
+    onPermDeleteProject: (id: string) => Promise<void> | void;
+    userRole: RoleName;
     addToast: (toast: Omit<Toast, 'id'>) => void;
     teamMembers: TeamMember[];
 }
@@ -76,7 +80,7 @@ const ProjectCard: React.FC<{
     onSelect: () => void;
     onSave: (p: Project) => Promise<void> | void;
     onDelete: (id: string) => void;
-    userRole: Role;
+    userRole: RoleName;
     teamMembers: TeamMember[];
 }> = ({ project, onSelect, onSave, onDelete, userRole, teamMembers }) => {
     const [showAssignMenu, setShowAssignMenu] = useState(false);
@@ -85,8 +89,8 @@ const ProjectCard: React.FC<{
     const [isAssigning, setIsAssigning] = useState(false);
     const assignMenuRef = useRef<HTMLDivElement | null>(null);
 
-    const canDelete = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
-    const canAssign = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
+    const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
+    const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
 
@@ -215,9 +219,11 @@ const ProjectCard: React.FC<{
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete project</AlertDialogTitle>
+                        <AlertDialogTitle>Move project to trash</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete <span className="font-medium text-[var(--text)]">{project.name}</span>. Type <span className="font-medium text-[var(--text)]">confirm</span> to proceed.
+                            <span className="font-medium text-[var(--text)]">{project.name}</span> will be moved to trash and <strong>automatically deleted after 30 days</strong>. You can restore it from the Trash before then.
+                            <br /><br />
+                            Type <span className="font-medium text-[var(--text)]">confirm</span> to proceed.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="space-y-2">
@@ -232,7 +238,7 @@ const ProjectCard: React.FC<{
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleteConfirmation.trim().toLowerCase() !== 'confirm'}>
-                            Delete project
+                            Move to Trash
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -242,9 +248,10 @@ const ProjectCard: React.FC<{
 };
 
 
-const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, userRole, addToast, teamMembers }) => {
+const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCreatingProject, setIsCreatingProject] = useState(false);
+    const [isTrashOpen, setIsTrashOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('All Members');
 
@@ -287,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
         }
     };
 
-    const canCreate = userRole === Role.Administrator || userRole === Role.SeniorEstimator;
+    const canCreate = userRole === 'Administrator' || userRole === 'Team Lead';
 
     return (
         <>
@@ -305,16 +312,31 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
                                 <p className="text-xs text-[var(--primary-text-muted)]">Manage your estimates and proposals</p>
                             </div>
                         </div>
-                        {canCreate && (
-                            <Button
-                                size="sm"
-                                onClick={() => setIsModalOpen(true)}
-                                className="gap-1.5"
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsTrashOpen(true)}
+                                className="relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+                                title="Trash"
                             >
-                                <Plus className="w-4 h-4" />
-                                New Project
-                            </Button>
-                        )}
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Trash
+                                {trash.length > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                                        {trash.length}
+                                    </span>
+                                )}
+                            </button>
+                            {canCreate && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => setIsModalOpen(true)}
+                                    className="gap-1.5"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    New Project
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Stat pills */}
@@ -421,6 +443,14 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, onSelectProject, onAddN
                 isLoading={isCreatingProject}
                 addToast={addToast}
                 teamMembers={teamMembers}
+            />
+
+            <TrashBin
+                isOpen={isTrashOpen}
+                trash={trash}
+                onClose={() => setIsTrashOpen(false)}
+                onRestore={onRestoreProject}
+                onPermDelete={onPermDeleteProject}
             />
         </>
     );

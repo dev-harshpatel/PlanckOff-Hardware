@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withAuth, withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
 import { getAllProjects, createProject } from '@/lib/db/projects';
 import type { NewProjectData } from '@/types';
@@ -10,7 +10,7 @@ export const GET = withAuth(async (_req: NextRequest, { user }: AuthContext) => 
   return NextResponse.json({ data });
 });
 
-export const POST = withAuth(async (req: NextRequest, { user }: AuthContext) => {
+export const POST = withRoleAuth(['Administrator', 'Team Lead'], async (req: NextRequest, { user }: AuthContext) => {
   let body: NewProjectData;
   try {
     body = (await req.json()) as NewProjectData;

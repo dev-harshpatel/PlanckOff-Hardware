@@ -4,9 +4,10 @@ import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import HardwarePrepEditor from './HardwarePrepEditor';
 import ElectrificationEditor from './ElectrificationEditor';
 import HingeSpecEditor from './HingeSpecEditor';
+import { ElevationTab } from './ElevationTab';
 import { validateDoor, ValidationResult } from '../utils/doorValidation';
 import { generateHardwarePrepString } from '../utils/hardwareDataMigration';
-import { X, DoorOpen, Frame, Wrench, AlertTriangle, CheckCircle2, PackageOpen } from 'lucide-react';
+import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, PackageOpen } from 'lucide-react';
 
 interface EnhancedDoorEditModalProps {
     door: Door;
@@ -14,9 +15,11 @@ interface EnhancedDoorEditModalProps {
     onCancel: () => void;
     hardwareSets: HardwareSet[];
     elevationTypes: ElevationType[];
+    projectId: string;
+    onElevationTypeUpdate: (updated: ElevationType) => void;
 }
 
-type TabId = 'door' | 'frame' | 'hardware';
+type TabId = 'door' | 'frame' | 'hardware' | 'elevation';
 
 type RawSection = Record<string, string | undefined>;
 
@@ -120,7 +123,9 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     onSave,
     onCancel,
     hardwareSets,
-    elevationTypes
+    elevationTypes,
+    projectId,
+    onElevationTypeUpdate,
 }) => {
     const [activeTab, setActiveTab] = useState<TabId>('door');
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
@@ -218,9 +223,10 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const [isIssuesOpen, setIsIssuesOpen] = useState(false);
 
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-        { id: 'door',     label: 'Door',     icon: <DoorOpen className="w-3.5 h-3.5" /> },
-        { id: 'frame',    label: 'Frame',    icon: <Frame className="w-3.5 h-3.5" /> },
-        { id: 'hardware', label: 'Hardware', icon: <Wrench className="w-3.5 h-3.5" /> },
+        { id: 'door',      label: 'Door',      icon: <DoorOpen className="w-3.5 h-3.5" /> },
+        { id: 'frame',     label: 'Frame',     icon: <Frame    className="w-3.5 h-3.5" /> },
+        { id: 'hardware',  label: 'Hardware',  icon: <Wrench   className="w-3.5 h-3.5" /> },
+        { id: 'elevation', label: 'Elevation', icon: <Image    className="w-3.5 h-3.5" /> },
     ];
 
     return (
@@ -423,6 +429,16 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
 
 
                         </div>
+                    )}
+
+                    {/* ── ELEVATION TAB ── */}
+                    {activeTab === 'elevation' && (
+                        <ElevationTab
+                            door={editedDoor}
+                            elevationTypes={elevationTypes}
+                            projectId={projectId}
+                            onElevationTypeUpdate={onElevationTypeUpdate}
+                        />
                     )}
                 </div>
 

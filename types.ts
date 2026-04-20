@@ -376,7 +376,11 @@ export interface ElevationType {
   id: string;
   name: string;
   code: string;
-  doors: Door[];
+  description?: string;
+  imageData?: string;   // legacy base64 (ElevationManager — kept for backward compat)
+  imageUrl?: string;    // Supabase Storage public URL
+  imagePath?: string;   // Storage path (used for deletion/replacement)
+  doors?: Door[];
 }
 
 export interface NewProjectData {
@@ -412,6 +416,7 @@ export interface Project {
   hardwareSets?: HardwareSet[];
   doors?: Door[];
   assignedTo?: string; // Team Member ID
+  deletedAt?: string;  // ISO string — present only for trashed projects
 }
 
 export type ProjectStatus = 'Active' | 'Under Review' | 'Submitted' | 'On Hold' | 'Complete' | 'Archived';

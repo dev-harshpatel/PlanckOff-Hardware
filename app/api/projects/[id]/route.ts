@@ -19,7 +19,8 @@ export const GET = withAuth(
   },
 );
 
-export const PUT = withAuth(
+export const PUT = withRoleAuth(
+  ['Administrator', 'Team Lead'],
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const id = params?.id as string;
     let updates: Partial<Project>;

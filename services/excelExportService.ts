@@ -1,9 +1,20 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { Door, HardwareSet, HardwareItem } from '../types';
+import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
+
+function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
+  if (!door.elevationTypeId) return '';
+  const et = elevationTypes.find(e =>
+    e.id === door.elevationTypeId ||
+    e.code === door.elevationTypeId ||
+    e.name === door.elevationTypeId
+  );
+  return et?.imageUrl ?? '';
+}
+
 // Build headers for Door Schedule
 const buildDoorScheduleHeaders = (columns: DoorScheduleExportConfig['columns']): string[] => {
   const headers: string[] = [];
@@ -45,13 +56,19 @@ const buildDoorScheduleHeaders = (columns: DoorScheduleExportConfig['columns']):
   if (columns.additional.includes('louvers')) headers.push('Louvers');
   if (columns.additional.includes('visionPanels')) headers.push('Vision Panels');
   if (columns.additional.includes('specialNotes')) headers.push('Special Notes');
+  if (columns.additional.includes('elevationTypeId')) headers.push('Elevation Type');
+  if (columns.additional.includes('elevationImageUrl')) headers.push('Elevation Image URL');
 
   return headers;
 };
 
 // Build data row for a door
-const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['columns']): any[] => {
-  const row: any[] = [];
+const buildDoorScheduleRow = (
+  door: Door,
+  columns: DoorScheduleExportConfig['columns'],
+  elevationTypes: ElevationType[] = [],
+): unknown[] => {
+  const row: unknown[] = [];
 
   // Basic Information
   if (columns.basic.includes('doorTag')) row.push(door.doorTag || '');
@@ -90,6 +107,8 @@ const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['col
   if (columns.additional.includes('louvers')) row.push(door.louvers || '');
   if (columns.additional.includes('visionPanels')) row.push(door.visionPanels || '');
   if (columns.additional.includes('specialNotes')) row.push(door.specialNotes || '');
+  if (columns.additional.includes('elevationTypeId')) row.push(door.elevationTypeId || '');
+  if (columns.additional.includes('elevationImageUrl')) row.push(resolveElevationImageUrl(door, elevationTypes));
 
   return row;
 };
@@ -98,16 +117,17 @@ const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['col
 export const exportDoorScheduleToExcel = (
   doors: Door[],
   config: DoorScheduleExportConfig,
-  projectName: string
+  projectName: string,
+  elevationTypes: ElevationType[] = [],
 ): void => {
   const workbook = XLSX.utils.book_new();
 
   // Build main data
   const headers = buildDoorScheduleHeaders(config.columns);
-  const dataRows = doors.map(door => buildDoorScheduleRow(door, config.columns));
+  const dataRows = doors.map(door => buildDoorScheduleRow(door, config.columns, elevationTypes));
 
   // Create data array for worksheet
-  const wsData: any[][] = [];
+  const wsData: unknown[][] = [];
 
   // Add header rows if requested
   if (config.includeHeader) {
@@ -698,7 +718,8 @@ function createProcurementSummarySheet(
 export const exportDoorScheduleToPDF = async (
     doors: Door[],
     selectedColumns: string[],
-    projectName: string
+    projectName: string,
+    elevationTypes: ElevationType[] = [],
 ): Promise<void> => {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
@@ -766,31 +787,38 @@ export const exportDoorScheduleToPDF = async (
         
         // Notes
         specialNotes: 'Special Notes',
-        csiSection: 'CSI Section'
+        csiSection: 'CSI Section',
+        // Elevation
+        elevationTypeId: 'Elevation Type',
+        elevationImageUrl: 'Elevation Image URL',
     };
-    
+
     // Build headers from selected columns
     const headers = selectedColumns.map(colId => columnLabels[colId] || colId);
-    
+
     // Build data rows
     const dataRows = doors.map(door => {
         return selectedColumns.map(colId => {
-            const value = (door as any)[colId];
-            
+            if (colId === 'elevationImageUrl') {
+                return resolveElevationImageUrl(door, elevationTypes) || '-';
+            }
+            const value = (door as unknown as Record<string, unknown>)[colId];
+
             // Special handling for complex fields
             if (colId === 'assignedHardwareSet') {
-                return value?.name || '-';
+                return (value as { name?: string } | null)?.name || '-';
             } else if (colId === 'pricing' || colId === 'framePricing') {
                 if (value && typeof value === 'object') {
-                    const total = value.total || value.unitCost || 0;
+                    const v = value as Record<string, number>;
+                    const total = v.total || v.unitCost || 0;
                     return total > 0 ? `$${total.toFixed(2)}` : '-';
                 }
                 return '-';
             } else if (colId === 'totalUnitCost') {
-                return value ? `$${value.toFixed(2)}` : '-';
-            } else if (colId === 'handing' || colId === 'doorCoreType' || colId === 'doorFaceType' || 
+                return typeof value === 'number' ? `$${value.toFixed(2)}` : '-';
+            } else if (colId === 'handing' || colId === 'doorCoreType' || colId === 'doorFaceType' ||
                        colId === 'frameMaterial' || colId === 'anchorType' || colId === 'frameProfile') {
-                return value?.toString() || value || '-';
+                return value?.toString() || '-';
             } else if (typeof value === 'number') {
                 return value.toString();
             } else if (typeof value === 'boolean') {

@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { parseDoorSchedule } from '@/services/doorScheduleService';
+import { extractDoorScheduleFromPdf } from '@/services/doorSchedulePdfService';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
 import {
   upsertDoorScheduleImport,
@@ -21,6 +22,7 @@ import {
   upsertProjectHardwareFinal,
 } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
+import { queueItemsForApproval } from '@/lib/db/masterHardware';
 
 export const maxDuration = 120;
 
@@ -38,10 +40,10 @@ export const POST = withAuth(
       return NextResponse.json({ error: 'Invalid multipart form data.' }, { status: 400 });
     }
 
-    const excelField = formData.get('excel');
+    const scheduleField = formData.get('excel');
     const pdfField = formData.get('pdf');
 
-    if (!(excelField instanceof File)) {
+    if (!(scheduleField instanceof File)) {
       return NextResponse.json(
         { error: 'Missing "excel" field. Send the door schedule as a multipart field named "excel".' },
         { status: 400 },
@@ -54,28 +56,38 @@ export const POST = withAuth(
       );
     }
 
-    if (excelField.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Excel file too large. Maximum size is 20 MB.' }, { status: 413 });
+    if (scheduleField.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Door schedule file too large. Maximum size is 20 MB.' }, { status: 413 });
     }
     if (pdfField.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'PDF file too large. Maximum size is 20 MB.' }, { status: 413 });
+      return NextResponse.json({ error: 'Hardware PDF too large. Maximum size is 20 MB.' }, { status: 413 });
     }
 
-    // ── Step 1: Parse Excel door schedule ─────────────────────────────────
-    const excelBuffer = Buffer.from(await excelField.arrayBuffer());
+    // ── Step 1: Parse door schedule (Excel OR PDF) ────────────────────────
+    const scheduleBuffer = Buffer.from(await scheduleField.arrayBuffer());
+    const scheduleExt = (scheduleField.name.split('.').pop() ?? '').toLowerCase();
+    const scheduleIsPdf = scheduleExt === 'pdf';
+
     let scheduleResult;
     try {
-      scheduleResult = parseDoorSchedule(excelBuffer, excelField.name);
+      if (scheduleIsPdf) {
+        console.log(`[process] Door schedule is a PDF — using AI extraction (file="${scheduleField.name}")`);
+        scheduleResult = await extractDoorScheduleFromPdf(scheduleBuffer, scheduleField.name, projectId);
+      } else {
+        scheduleResult = parseDoorSchedule(scheduleBuffer, scheduleField.name);
+      }
     } catch (err) {
       return NextResponse.json(
-        { error: `Failed to parse Excel file: ${err instanceof Error ? err.message : String(err)}` },
+        { error: `Failed to parse door schedule: ${err instanceof Error ? err.message : String(err)}` },
         { status: 422 },
       );
     }
 
     if (scheduleResult.rowCount === 0) {
       return NextResponse.json(
-        { error: 'No door rows found in the Excel file. Check that the sheet has a "DOOR TAG" column.' },
+        { error: scheduleIsPdf
+            ? 'No door rows found in the PDF. Verify this is a door schedule document with a Door Tag column.'
+            : 'No door rows found in the Excel file. Check that the sheet has a "DOOR TAG" column.' },
         { status: 422 },
       );
     }
@@ -83,7 +95,7 @@ export const POST = withAuth(
     // ── Step 2: Persist door schedule ─────────────────────────────────────
     const { data: scheduleData, error: scheduleError } = await upsertDoorScheduleImport(projectId, {
       scheduleJson: scheduleResult.rows,
-      fileName: excelField.name,
+      fileName: scheduleField.name,
       uploadedBy: ctx.user.id,
     });
 
@@ -119,6 +131,37 @@ export const POST = withAuth(
 
     if (pdfError) {
       return NextResponse.json({ error: pdfError.message }, { status: 500 });
+    }
+
+    // ── Step 4b: Queue new unique items for master hardware DB approval ───
+    console.log(`[process:master] PDF extracted sets=${pdfResult.sets.length}  items=${pdfResult.itemCount}`);
+    const candidateItems = pdfResult.sets
+      .flatMap(set =>
+        (set.hardwareItems ?? []).map(item => ({
+          name: (item.item ?? '').trim(),
+          manufacturer: (item.manufacturer ?? '').trim(),
+          description: (item.description ?? '').trim(),
+          finish: (item.finish ?? '').trim(),
+        })),
+      )
+      .filter(item => item.name.length > 0);
+
+    console.log(`[process:master] Candidate items after filter: ${candidateItems.length}`);
+
+    if (candidateItems.length > 0) {
+      const queueResult = await queueItemsForApproval(
+        candidateItems,
+        projectId,
+        pdfField.name,
+        ctx.user.id,
+      );
+      if (queueResult.data) {
+        console.log(`[process:master] Queued ${queueResult.data.queued} new items, skipped ${queueResult.data.skipped} duplicates.`);
+      } else {
+        console.error('[process:master] queueItemsForApproval error:', queueResult.error?.message);
+      }
+    } else {
+      console.warn('[process:master] No candidate items — check that hardwareItems[].item field is populated.');
     }
 
     // ── Step 5: Merge ─────────────────────────────────────────────────────

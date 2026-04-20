@@ -62,18 +62,19 @@ export const calculateHardwareUsage = (
 export const exportDoorSchedule = async (
   doors: Door[],
   config: DoorScheduleExportConfig,
-  projectName: string
+  projectName: string,
+  elevationTypes: ElevationType[] = [],
 ): Promise<void> => {
   try {
     switch (config.format) {
       case 'xlsx':
-        await exportDoorScheduleToExcel(doors, config, projectName);
+        await exportDoorScheduleToExcel(doors, config, projectName, elevationTypes);
         break;
       case 'pdf':
-        await exportDoorScheduleToPDF(doors, config, projectName);
+        await exportDoorScheduleToPDF(doors, config, projectName, elevationTypes);
         break;
       case 'csv':
-        exportDoorScheduleToCSV(doors, config, projectName);
+        exportDoorScheduleToCSV(doors, config, projectName, elevationTypes);
         break;
       default:
         throw new Error(`Unsupported format: ${config.format}`);

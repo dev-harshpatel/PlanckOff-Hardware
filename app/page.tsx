@@ -13,7 +13,7 @@ const Dashboard = dynamic(() => import('@/views/Dashboard'), { ssr: false });
 
 export default function HomePage() {
   const router = useRouter();
-  const { projects, addProject, updateProject, deleteProject } = useProject();
+  const { projects, trash, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -38,10 +38,13 @@ export default function HomePage() {
   return (
     <Dashboard
       projects={projects}
+      trash={trash}
       onSelectProject={(id) => router.push(`/project/${id}`)}
       onAddNewProject={addProject}
       onProjectUpdate={updateProject}
       onDeleteProject={deleteProject}
+      onRestoreProject={restoreProject}
+      onPermDeleteProject={permDeleteProject}
       userRole={(user?.role ?? 'Estimator') as never}
       addToast={addToast}
       teamMembers={teamMembers}

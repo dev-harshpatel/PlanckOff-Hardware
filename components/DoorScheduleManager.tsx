@@ -98,8 +98,12 @@ interface DoorScheduleManagerProps {
     onProvidedSetChange?: (doorId: string, newSetName: string) => void;
     elevationTypes?: ElevationType[];
     onManageElevations?: () => void;
+    onElevationTypeUpdate?: (updated: ElevationType) => void;
+    projectId: string;
     addToast: (toast: Omit<Toast, 'id'>) => void;
     activeTask?: ActiveUploadTask;
+    onCancelTask?: () => void;
+    canReupload?: boolean;
 }
 
 type StatusFilter = 'all' | 'pending' | 'complete' | 'error';
@@ -138,8 +142,12 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     onProvidedSetChange,
     elevationTypes = [],
     onManageElevations,
+    onElevationTypeUpdate,
+    projectId,
     addToast,
     activeTask,
+    onCancelTask,
+    canReupload = true,
 }) => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [doorMaterialFilter, setDoorMaterialFilter] = useState<string>('all');
@@ -832,7 +840,16 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         ) : (
                             <Loader2 className="w-4 h-4 text-[var(--primary-text-muted)] animate-spin flex-shrink-0" />
                         )}
-                        <span className="text-sm font-medium text-[var(--text)] truncate">{activeTask.fileName}</span>
+                        <span className="text-sm font-medium text-[var(--text)] truncate flex-1">{activeTask.fileName}</span>
+                        {onCancelTask && activeTask.progress < 100 && (
+                            <button
+                                onClick={onCancelTask}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[var(--text-muted)] hover:text-red-500 border border-[var(--border)] hover:border-red-400 rounded-md transition-colors flex-shrink-0"
+                            >
+                                <X className="w-3 h-3" />
+                                Cancel
+                            </button>
+                        )}
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-[var(--primary-text-muted)] truncate flex-1">{activeTask.stage}</span>
@@ -867,10 +884,10 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                 </button>
                             </Tooltip>
                         )}
-                        <Tooltip content="Upload a new door schedule file (Excel/PDF)">
+                        <Tooltip content={!canReupload ? 'Use "Process Files" to upload your first Excel and PDF together' : 'Upload a new door schedule file (Excel/PDF)'}>
                             <button
-                                onClick={onUploadClick}
-                                disabled={isLoading || isAssigningBatch}
+                                onClick={canReupload ? onUploadClick : undefined}
+                                disabled={isLoading || isAssigningBatch || !canReupload}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isLoading
@@ -1286,7 +1303,12 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                                 : "Upload a door schedule file to get started with hardware assignment."}
                                         </p>
                                         {!searchQuery && statusFilter === 'all' && doorMaterialFilter === 'all' && frameMaterialFilter === 'all' && (
-                                            <Button onClick={onUploadClick} size="sm">
+                                            <Button
+                                                onClick={canReupload ? onUploadClick : undefined}
+                                                disabled={!canReupload}
+                                                title={!canReupload ? 'Use "Process Files" to upload your first Excel and PDF together' : undefined}
+                                                size="sm"
+                                            >
                                                 <Upload className="w-3.5 h-3.5 mr-1.5" />
                                                 Upload Door Schedule
                                             </Button>
@@ -1323,6 +1345,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     onCancel={() => setEditModalDoor(null)}
                     hardwareSets={hardwareSets}
                     elevationTypes={elevationTypes}
+                    projectId={projectId}
+                    onElevationTypeUpdate={onElevationTypeUpdate ?? (() => {})}
                 />
             )}
         </div>

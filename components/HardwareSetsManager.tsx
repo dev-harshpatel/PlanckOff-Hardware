@@ -36,6 +36,8 @@ interface HardwareSetsManagerProps {
     onBulkDeleteSets: (setIds: Set<string>) => void;
     onCreateVariant: (newSet: HardwareSet, doorIds: string[], sourceSetId: string) => void;
     activeTask?: ActiveUploadTask;
+    onCancelTask?: () => void;
+    canReupload?: boolean;
 }
 
 // Helper to format inches to Feet-Inches (e.g. 36 -> 3'-0")
@@ -47,7 +49,7 @@ const formatDimension = (inches: number): string => {
 };
 
 const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
-    const { hardwareSets = [], doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant, activeTask } = props;
+    const { hardwareSets = [], doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant, activeTask, onCancelTask, canReupload = true } = props;
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -263,7 +265,16 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                         ) : (
                             <Loader2 className="w-4 h-4 text-[var(--primary-text-muted)] animate-spin flex-shrink-0" />
                         )}
-                        <span className="text-sm font-medium text-[var(--text)] truncate">{activeTask.fileName}</span>
+                        <span className="text-sm font-medium text-[var(--text)] truncate flex-1">{activeTask.fileName}</span>
+                        {onCancelTask && activeTask.progress < 100 && (
+                            <button
+                                onClick={onCancelTask}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[var(--text-muted)] hover:text-red-500 border border-[var(--border)] hover:border-red-400 rounded-md transition-colors flex-shrink-0"
+                            >
+                                <X className="w-3 h-3" />
+                                Cancel
+                            </button>
+                        )}
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-[var(--primary-text-muted)] truncate flex-1">{activeTask.stage}</span>
@@ -293,8 +304,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isLoading}
+                            onClick={() => canReupload && fileInputRef.current?.click()}
+                            disabled={isLoading || !canReupload}
+                            title={!canReupload ? 'Use "Process Files" to upload your first PDF and Excel together' : undefined}
                             className="gap-1.5"
                         >
                             <Upload className="w-3.5 h-3.5" />
@@ -409,7 +421,13 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                             </p>
                                             {!searchQuery && (
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5">
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => canReupload && fileInputRef.current?.click()}
+                                                        disabled={!canReupload}
+                                                        title={!canReupload ? 'Use "Process Files" to upload your first PDF and Excel together' : undefined}
+                                                        className="gap-1.5"
+                                                    >
                                                         <Upload className="w-3.5 h-3.5" />
                                                         Upload PDF
                                                     </Button>

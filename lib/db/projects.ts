@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import type { Project, NewProjectData } from '@/types';
+import type { Project, NewProjectData, ElevationType } from '@/types';
 import { buildProjectLocationLabel } from '@/lib/project-locations';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,7 @@ interface ProjectRow {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  elevation_types: ElevationType[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,8 @@ function toProject(row: ProjectRow): Project {
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     lastModified: row.updated_at,
+    elevationTypes: row.elevation_types ?? [],
+    deletedAt: row.deleted_at ?? undefined,
   };
 }
 
@@ -55,7 +58,7 @@ type DbResult<T> = { data: T | null; error: { message: string } | null };
 
 const BASE_SELECT = `
   id, name, client, location, country, province, description, project_number, status,
-  due_date, assigned_to, deleted_at, created_by, created_at, updated_at
+  due_date, assigned_to, deleted_at, created_by, created_at, updated_at, elevation_types
 `;
 
 export async function getAllProjects(): Promise<DbResult<Project[]>> {
@@ -139,6 +142,7 @@ export async function updateProject(
     if (updates.status !== undefined)        row.status          = updates.status;
     if (updates.dueDate !== undefined)       row.due_date        = updates.dueDate;
     if (updates.assignedTo !== undefined)    row.assigned_to     = updates.assignedTo || null;
+    if (updates.elevationTypes !== undefined) row.elevation_types = updates.elevationTypes;
     if (updates.location === undefined && (updates.country !== undefined || updates.province !== undefined)) {
       row.location = buildProjectLocationLabel(updates.country, updates.province) || null;
     }
@@ -212,5 +216,20 @@ export async function restoreProject(id: string): Promise<DbResult<boolean>> {
     return { data: true, error: null };
   } catch (err) {
     return { data: null, error: { message: String(err) } };
+  }
+}
+
+/** Hard-delete any projects whose deleted_at is older than 30 days. */
+export async function cleanupExpiredProjects(): Promise<void> {
+  try {
+    const db = createSupabaseAdminClient();
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await db
+      .from('projects')
+      .delete()
+      .not('deleted_at', 'is', null)
+      .lt('deleted_at', cutoff);
+  } catch {
+    // Non-critical — log silently
   }
 }

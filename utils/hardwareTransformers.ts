@@ -195,7 +195,12 @@ export function transformFromFinalJson(
   for (const set of finalJson) {
     const assignedSet = setsByName.get(set.setName.toLowerCase()) ?? null;
 
-    for (const door of set.doors) {
+    // Deduplicate doors within the same set by doorTag (last-write wins)
+    const uniqueDoorsInSet = Array.from(
+      new Map(set.doors.map((d) => [String(d.doorTag).toLowerCase(), d])).values(),
+    );
+
+    for (const door of uniqueDoorsInSet) {
       // Resolve dimensions: prefer sections, fall back to flat fields
       const rawWidth =
         door.sections?.door['WIDTH'] ??
@@ -219,7 +224,7 @@ export function transformFromFinalJson(
       const providedHardwareSet = door.sections?.hardware?.['HARDWARE SET'] ?? door.hwSet ?? door.matchedSetName;
 
       const builtDoor: Door = {
-        id: `door-final-${door.doorTag}`,
+        id: `door-final-${set.setName}-${door.doorTag}`,
         doorTag: String(door.doorTag),
         status: assignedSet ? 'complete' : 'pending',
 

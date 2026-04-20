@@ -65,6 +65,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>(project.hardwareSets || []);
     const [doors, setDoors] = useState<Door[]>(project.doors || []);
     const [viewMode, setViewMode] = useState<'split' | 'hardware' | 'doors'>('split');
+    const [isDataLoading, setIsDataLoading] = useState(true);
 
     // Background Upload Context (used for progress widget display only)
     const { tasks } = useBackgroundUpload();
@@ -143,7 +144,20 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         onProjectUpdate(updatedProject);
     };
 
+    const handleSingleElevationTypeUpdate = (updated: ElevationType) => {
+        const current = project.elevationTypes ?? [];
+        const exists = current.some(et => et.id === updated.id);
+        const next = exists
+            ? current.map(et => et.id === updated.id ? updated : et)
+            : [...current, updated]; // new type created on-the-fly from ElevationTab
+        onProjectUpdate({ ...project, elevationTypes: next });
+    };
+
     const doorScheduleInputRef = useRef<HTMLInputElement>(null);
+
+    // Polling state — used when user navigates away mid-processing and comes back
+    const [isPollingForResult, setIsPollingForResult] = useState(false);
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Reactive report generation
     const report = useMemo(() => generateReport(doors), [doors]);
@@ -178,18 +192,67 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         }
     }, [project.id]);
 
+    // Poll for the final JSON after the user navigated away mid-processing and returns.
+    // Clears sessionStorage flag and loads data as soon as the merge result appears.
+    const startPollingForResult = useCallback(() => {
+        const key = `planckoff_proc_${project.id}`;
+        setIsPollingForResult(true);
+        setIsDataLoading(true);
+
+        const poll = async () => {
+            const ts = sessionStorage.getItem(key);
+            if (!ts || Date.now() - Number(ts) > 5 * 60 * 1000) {
+                // Timed out or flag was cleared by another tab
+                sessionStorage.removeItem(key);
+                if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                setIsPollingForResult(false);
+                setIsDataLoading(false);
+                addToast({ type: 'error', message: 'File processing timed out. Please try uploading again.' });
+                return;
+            }
+            try {
+                const res = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
+                if (res.ok) {
+                    const json = await res.json() as { data?: { finalJson?: MergedHardwareSet[] } };
+                    const finalJson = json.data?.finalJson;
+                    if (finalJson && finalJson.length > 0) {
+                        sessionStorage.removeItem(key);
+                        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                        const { hardwareSets: hs, doors: ds } = transformFromFinalJson(finalJson);
+                        if (hs.length > 0) { setHardwareSets(hs); isInitialMount.current = true; }
+                        if (ds.length > 0) { setDoors(ds); isInitialMount.current = true; }
+                        setIsPollingForResult(false);
+                        setIsDataLoading(false);
+                        addToast({ type: 'success', message: 'File processing completed! Your project data is ready.' });
+                    }
+                }
+            } catch {
+                // network hiccup — keep polling
+            }
+        };
+
+        poll();
+        pollingIntervalRef.current = setInterval(poll, 3000);
+    }, [project.id, addToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Fetch stored hardware PDF + door schedule from new tables and populate UI state
     useEffect(() => {
         let cancelled = false;
 
         async function loadProjectData() {
             try {
+                // If a combined upload was in-progress when we last left, check for its result first.
+                const processingKey = `planckoff_proc_${project.id}`;
+                const processingTs = sessionStorage.getItem(processingKey);
+
                 // 1. Try the final JSON first (single source of truth)
                 const mergeRes = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
                 if (!cancelled && mergeRes.ok) {
                     const mergeJson = await mergeRes.json() as { data?: { finalJson?: MergedHardwareSet[] } };
                     const finalJson = mergeJson.data?.finalJson;
                     if (finalJson && finalJson.length > 0) {
+                        // Server finished while we were away — clear the flag
+                        if (processingTs) sessionStorage.removeItem(processingKey);
                         const { hardwareSets: hs, doors: ds } = transformFromFinalJson(finalJson);
                         if (hs.length > 0) {
                             setHardwareSets(hs);
@@ -204,6 +267,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 }
 
                 if (cancelled) return;
+
+                // No final JSON yet. If a combined upload was in-progress, start polling instead
+                // of showing stale partial data — keep the skeleton visible until the server finishes.
+                if (processingTs && Date.now() - Number(processingTs) < 5 * 60 * 1000) {
+                    if (!cancelled) startPollingForResult();
+                    return; // skip the fallback — polling will load data when ready
+                }
 
                 // 2. Fallback: fetch separate PDF + door schedule tables
                 const [hwRes, dsRes] = await Promise.all([
@@ -234,22 +304,38 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 }
             } catch {
                 // Non-critical — UI just shows empty state
+            } finally {
+                // Don't clear skeleton if we handed off to the polling path
+                if (!cancelled && !sessionStorage.getItem(`planckoff_proc_${project.id}`)) {
+                    setIsDataLoading(false);
+                }
             }
         }
 
         loadProjectData();
-        return () => { cancelled = true; };
-    }, [project.id]);
+        return () => {
+            cancelled = true;
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Convert current UI state back to MergedHardwareSet[] and PUT to final JSON
     const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[]): Promise<void> => {
         try {
             const finalJson: MergedHardwareSet[] = currentSets.map((set): MergedHardwareSet => {
-                const matchedDoors = currentDoors.filter(
-                    (d) =>
-                        d.assignedHardwareSet?.id === set.id ||
-                        d.providedHardwareSet?.toLowerCase() === set.name.toLowerCase(),
-                );
+                const matchedDoors = currentDoors.filter((d) => {
+                    // If the door has been explicitly assigned (via AI merge or variant creation),
+                    // use ID match only — name-based fallback would re-attach it to the original
+                    // Excel set after a reload (sections.hardware['HARDWARE SET'] never changes).
+                    if (d.assignedHardwareSet) {
+                        return d.assignedHardwareSet.id === set.id;
+                    }
+                    // Unassigned doors (imported from Excel but not yet merged): match by name.
+                    return d.providedHardwareSet?.toLowerCase() === set.name.toLowerCase();
+                });
 
                 const mergedDoors: MergedDoor[] = matchedDoors.map((d): MergedDoor => ({
                     doorTag: d.doorTag,
@@ -419,12 +505,12 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 body: form,
             });
 
-            const json = await res.json() as { data?: { setCount: number; itemCount: number; durationMs: number; tier: number; warnings: string[] }; error?: string };
+            const json = await res.json() as { data?: { setCount: number; itemCount: number; durationMs: number; tier: number; warnings: string[]; masterQueued: number; masterSkipped: number }; error?: string };
             if (!res.ok) throw new Error(json.error ?? 'Upload failed.');
 
             updateProcessingTask(taskId, { stage: 'Saving to database…', progress: 85 });
 
-            const { setCount, itemCount, tier, warnings } = json.data!;
+            const { setCount, itemCount, tier, warnings, masterQueued } = json.data!;
 
             // 3. Reload hardware sets into UI
             const hwRes = await fetch(`/api/projects/${project.id}/hardware-pdf`, { credentials: 'include' });
@@ -455,7 +541,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             const mergeNote = mergeStats
                 ? ` · ${mergeStats.matchedDoorCount} door${mergeStats.matchedDoorCount !== 1 ? 's' : ''} linked across ${mergeStats.setCount} sets`
                 : '';
-            addToast({ type: 'success', message: `Extracted ${setCount} hardware sets (${itemCount} items) from PDF${tier === 2 ? ' — used fallback text extraction' : ''}${mergeNote}.` });
+            const masterNote = masterQueued > 0 ? ` · ${masterQueued} new item${masterQueued !== 1 ? 's' : ''} queued for review in Database` : '';
+            addToast({ type: 'success', message: `Extracted ${setCount} hardware sets (${itemCount} items) from PDF${tier === 2 ? ' — used fallback text extraction' : ''}${mergeNote}${masterNote}.` });
             if (warnings.length > 0) { setUploadErrors(warnings); setIsErrorModalOpen(true); }
         } catch (err) {
             removeProcessingTask(taskId);
@@ -585,6 +672,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setIsCombinedProcessing(true);
         setCombinedProgress(0);
         setCombinedLogs([]);
+        sessionStorage.setItem(`planckoff_proc_${project.id}`, Date.now().toString());
 
         const step = (msg: string, progress: number) => {
             setCombinedCurrentStep(msg);
@@ -610,8 +698,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 setCombinedProgress(prev => {
                     if (prev >= 70) { clearInterval(pdfProgressTimer); return prev; }
                     const next = prev + 3;
-                    if (next === 20) { addLog('info', 'Parsing door schedule columns and rows…'); setCombinedCurrentStep('Parsing door schedule…'); }
-                    if (next === 30) { addLog('success', `Door schedule parsed — found rows.`); addLog('info', 'Sending hardware PDF to AI (Gemini)…'); setCombinedCurrentStep('AI reading hardware PDF…'); }
+                    if (next === 20) { const isPdf = combinedExcelFile?.name?.toLowerCase().endsWith('.pdf'); addLog('info', isPdf ? 'Sending door schedule PDF to AI (Gemini)…' : 'Parsing door schedule columns and rows…'); setCombinedCurrentStep(isPdf ? 'AI reading door schedule PDF…' : 'Parsing door schedule…'); }
+                    if (next === 30) { addLog('success', 'Door schedule processed.'); addLog('info', 'Sending hardware PDF to AI (Gemini)…'); setCombinedCurrentStep('AI reading hardware PDF…'); }
                     if (next === 45) { addLog('info', 'AI extracting hardware sets and items…'); }
                     if (next === 60) { addLog('info', 'AI processing hardware specifications…'); }
                     return next;
@@ -626,7 +714,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
             clearInterval(pdfProgressTimer);
 
-            const json = await res.json() as {
+            // Safely parse — server may return plain-text 500 in edge cases
+            let json: {
                 data?: {
                     setCount: number;
                     matchedDoorCount: number;
@@ -638,13 +727,19 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     itemCount: number;
                 };
                 error?: string;
-            };
+            } | null = null;
+            try {
+                json = await res.json();
+            } catch {
+                throw new Error(`Server error (HTTP ${res.status}). The request may have timed out — please try again.`);
+            }
 
-            if (!res.ok) throw new Error(json.error ?? 'Processing failed.');
+            if (!res.ok) throw new Error(json?.error ?? `Server error (HTTP ${res.status}).`);
 
-            const { setCount, matchedDoorCount, unmatchedDoorCount, unmatchedDoorCodes, pdfSetsWithNoDoors, rowCount, itemCount, warnings } = json.data!;
+            const { setCount, matchedDoorCount, unmatchedDoorCount, unmatchedDoorCodes, pdfSetsWithNoDoors, rowCount, itemCount, warnings } = json!.data!;
 
-            addLog('success', `Door schedule: ${rowCount} door rows parsed from Excel.`);
+            const scheduleLabel = combinedExcelFile?.name?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Excel';
+            addLog('success', `Door schedule: ${rowCount} door rows extracted from ${scheduleLabel}.`);
             addLog('success', `Hardware PDF: ${setCount} sets, ${itemCount} items extracted by AI.`);
 
             step('Matching doors to hardware sets…', 80);
@@ -685,6 +780,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             addToast({ type: 'error', message: `Processing failed: ${msg}` });
         } finally {
             setIsCombinedProcessing(false);
+            sessionStorage.removeItem(`planckoff_proc_${project.id}`);
         }
     };
 
@@ -774,18 +870,24 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const hardwareActiveTask = processingTasks.find(t => t.type === 'hardware-pdf');
     const doorActiveTask = processingTasks.find(t => t.type === 'door-schedule');
 
+    // Individual re-upload buttons are only enabled after the first combined upload completes.
+    // If there's already data (loaded from DB on mount), they're also enabled immediately.
+    const individualUploadsEnabled = !isDataLoading && !isPollingForResult && (hardwareSets.length > 0 || doors.length > 0);
+
     const hardwareSetsPanel = (
         <div className="h-full min-h-0 p-5 flex flex-col">
             <HardwareSetsManager
                 hardwareSets={hardwareSets}
                 doors={doors}
-                isLoading={false}
+                isLoading={isDataLoading || isPollingForResult}
                 onProcessUploads={handleHardwareUploads}
                 onSaveSet={handleSaveSet}
                 onDeleteSet={handleDeleteSet}
                 onBulkDeleteSets={handleBulkDeleteSets}
                 onCreateVariant={handleSplitSetAndReassign}
                 activeTask={hardwareActiveTask}
+                onCancelTask={hardwareActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== hardwareActiveTask.id)) : undefined}
+                canReupload={individualUploadsEnabled}
             />
         </div>
     );
@@ -796,14 +898,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 doors={doors}
                 onDoorsUpdate={handleDoorsUpdate}
                 hardwareSets={hardwareSets}
-                isLoading={false}
+                isLoading={isDataLoading || isPollingForResult}
                 onUploadClick={() => doorScheduleInputRef.current?.click()}
                 appSettings={appSettings}
                 onProvidedSetChange={handleProvidedSetChange}
                 elevationTypes={project.elevationTypes || []}
                 onManageElevations={() => setIsElevationManagerOpen(true)}
+                onElevationTypeUpdate={handleSingleElevationTypeUpdate}
+                projectId={project.id}
                 addToast={addToast}
                 activeTask={doorActiveTask}
+                onCancelTask={doorActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id)) : undefined}
+                canReupload={individualUploadsEnabled}
             />
         </div>
     );
@@ -857,10 +963,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     {/* Right — process files button + save status */}
                     <div className="flex items-center gap-3 justify-end min-w-[90px]">
                         <Button
-                            variant="ghost"
                             size="sm"
                             onClick={() => setIsCombinedUploadOpen(true)}
-                            className="gap-1.5 text-[var(--text-muted)]"
+                            className="gap-1.5"
                         >
                             <Upload className="h-4 w-4" />
                             <span className="hidden md:inline">Process Files</span>
@@ -938,6 +1043,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     elevationTypes={project.elevationTypes || []}
                     onUpdate={handleElevationUpdate}
                     onClose={() => setIsElevationManagerOpen(false)}
+                    projectId={project.id}
                 />
             )}
 
@@ -989,17 +1095,22 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             <label className="flex flex-col gap-1.5">
                                 <span className="text-xs font-medium text-[var(--text-secondary)] flex items-center gap-1.5">
                                     <FileSpreadsheet className="h-3.5 w-3.5" />
-                                    Door Schedule (.xlsx)
+                                    Door Schedule (.xlsx or .pdf)
                                 </span>
                                 <input
                                     type="file"
-                                    accept=".xlsx"
+                                    accept=".xlsx,.pdf"
                                     disabled={isCombinedProcessing}
                                     onChange={(e) => setCombinedExcelFile(e.target.files?.[0] ?? null)}
                                     className="text-sm text-[var(--text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[var(--bg-muted)] file:text-[var(--text-secondary)] hover:file:bg-[var(--bg-subtle)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 {combinedExcelFile && (
-                                    <span className="text-xs text-[var(--text-muted)] truncate">{combinedExcelFile.name}</span>
+                                    <span className="text-xs text-[var(--text-muted)] truncate">
+                                        {combinedExcelFile.name}
+                                        {combinedExcelFile.name.toLowerCase().endsWith('.pdf') && (
+                                            <span className="ml-1.5 text-amber-600 dark:text-amber-400">(AI extraction)</span>
+                                        )}
+                                    </span>
                                 )}
                             </label>
 
@@ -1120,6 +1231,19 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             )}
 
             {/* Minimized floating widget — shown when modal is minimized during processing */}
+            {/* Polling indicator — shown when user returned to project while server is still processing */}
+            {isPollingForResult && !isCombinedUploadOpen && (
+                <div className="fixed bottom-6 right-6 z-50">
+                    <div className="flex items-center gap-3 bg-[var(--bg)] border border-[var(--border)] rounded-full shadow-lg px-4 py-2.5">
+                        <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0" />
+                        <div className="flex flex-col items-start min-w-0">
+                            <span className="text-xs font-medium text-[var(--text)]">Processing files…</span>
+                            <span className="text-xs text-[var(--text-muted)]">Waiting for server</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isCombinedUploadOpen && isCombinedMinimized && (
                 <div className="fixed bottom-6 right-6 z-50">
                     <button

@@ -1,6 +1,16 @@
-import { Door, HardwareSet } from '../types';
+import { Door, HardwareSet, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
+
+function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
+  if (!door.elevationTypeId) return '';
+  const et = elevationTypes.find(e =>
+    e.id === door.elevationTypeId ||
+    e.code === door.elevationTypeId ||
+    e.name === door.elevationTypeId
+  );
+  return et?.imageUrl ?? '';
+}
 
 // Helper to escape CSV values
 const escapeCSV = (value: any): string => {
@@ -67,13 +77,19 @@ const buildDoorScheduleHeaders = (columns: DoorScheduleExportConfig['columns']):
   if (columns.additional.includes('louvers')) headers.push('Louvers');
   if (columns.additional.includes('visionPanels')) headers.push('Vision Panels');
   if (columns.additional.includes('specialNotes')) headers.push('Special Notes');
+  if (columns.additional.includes('elevationTypeId')) headers.push('Elevation Type');
+  if (columns.additional.includes('elevationImageUrl')) headers.push('Elevation Image URL');
 
   return headers;
 };
 
 // Build data row for a door
-const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['columns']): any[] => {
-  const row: any[] = [];
+const buildDoorScheduleRow = (
+  door: Door,
+  columns: DoorScheduleExportConfig['columns'],
+  elevationTypes: ElevationType[] = [],
+): unknown[] => {
+  const row: unknown[] = [];
 
   // Basic Information
   if (columns.basic.includes('doorTag')) row.push(door.doorTag || '');
@@ -112,6 +128,8 @@ const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['col
   if (columns.additional.includes('louvers')) row.push(door.louvers || '');
   if (columns.additional.includes('visionPanels')) row.push(door.visionPanels || '');
   if (columns.additional.includes('specialNotes')) row.push(door.specialNotes || '');
+  if (columns.additional.includes('elevationTypeId')) row.push(door.elevationTypeId || '');
+  if (columns.additional.includes('elevationImageUrl')) row.push(resolveElevationImageUrl(door, elevationTypes));
 
   return row;
 };
@@ -120,10 +138,11 @@ const buildDoorScheduleRow = (door: Door, columns: DoorScheduleExportConfig['col
 export const exportDoorScheduleToCSV = (
   doors: Door[],
   config: DoorScheduleExportConfig,
-  projectName: string
+  projectName: string,
+  elevationTypes: ElevationType[] = [],
 ): void => {
   const headers = buildDoorScheduleHeaders(config.columns);
-  const rows = doors.map(door => buildDoorScheduleRow(door, config.columns));
+  const rows = doors.map(door => buildDoorScheduleRow(door, config.columns, elevationTypes));
 
   // Build CSV content
   let csv = '';

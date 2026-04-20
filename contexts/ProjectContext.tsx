@@ -17,6 +17,7 @@ interface ProjectContextType {
   deleteProject: (id: string) => void;
   restoreProject: (id: string) => void;
   permDeleteProject: (id: string) => void;
+  fetchTrashed: () => Promise<void>;
   updateInventory: (items: HardwareItem[]) => void;
   addToInventory: (items: HardwareItem[]) => void;
   overwriteInventory: (items: HardwareItem[]) => void;
@@ -69,9 +70,23 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [isAuthenticated]);
 
+  const fetchTrashed = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await fetch('/api/projects/trash', { credentials: 'include' });
+      if (res.ok) {
+        const json = (await res.json()) as { data: Project[] };
+        setTrash(json.data ?? []);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    fetchTrashed();
+  }, [fetchProjects, fetchTrashed]);
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -109,8 +124,17 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const json = (await res.json()) as { data?: Project; error?: string };
       if (!res.ok) throw new Error(json.error ?? 'Failed to update project.');
 
-      // Update local state immediately
-      setProjects(prev => prev.map(p => p.id === updatedProject.id ? (json.data ?? updatedProject) : p));
+      // The DB layer (lib/db/projects.ts) only persists metadata columns — it does not
+      // read/write doors, hardwareSets, or elevationTypes. Merging json.data directly
+      // would strip all domain data. Always preserve those fields from updatedProject.
+      const merged: Project = {
+        ...(json.data ?? updatedProject),
+        doors:          updatedProject.doors,
+        hardwareSets:   updatedProject.hardwareSets,
+        elevationTypes: updatedProject.elevationTypes,
+      };
+
+      setProjects(prev => prev.map(p => p.id === updatedProject.id ? merged : p));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message: `Failed to update project: ${message}` });
@@ -124,8 +148,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to delete project.');
+      // Move the project from active list to trash optimistically
+      const trashed = projects.find(p => p.id === id);
       setProjects(prev => prev.filter(p => p.id !== id));
-      addToast({ type: 'success', message: 'Project moved to trash.' });
+      if (trashed) {
+        setTrash(prev => [{ ...trashed, deletedAt: new Date().toISOString() }, ...prev]);
+      }
+      addToast({ type: 'success', message: 'Project moved to trash. It will be permanently deleted in 30 days.' });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
@@ -141,7 +170,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (!res.ok) throw new Error('Failed to restore project.');
       setTrash(prev => prev.filter(p => p.id !== id));
       await fetchProjects();
-      addToast({ type: 'success', message: 'Project restored.' });
+      addToast({ type: 'success', message: 'Project restored successfully.' });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
@@ -192,6 +221,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       deleteProject,
       restoreProject: restoreProjectFn,
       permDeleteProject,
+      fetchTrashed,
       updateInventory,
       addToInventory,
       overwriteInventory,

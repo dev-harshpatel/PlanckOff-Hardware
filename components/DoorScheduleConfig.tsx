@@ -1,13 +1,30 @@
 import React, { useState, useMemo } from 'react';
-import { Door, HardwareSet } from '../types';
+import { Door, HardwareSet, ElevationType } from '../types';
 import ReportDataPreview from './ReportDataPreview';
 import { exportDoorScheduleToExcel, exportDoorScheduleToPDF } from '../services/excelExportService';
 
+export interface DoorScheduleExportConfig {
+  format?: string;
+  columns: {
+    basic: string[];
+    dimensions: string[];
+    materials: string[];
+    fireSafety: string[];
+    hardware: string[];
+    additional: string[];
+  };
+  includeHeader: boolean;
+  includeSummary: boolean;
+}
+
 interface DoorScheduleConfigProps {
     doors: Door[];
-    hardwareSets: HardwareSet[];
+    hardwareSets?: HardwareSet[];
+    elevationTypes?: ElevationType[];
     projectName: string;
     onUpdateDoors?: (doors: Door[]) => void;
+    onBack?: () => void;
+    onExport?: (config: DoorScheduleExportConfig) => void;
 }
 
 const COLUMN_GROUPS = {
@@ -72,7 +89,11 @@ const COLUMN_GROUPS = {
     'Notes': [
         { id: 'specialNotes', label: 'Special Notes' },
         { id: 'csiSection', label: 'CSI Section' },
-    ]
+    ],
+    'Elevation': [
+        { id: 'elevationTypeId', label: 'Elevation Type' },
+        { id: 'elevationImageUrl', label: 'Elevation Image URL' },
+    ],
 };
 
 const DEFAULT_COLUMNS = ['doorTag', 'quantity', 'width', 'height', 'type', 'frameMaterial', 'assignedHardwareSet', 'pricing', 'framePricing', 'totalUnitCost'];
@@ -80,6 +101,7 @@ const DEFAULT_COLUMNS = ['doorTag', 'quantity', 'width', 'height', 'type', 'fram
 const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     doors,
     hardwareSets,
+    elevationTypes = [],
     projectName,
     onUpdateDoors
 }) => {
@@ -110,23 +132,21 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
     const handleGenerate = () => {
         if (exportFormat === 'pdf') {
-            // PDF Export
-            exportDoorScheduleToPDF(doors, selectedColumns, projectName || "Door_Schedule_Export");
+            exportDoorScheduleToPDF(doors, selectedColumns, projectName || "Door_Schedule_Export", elevationTypes);
         } else {
-            // Excel Export - Temp config for testing - using corrected field names
-            const tempConfig = {
+            const tempConfig: DoorScheduleExportConfig = {
                 columns: {
                     basic: selectedColumns.filter(c => ['doorTag', 'location', 'quantity', 'type'].includes(c)),
                     dimensions: selectedColumns.filter(c => ['width', 'height', 'thickness', 'frameDepth'].includes(c)),
                     materials: selectedColumns.filter(c => ['doorMaterial', 'frameMaterial', 'doorCoreType', 'woodSpecies'].includes(c)),
                     fireSafety: selectedColumns.filter(c => ['fireRating', 'smokeRating', 'stcRating', 'egressRequired'].includes(c)),
                     hardware: selectedColumns.filter(c => ['assignedHardwareSet', 'hardwarePrep', 'hingeType', 'lockType'].includes(c)),
-                    additional: selectedColumns.filter(c => ['interiorExterior', 'swingDirection', 'undercut', 'louvers', 'visionPanels', 'specialNotes'].includes(c))
+                    additional: selectedColumns.filter(c => ['interiorExterior', 'swingDirection', 'undercut', 'louvers', 'visionPanels', 'specialNotes', 'elevationTypeId', 'elevationImageUrl'].includes(c)),
                 },
                 includeHeader: true,
-                includeSummary: true
+                includeSummary: true,
             };
-            exportDoorScheduleToExcel(doors, tempConfig, projectName || "Door_Schedule_Export");
+            exportDoorScheduleToExcel(doors, tempConfig, projectName || "Door_Schedule_Export", elevationTypes);
         }
     };
 

@@ -20,7 +20,7 @@ export function AppShell({ children }: AppShellProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
-  const { user: currentUser, isAuthenticated, isLoading } = useAuth();
+  const { user: currentUser, isAuthenticated, isLoading, logout } = useAuth();
   const { projects } = useProject();
 
   useEffect(() => {
@@ -71,9 +71,6 @@ export function AppShell({ children }: AppShellProps) {
     ? projects.find((p) => p.id === pathname.split('/')[2])?.name
     : undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userRoleCompat = (currentUser?.role ?? 'Estimator') as any;
-
   return (
     <div className="h-full flex flex-col bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
       <Toaster />
@@ -83,7 +80,8 @@ export function AppShell({ children }: AppShellProps) {
         currentPage={getCurrentPage() as never}
         onNavigate={handleNavigate as never}
         projectName={activeProjectName}
-        userRole={userRoleCompat}
+        user={currentUser}
+        onLogout={logout}
       />
 
       <main className="flex-1 min-h-0 overflow-hidden">{children}</main>

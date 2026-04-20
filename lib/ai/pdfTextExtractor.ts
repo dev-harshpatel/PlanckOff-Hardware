@@ -98,23 +98,45 @@ function reconstructRows(items: RawTextItem[], yTolerance = 3): string {
  * @param buffer  Raw PDF bytes
  * @returns       Array of per-page text strings + total page count
  */
-export async function extractPdfText(buffer: Buffer): Promise<PdfExtractionResult> {
+export async function extractPdfText(
+  buffer: Buffer,
+  onPageProgress?: (current: number, total: number) => void,
+): Promise<PdfExtractionResult> {
   // Dynamic import — keeps pdfjs out of the client bundle
-  // The legacy build works in Node.js without a Canvas/DOM dependency
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as string);
 
-  // Disable the worker in Node (we run everything synchronously in-process)
+  // pdfjs v4+ requires a real worker src even in Node.js.
+  // import.meta.resolve is the most reliable approach (Node 20.6+, Next.js ESM).
+  // Falls back to pathToFileURL(process.cwd() + relative path) for older runtimes.
+  const WORKER_SUBPATH = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
+  let workerSrc: string;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (import.meta as any).resolve === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      workerSrc = (import.meta as any).resolve(WORKER_SUBPATH);
+    } else {
+      throw new Error('import.meta.resolve unavailable');
+    }
+  } catch {
+    const { pathToFileURL } = await import('url');
+    const { resolve } = await import('path');
+    workerSrc = pathToFileURL(resolve(process.cwd(), 'node_modules', ...WORKER_SUBPATH.split('/'))).href;
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc;
+  console.log('[pdfTextExtractor] workerSrc:', workerSrc);
 
   const uint8 = new Uint8Array(buffer);
-  const loadingTask = pdfjsLib.getDocument({ data: uint8, useWorkerFetch: false, isEvalSupported: false });
+  const loadingTask = pdfjsLib.getDocument({ data: uint8, useWorkerFetch: false, isEvalSupported: false, disableAutoFetch: true });
   const pdf = await loadingTask.promise;
 
   const pageCount = pdf.numPages;
   const pages: ExtractedPage[] = [];
 
   for (let i = 1; i <= pageCount; i++) {
+    onPageProgress?.(i, pageCount);
+
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
 

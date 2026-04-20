@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(grep -E \"\\(src|app\\)/.*\\\\.\\(ts|tsx|js|jsx\\)$\")",
+      "Bash(find /d/Projects/learning-projects/PlanckOff-Hardware/supabase/migrations -name \"*.sql\" -exec grep -l \"deleted_at\" {} \\\\;)",
+      "Bash(xargs grep *)",
+      "Bash(pdftotext \"d:/Projects/learning-projects/PlanckOff-Hardware/docs/Data/Door Schedule.pdf\" -)",
+      "Bash(python3)",
+      "Bash(pdfinfo \"d:/Projects/learning-projects/PlanckOff-Hardware/docs/Data/Door Schedule.pdf\")",
+      "Bash(python3 -c \"import pdf2image; print\\('pdf2image available'\\)\")",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); const d = {...p.dependencies,...p.devDependencies}; const pdfKeys = Object.keys\\(d\\).filter\\(k => k.includes\\('pdf'\\)\\); console.log\\(pdfKeys.map\\(k => k+': '+d[k]\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(cat next.config.ts)",
+      "Bash(cat next.config.js)",
+      "Bash(cat next.config.mjs)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('next:', p.dependencies.next || p.devDependencies.next\\)\")",
+      "Bash(pdftotext /d/Projects/learning-projects/PlanckOff-Hardware/docs/Data/hardware-pdf.pdf -)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(pkg.version\\);\")",
+      "Bash(node --input-type=module)",
+      "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, exports: Object.keys\\(p.exports || {}\\).slice\\(0,10\\)}, null, 2\\)\\);\")"
+    ]
+  }
+}

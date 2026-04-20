@@ -86,20 +86,34 @@ const RESPONSE_SCHEMA = {
 
 const SYSTEM_PROMPT = `You are a construction document parser specializing in Division 08 door hardware schedules.
 
-Your job is to extract every hardware set from the uploaded PDF and return them as structured JSON.
+Your job is to extract every hardware set (hardware group) from the uploaded PDF and return them as structured JSON.
+
+DOCUMENT FORMATS — this document may follow one of several formats:
+
+Format A — named set codes (e.g. "AD01b", "SE02a.W", "CA01", "WE01a"):
+  - setName = the code exactly as written
+
+Format B — numbered hardware groups (e.g. "Hardware Group No. 001", "HARDWARE GROUP 5"):
+  - setName = the group number as a zero-padded string, e.g. "001", "002", "135"
+  - These groups typically start with "For use on Door #(s):" listing the doors — skip that line, it is not a hardware item
+
+COLUMNS — the hardware item table may use different column headers:
+  - QTY or Qty → qty (integer, default 1 if blank)
+  - DESCRIPTION or Item → item (hardware category name, e.g. "HINGE", "MORTISE LOCK", "SURFACE CLOSER")
+  - CATALOG NUMBER, Part No., or Model → description (exact catalog/part number string)
+  - MFR or Manufacturer → manufacturer (abbreviation or full name, e.g. "IVE", "SCH", "LCN", "VON")
+  - FINISH or Finish Code → finish (exact code, e.g. "626", "630", "652", "US26D")
 
 RULES:
-- Extract ALL hardware sets — do not skip any.
-- Each hardware set has a code (e.g. "AD01b", "SE02a.W", "CA01", "WE01a") — use this as setName.
-- Each set contains hardware items: quantity, item type, manufacturer, part description, and finish code.
+- Extract ALL hardware sets/groups — do not skip any.
 - qty must be an integer. Use 1 if not stated.
-- Preserve finish codes exactly as written (e.g. 626, 628, 630, CA, C, 689, ANOD, PT).
+- Preserve catalog numbers and finish codes exactly as written.
 - If a note or special instruction applies to a set, put it in the notes field.
-- Items marked "By Others" — include them, put "By Others" in the description.
-- Do not include the door index table — only extract hardware set definitions.
+- Items marked "By Others" — include them, set description to "By Others".
+- Skip any door-index or door-to-set mapping tables at the start of the document — only extract the set/group definitions.
 - Return results in the JSON format defined by the response schema.`;
 
-const USER_PROMPT = 'Extract all hardware sets from this document. Return every set and every item.';
+const USER_PROMPT = 'Extract all hardware sets from this document. Return every set and every item within each set.';
 
 // ---------------------------------------------------------------------------
 // Debug file writer (DEV only)
@@ -171,12 +185,18 @@ function isValidSet(item: unknown): item is Record<string, unknown> {
 // Response parser
 // ---------------------------------------------------------------------------
 
-function parseResponse(raw: string): { sets: ExtractedHardwareSet[]; parseWarning?: string } {
+function parseResponse(raw: string, label = ''): { sets: ExtractedHardwareSet[]; parseWarning?: string } {
   let text = raw.trim();
+  const prefix = label ? `[hardwarePdf:parse${label}]` : '[hardwarePdf:parse]';
+
+  console.log(`${prefix} raw length=${raw.length} chars, first 200: ${raw.slice(0, 200).replace(/\n/g, '\\n')}`);
 
   // Strip markdown fences if model ignored the json_schema instruction
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) text = fenceMatch[1].trim();
+  if (fenceMatch) {
+    console.log(`${prefix} stripped markdown fence`);
+    text = fenceMatch[1].trim();
+  }
 
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -190,17 +210,21 @@ function parseResponse(raw: string): { sets: ExtractedHardwareSet[]; parseWarnin
       const sets = ((parsed as Record<string, unknown>).sets as unknown[])
         .filter(isValidSet)
         .map(normalizeSet);
+      console.log(`${prefix} parsed OK — ${sets.length} sets`);
       return { sets };
     }
 
     // Fallback: model returned a bare array
     if (Array.isArray(parsed)) {
       const sets = (parsed as unknown[]).filter(isValidSet).map(normalizeSet);
+      console.log(`${prefix} bare array fallback — ${sets.length} sets`);
       return { sets, parseWarning: 'Model returned bare array instead of { sets: [] } — still parsed.' };
     }
 
+    console.warn(`${prefix} unexpected structure — keys: ${Object.keys(parsed as object).join(', ')}`);
     return { sets: [], parseWarning: 'AI response was valid JSON but had unexpected structure.' };
-  } catch {
+  } catch (e) {
+    console.error(`${prefix} JSON.parse failed: ${e instanceof Error ? e.message : e}. First 500 chars: ${text.slice(0, 500)}`);
     return { sets: [], parseWarning: 'AI response was not valid JSON. No sets extracted.' };
   }
 }
@@ -315,6 +339,8 @@ async function tier1Extract(
   const base64Pdf = buffer.toString('base64');
   const warnings: string[] = [];
 
+  console.log(`[hardwarePdf:t1] Sending full PDF (${(buffer.length / 1024).toFixed(0)} KB base64) to ${MODEL}…`);
+
   const raw = await callOpenRouterForSets(client, [
     { role: 'system', content: SYSTEM_PROMPT },
     {
@@ -329,7 +355,9 @@ async function tier1Extract(
     },
   ]);
 
-  const { sets, parseWarning } = parseResponse(raw);
+  console.log(`[hardwarePdf:t1] Response received — ${raw.length} chars`);
+
+  const { sets, parseWarning } = parseResponse(raw, ':t1');
   if (parseWarning) warnings.push(parseWarning);
 
   return { raw, sets, warnings };
@@ -348,7 +376,12 @@ async function tier2Extract(
   warnings.push('Tier 1 failed or file too large — using Tier 2 (server-side text extraction).');
 
   // Extract text server-side with position-aware row reconstruction
-  const { pages, pageCount } = await extractPdfText(buffer);
+  console.log('[hardwarePdf:t2] Starting pdfjs text extraction…');
+  const { pages, pageCount } = await extractPdfText(buffer, (cur, total) => {
+    if (cur === 1 || cur % 5 === 0 || cur === total) {
+      console.log(`[hardwarePdf:t2] Extracting text — page ${cur}/${total}`);
+    }
+  });
   const totalTextChars = pages.reduce((sum, p) => sum + p.text.length, 0);
 
   if (totalTextChars < 100) {
@@ -360,9 +393,13 @@ async function tier2Extract(
 
   const batches = batchPages(pages, TIER2_BATCH_SIZE);
 
+  console.log(`[hardwarePdf:t2] Splitting ${pageCount} pages into ${batches.length} batches of ${TIER2_BATCH_SIZE} — model: ${MODEL}`);
+
   // Build parallel tasks — one AI call per batch
   const tasks = batches.map((batch, idx) => async (): Promise<ExtractedHardwareSet[]> => {
     if (!batch.text.trim()) return [];
+
+    console.log(`[hardwarePdf:t2] → Batch ${idx + 1}/${batches.length}: pages ${batch.startPage}–${batch.endPage} — sending to ${MODEL}…`);
 
     const batchPrompt =
       `Pages ${batch.startPage}–${batch.endPage} of ${pageCount}:\n\n${batch.text}`;
@@ -371,6 +408,8 @@ async function tier2Extract(
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${USER_PROMPT}\n\n${batchPrompt}` },
     ]);
+
+    console.log(`[hardwarePdf:t2] ✓ Batch ${idx + 1}/${batches.length} done (pages ${batch.startPage}–${batch.endPage}) — response length: ${raw.length} chars`);
 
     // Save per-batch debug file
     if (process.env.NODE_ENV === 'development') {
@@ -386,7 +425,7 @@ async function tier2Extract(
       } catch { /* non-critical */ }
     }
 
-    const { sets, parseWarning } = parseResponse(raw);
+    const { sets, parseWarning } = parseResponse(raw, `:t2-b${idx + 1}`);
     if (parseWarning) warnings.push(`Batch ${idx + 1}: ${parseWarning}`);
     return sets;
   });

@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
 import { upsertHardwarePdfExtraction, getHardwarePdfExtraction } from '@/lib/db/hardware';
+import { queueItemsForApproval } from '@/lib/db/masterHardware';
 
 export const GET = withAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
@@ -83,10 +84,58 @@ export const POST = withAuth(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // Queue new unique items into the master hardware pending table.
+    // Must be awaited — serverless functions terminate once the response is sent,
+    // so fire-and-forget (.then()) would be silently dropped.
+    console.log(`[hw-pdf:master] Starting queue step — sets=${result.sets.length}  totalItems=${result.itemCount}`);
+
+    // Log the raw shape of the first set so we can verify field names
+    if (result.sets.length > 0) {
+      const firstSet = result.sets[0];
+      console.log('[hw-pdf:master] First set sample:', JSON.stringify({
+        setName: firstSet.setName,
+        itemCount: firstSet.hardwareItems?.length ?? 0,
+        firstItem: firstSet.hardwareItems?.[0] ?? null,
+      }));
+    }
+
+    const candidateItems = result.sets
+      .flatMap(set =>
+        (set.hardwareItems ?? []).map(item => ({
+          name: (item.item ?? '').trim(),
+          manufacturer: (item.manufacturer ?? '').trim(),
+          description: (item.description ?? '').trim(),
+          finish: (item.finish ?? '').trim(),
+        })),
+      )
+      .filter(item => item.name.length > 0); // skip blank item names
+
+    console.log(`[hw-pdf:master] Candidates after flattening and filtering blanks: ${candidateItems.length}`);
+
+    let queuedCount = 0;
+    let skippedCount = 0;
+    if (candidateItems.length > 0) {
+      const queueResult = await queueItemsForApproval(
+        candidateItems,
+        projectId,
+        filename,
+        ctx.user.id,
+      );
+      if (queueResult.data) {
+        queuedCount = queueResult.data.queued;
+        skippedCount = queueResult.data.skipped;
+      } else {
+        console.error('[hw-pdf:master] queueItemsForApproval returned error:', queueResult.error?.message);
+      }
+    } else {
+      console.warn('[hw-pdf:master] candidateItems is empty — nothing queued. Check that hardwareItems[].item field is non-blank.');
+    }
+
     console.log(
       `[hardware-pdf] Saved → project=${projectId}  file="${filename}"  ` +
       `sets=${result.setCount}  items=${result.itemCount}  tier=${result.tier}  ` +
-      `db_id=${data!.id}  duration=${result.durationMs}ms`,
+      `db_id=${data!.id}  duration=${result.durationMs}ms  ` +
+      `master-queued=${queuedCount}  master-skipped=${skippedCount}`,
     );
 
     return NextResponse.json({
@@ -97,6 +146,8 @@ export const POST = withAuth(
         durationMs: result.durationMs,
         tier: result.tier,
         warnings: result.warnings,
+        masterQueued: queuedCount,
+        masterSkipped: skippedCount,
       },
     });
   },

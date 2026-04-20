@@ -36,7 +36,7 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
 
     const handleDoorScheduleExport = (config: DoorScheduleExportConfig) => {
         try {
-            exportDoorSchedule(doors, config, projectName);
+            exportDoorSchedule(doors, config, projectName, elevationTypes);
         } catch (error) {
             console.error('Export failed:', error);
             alert('Export failed. Please try again.');
@@ -102,6 +102,7 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
                     {currentView === 'door-schedule' && (
                         <DoorScheduleConfig
                             doors={doors}
+                            elevationTypes={elevationTypes}
                             projectName={projectName}
                             onBack={() => setCurrentView('selector')}
                             onExport={handleDoorScheduleExport}
