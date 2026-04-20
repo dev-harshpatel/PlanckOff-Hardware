@@ -294,50 +294,67 @@ export async function reviewPendingBatch(
 
   if (ids.length === 0) return { data: { processed: 0 }, error: null };
 
+  // PostgREST encodes .in() filters as URL params — large batches exceed the limit.
+  // Process in chunks of 100 to stay well under it.
+  const CHUNK_SIZE = 100;
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    chunks.push(ids.slice(i, i + CHUNK_SIZE));
+  }
+
   try {
     const db = createSupabaseAdminClient();
     const status = action === 'approve' ? 'approved' : 'rejected';
+    const reviewedAt = new Date().toISOString();
 
-    const { data: updated, error: updateError } = await db
-      .from('master_hardware_pending')
-      .update({
-        status,
-        reviewed_by: reviewedBy,
-        reviewed_at: new Date().toISOString(),
-      })
-      .in('id', ids)
-      .eq('status', 'pending')
-      .select();
+    const allUpdated: Record<string, unknown>[] = [];
 
-    if (updateError) {
-      console.error('[master-hw:review] UPDATE ERROR:', updateError.message, '| code:', updateError.code);
-      return { data: null, error: { message: updateError.message } };
-    }
+    for (const chunk of chunks) {
+      const { data: updated, error: updateError } = await db
+        .from('master_hardware_pending')
+        .update({ status, reviewed_by: reviewedBy, reviewed_at: reviewedAt })
+        .in('id', chunk)
+        .eq('status', 'pending')
+        .select();
 
-    console.log(`[master-hw:review] Updated ${updated?.length ?? 0} pending rows to status="${status}"`);
-
-    if (action === 'approve' && updated && updated.length > 0) {
-      console.log(`[master-hw:review] Inserting ${updated.length} rows into master_hardware_items...`);
-      const { error: insertError } = await db.from('master_hardware_items').insert(
-        updated.map(row => ({
-          name: row.name,
-          manufacturer: row.manufacturer,
-          description: row.description,
-          finish: row.finish,
-          model_number: row.model_number,
-          source_project_id: row.source_project_id,
-          source_file_name: row.source_file_name,
-          created_by: reviewedBy,
-        })),
-      );
-      if (insertError) {
-        console.error('[master-hw:review] INSERT INTO master_hardware_items ERROR:', insertError.message, '| code:', insertError.code, '| hint:', insertError.hint);
-        return { data: null, error: { message: insertError.message } };
+      if (updateError) {
+        console.error('[master-hw:review] UPDATE ERROR:', updateError.message, '| code:', updateError.code);
+        return { data: null, error: { message: updateError.message } };
       }
-      console.log(`[master-hw:review] SUCCESS — ${updated.length} items moved to master_hardware_items.`);
+
+      if (updated) allUpdated.push(...updated);
     }
 
-    return { data: { processed: updated?.length ?? 0 }, error: null };
+    console.log(`[master-hw:review] Updated ${allUpdated.length} pending rows to status="${status}"`);
+
+    if (action === 'approve' && allUpdated.length > 0) {
+      console.log(`[master-hw:review] Inserting ${allUpdated.length} rows into master_hardware_items...`);
+
+      // Also insert in chunks to avoid body-size limits
+      for (let i = 0; i < allUpdated.length; i += CHUNK_SIZE) {
+        const insertChunk = allUpdated.slice(i, i + CHUNK_SIZE);
+        const { error: insertError } = await db.from('master_hardware_items').insert(
+          insertChunk.map(row => ({
+            name: row.name,
+            manufacturer: row.manufacturer,
+            description: row.description,
+            finish: row.finish,
+            model_number: row.model_number,
+            source_project_id: row.source_project_id,
+            source_file_name: row.source_file_name,
+            created_by: reviewedBy,
+          })),
+        );
+        if (insertError) {
+          console.error('[master-hw:review] INSERT INTO master_hardware_items ERROR:', insertError.message, '| code:', insertError.code, '| hint:', insertError.hint);
+          return { data: null, error: { message: insertError.message } };
+        }
+      }
+
+      console.log(`[master-hw:review] SUCCESS — ${allUpdated.length} items moved to master_hardware_items.`);
+    }
+
+    return { data: { processed: allUpdated.length }, error: null };
   } catch (err) {
     console.error('[master-hw:review] UNEXPECTED EXCEPTION:', err);
     return { data: null, error: { message: String(err) } };
