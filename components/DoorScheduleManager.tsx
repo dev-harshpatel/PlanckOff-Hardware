@@ -87,6 +87,12 @@ interface CustomColumn {
     type: 'text' | 'number';
 }
 
+interface PersistedColumnPrefs {
+    visibleColumns: string[];
+    columnOrder: string[];
+    customColumns: CustomColumn[];
+}
+
 
 interface DoorScheduleManagerProps {
     doors: Door[];
@@ -104,6 +110,7 @@ interface DoorScheduleManagerProps {
     activeTask?: ActiveUploadTask;
     onCancelTask?: () => void;
     canReupload?: boolean;
+    onDeleteDoors?: (doorIds: string[]) => void;
 }
 
 type StatusFilter = 'all' | 'pending' | 'complete' | 'error';
@@ -148,6 +155,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     activeTask,
     onCancelTask,
     canReupload = true,
+    onDeleteDoors,
 }) => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [doorMaterialFilter, setDoorMaterialFilter] = useState<string>('all');
@@ -176,6 +184,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false);
     const [newColumnName, setNewColumnName] = useState('');
     const [newColumnType, setNewColumnType] = useState<'text' | 'number'>('text');
+    const [columnPrefsLoaded, setColumnPrefsLoaded] = useState(false);
 
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -206,6 +215,72 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             inputRef.current.focus();
         }
     }, [editingCell]);
+
+    useEffect(() => {
+        const defaultVisible = ALL_AVAILABLE_COLUMNS.filter(c => c.isCore).map(c => c.key);
+        const defaultOrder = ALL_AVAILABLE_COLUMNS.map(c => c.key);
+
+        if (typeof window === 'undefined') {
+            setVisibleColumns(new Set(defaultVisible));
+            setColumnOrder(defaultOrder);
+            setCustomColumns([]);
+            setColumnPrefsLoaded(true);
+            return;
+        }
+
+        const storageKey = `planckoff-door-columns-${projectId}`;
+
+        try {
+            const raw = window.localStorage.getItem(storageKey);
+            if (!raw) {
+                setVisibleColumns(new Set(defaultVisible));
+                setColumnOrder(defaultOrder);
+                setCustomColumns([]);
+                setColumnPrefsLoaded(true);
+                return;
+            }
+
+            const parsed = JSON.parse(raw) as Partial<PersistedColumnPrefs>;
+            const parsedCustomColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns : [];
+            const allowedKeys = new Set([
+                ...ALL_AVAILABLE_COLUMNS.map(c => c.key),
+                ...parsedCustomColumns.map(c => c.id),
+            ]);
+
+            const parsedVisible = Array.isArray(parsed.visibleColumns)
+                ? parsed.visibleColumns.filter((key): key is string => typeof key === 'string' && allowedKeys.has(key))
+                : defaultVisible;
+
+            const parsedOrder = Array.isArray(parsed.columnOrder)
+                ? parsed.columnOrder.filter((key): key is string => typeof key === 'string' && ALL_AVAILABLE_COLUMNS.some(c => c.key === key))
+                : defaultOrder;
+
+            const missingStandardKeys = defaultOrder.filter(key => !parsedOrder.includes(key));
+
+            setCustomColumns(parsedCustomColumns);
+            setVisibleColumns(new Set(parsedVisible.length > 0 ? parsedVisible : defaultVisible));
+            setColumnOrder([...parsedOrder, ...missingStandardKeys]);
+        } catch {
+            setVisibleColumns(new Set(defaultVisible));
+            setColumnOrder(defaultOrder);
+            setCustomColumns([]);
+        } finally {
+            setColumnPrefsLoaded(true);
+        }
+    }, [projectId]);
+
+    useEffect(() => {
+        if (!columnPrefsLoaded || typeof window === 'undefined') return;
+
+        const storageKey = `planckoff-door-columns-${projectId}`;
+        const payload: PersistedColumnPrefs = {
+            visibleColumns: Array.from(visibleColumns),
+            columnOrder,
+            customColumns,
+        };
+
+        window.localStorage.setItem(storageKey, JSON.stringify(payload));
+    }, [projectId, visibleColumns, columnOrder, customColumns, columnPrefsLoaded]);
 
     // Close filter menu on outside click
     useEffect(() => {
@@ -409,23 +484,25 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
     const handleDeleteSelected = () => {
         if (selectedRows.size === 0) return;
-
-        if (window.confirm(`Are you sure you want to delete ${selectedRows.size} selected doors?`)) {
+        const ids = Array.from(selectedRows);
+        if (onDeleteDoors) {
+            onDeleteDoors(ids);
+        } else {
             onDoorsUpdate(prev => prev.filter(d => !selectedRows.has(d.id)));
-            setSelectedRows(new Set());
-            addToast({ type: 'success', message: `Deleted ${selectedRows.size} doors.` });
         }
+        setSelectedRows(new Set());
     };
 
     const handleDeleteRow = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this door?')) {
+        if (onDeleteDoors) {
+            onDeleteDoors([id]);
+        } else {
             onDoorsUpdate(prev => prev.filter(d => d.id !== id));
-            if (selectedRows.has(id)) {
-                const newSelected = new Set(selectedRows);
-                newSelected.delete(id);
-                setSelectedRows(newSelected);
-            }
-            addToast({ type: 'success', message: 'Door deleted.' });
+        }
+        if (selectedRows.has(id)) {
+            const newSelected = new Set(selectedRows);
+            newSelected.delete(id);
+            setSelectedRows(newSelected);
         }
     };
 

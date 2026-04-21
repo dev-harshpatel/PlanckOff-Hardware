@@ -24,6 +24,7 @@ import {
     Search,
     Filter,
     Plus,
+    Pencil,
     Trash2,
     UserPlus,
     Calendar,
@@ -79,10 +80,11 @@ const ProjectCard: React.FC<{
     project: Project;
     onSelect: () => void;
     onSave: (p: Project) => Promise<void> | void;
+    onEdit: (project: Project) => void;
     onDelete: (id: string) => void;
     userRole: RoleName;
     teamMembers: TeamMember[];
-}> = ({ project, onSelect, onSave, onDelete, userRole, teamMembers }) => {
+}> = ({ project, onSelect, onSave, onEdit, onDelete, userRole, teamMembers }) => {
     const [showAssignMenu, setShowAssignMenu] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -91,6 +93,7 @@ const ProjectCard: React.FC<{
 
     const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
     const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
+    const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
 
@@ -140,40 +143,15 @@ const ProjectCard: React.FC<{
                         )}
                     </div>
                     {/* Hover actions */}
-                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" ref={assignMenuRef}>
-                        {canAssign && (
-                            <div className="relative">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
-                                    disabled={isAssigning}
-                                    title="Assign"
-                                    className={`p-1 rounded text-[var(--text-faint)] hover:text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)]' : ''}`}
-                                >
-                                    <UserPlus className="w-3.5 h-3.5" />
-                                </button>
-                                {showAssignMenu && (
-                                    <div className="absolute right-0 mt-1 w-52 bg-[var(--bg)] rounded-md shadow-lg z-50 border border-[var(--border)] py-1" onClick={(e) => e.stopPropagation()}>
-                                        <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">Assign To</div>
-                                        {teamMembers.map(m => (
-                                            <button
-                                                key={m.id}
-                                                onClick={() => handleAssign(m.id)}
-                                                disabled={isAssigning}
-                                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${project.assignedTo === m.id ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] font-medium' : 'text-[var(--text-secondary)]'}`}
-                                            >
-                                                {m.name}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => handleAssign('')}
-                                            disabled={isAssigning}
-                                            className="block w-full text-left px-3 py-2 text-sm text-[var(--error-text)] hover:bg-[var(--error-bg)] border-t border-[var(--border-subtle)] disabled:opacity-50 transition-colors"
-                                        >
-                                            Unassign
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        {canEdit && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onEdit(project); }}
+                                className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] transition-colors"
+                                title="Edit"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                            </button>
                         )}
                         {canDelete && (
                             <button onClick={handleDeleteClick} className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors">
@@ -199,16 +177,53 @@ const ProjectCard: React.FC<{
 
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
-                    {assignedMember ? (
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                {assignedMember.name.charAt(0)}
+                    <div className="flex items-center gap-2 min-w-0" ref={assignMenuRef}>
+                        {assignedMember ? (
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                    {assignedMember.name.charAt(0)}
+                                </div>
+                                <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
                             </div>
-                            <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
-                        </div>
-                    ) : (
-                        <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
-                    )}
+                        ) : (
+                            <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
+                        )}
+                        {canAssign && (
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
+                                    disabled={isAssigning}
+                                    title="Assign"
+                                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
+                                >
+                                    <UserPlus className="w-3 h-3" />
+                                    Assign
+                                </button>
+                                {showAssignMenu && (
+                                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[var(--bg)] rounded-md shadow-lg z-50 border border-[var(--border)] py-1" onClick={(e) => e.stopPropagation()}>
+                                        <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">Assign To</div>
+                                        {teamMembers.map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => handleAssign(m.id)}
+                                                disabled={isAssigning}
+                                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${project.assignedTo === m.id ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] font-medium' : 'text-[var(--text-secondary)]'}`}
+                                            >
+                                                {m.name}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => handleAssign('')}
+                                            disabled={isAssigning}
+                                            className="block w-full text-left px-3 py-2 text-sm text-[var(--error-text)] hover:bg-[var(--error-bg)] border-t border-[var(--border-subtle)] disabled:opacity-50 transition-colors"
+                                        >
+                                            Unassign
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
                         {project.status || 'Active'}
@@ -250,7 +265,8 @@ const ProjectCard: React.FC<{
 
 const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isCreatingProject, setIsCreatingProject] = useState(false);
+    const [editingProject, setEditingProject] = useState<Project | null>(null);
+    const [isSavingProject, setIsSavingProject] = useState(false);
     const [isTrashOpen, setIsTrashOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('All Members');
@@ -281,17 +297,45 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
         ...teamMembers.map(m => ({ value: m.id, label: m.name })),
     ], [teamMembers]);
 
-    const handleSaveNewProject = async (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => {
-        setIsCreatingProject(true);
+    const handleSaveProject = async (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => {
+        setIsSavingProject(true);
         try {
-            await onAddNewProject(projectData, doorScheduleFile, hardwareSetFile);
+            if (editingProject) {
+                await onProjectUpdate({
+                    ...editingProject,
+                    name: projectData.name,
+                    description: projectData.description,
+                    client: projectData.client ?? '',
+                    location: projectData.location ?? '',
+                    country: projectData.country,
+                    province: projectData.province,
+                    dueDate: projectData.dueDate,
+                    status: projectData.status,
+                    projectNumber: projectData.projectNumber,
+                    assignedTo: projectData.assignedTo,
+                });
+                addToast({ type: 'success', message: `Project "${projectData.name}" updated.` });
+            } else {
+                await onAddNewProject(projectData, doorScheduleFile, hardwareSetFile);
+            }
             setIsModalOpen(false);
+            setEditingProject(null);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-            addToast({ type: 'error', message: 'Project creation failed', details: message });
+            addToast({ type: 'error', message: editingProject ? 'Project update failed' : 'Project creation failed', details: message });
         } finally {
-            setIsCreatingProject(false);
+            setIsSavingProject(false);
         }
+    };
+
+    const handleOpenCreate = () => {
+        setEditingProject(null);
+        setIsModalOpen(true);
+    };
+
+    const handleOpenEdit = (project: Project) => {
+        setEditingProject(project);
+        setIsModalOpen(true);
     };
 
     const canCreate = userRole === 'Administrator' || userRole === 'Team Lead';
@@ -329,7 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                             {canCreate && (
                                 <Button
                                     size="sm"
-                                    onClick={() => setIsModalOpen(true)}
+                                    onClick={handleOpenCreate}
                                     className="gap-1.5"
                                 >
                                     <Plus className="w-4 h-4" />
@@ -418,6 +462,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                                     project={project}
                                                     onSelect={() => onSelectProject(project.id)}
                                                     onSave={onProjectUpdate}
+                                                    onEdit={handleOpenEdit}
                                                     onDelete={onDeleteProject}
                                                     userRole={userRole}
                                                     teamMembers={teamMembers}
@@ -438,11 +483,12 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
             <NewProjectModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSave={handleSaveNewProject}
-                isLoading={isCreatingProject}
+                onClose={() => { setIsModalOpen(false); setEditingProject(null); }}
+                onSave={handleSaveProject}
+                isLoading={isSavingProject}
                 addToast={addToast}
                 teamMembers={teamMembers}
+                projectToEdit={editingProject}
             />
 
             <TrashBin

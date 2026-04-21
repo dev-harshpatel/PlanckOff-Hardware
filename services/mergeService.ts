@@ -91,11 +91,12 @@ function matchSetName(
 // Door row → MergedDoor
 // ---------------------------------------------------------------------------
 
-function toMergedDoor(row: DoorScheduleRow, matchedSetName: string): MergedDoor {
+function toMergedDoor(row: DoorScheduleRow, matchedSetName: string, scheduleOrder: number): MergedDoor {
   return {
     doorTag: row.doorTag,
     hwSet: row.hwSet,
     matchedSetName,
+    scheduleOrder,
     buildingArea: row.buildingArea,
     doorLocation: row.doorLocation,
     interiorExterior: row.interiorExterior,
@@ -206,7 +207,7 @@ export function mergeHardwareData(
   const unmatchedDoorCodes = new Set<string>();
   let matchedDoorCount = 0;
 
-  for (const row of doorRows) {
+  for (const [scheduleOrder, row] of doorRows.entries()) {
     const hwSet = row.hwSet?.trim();
 
     // Skip rows with no hwSet or NOTE# placeholders
@@ -217,7 +218,7 @@ export function mergeHardwareData(
     const match = matchSetName(hwSet, setIndex, prefixIndex);
 
     if (match) {
-      const mergedDoor = toMergedDoor(row, match.setName);
+      const mergedDoor = toMergedDoor(row, match.setName, scheduleOrder);
       doorsBySet.get(match.setName)!.push(mergedDoor);
       matchedDoorCount++;
 
@@ -232,12 +233,22 @@ export function mergeHardwareData(
   }
 
   // Build the final merged array — one entry per PDF set
-  const sets: MergedHardwareSet[] = pdfSets.map((pdfSet) => ({
-    setName: pdfSet.setName,
-    hardwareItems: pdfSet.hardwareItems,
-    notes: pdfSet.notes ?? '',
-    doors: doorsBySet.get(pdfSet.setName) ?? [],
-  }));
+  const sets: MergedHardwareSet[] = pdfSets.map((pdfSet) => {
+    const assignedDoors = doorsBySet.get(pdfSet.setName) ?? [];
+    const doorCount = assignedDoors.reduce((sum, d) => {
+      const qty = parseInt(d.sections?.door?.['QUANTITY'] ?? String(d.quantity ?? 1)) || 1;
+      return sum + qty;
+    }, 0);
+    return {
+      setName: pdfSet.setName,
+      hardwareItems: pdfSet.hardwareItems.map((item) => ({
+        ...item,
+        multipliedQuantity: item.qty * doorCount,
+      })),
+      notes: pdfSet.notes ?? '',
+      doors: assignedDoors,
+    };
+  });
 
   // PDF sets with no matching doors
   const pdfSetsWithNoDoors = sets

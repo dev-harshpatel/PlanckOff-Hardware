@@ -19,7 +19,7 @@ import {
   updateProjectHardwareFinal,
   getProjectHardwareFinal,
 } from '@/lib/db/hardware';
-import type { MergedHardwareSet } from '@/lib/db/hardware';
+import type { MergedHardwareSet, TrashItem } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 
 export const GET = withAuth(
@@ -27,7 +27,15 @@ export const GET = withAuth(
     const projectId = params?.id as string;
     const { data, error } = await getProjectHardwareFinal(projectId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ data });
+    // Expose both finalJson and trashJson so the client can restore the trash state
+    return NextResponse.json({
+      data: data ? {
+        finalJson: data.finalJson,
+        trashJson: data.trashJson ?? [],
+        id: data.id,
+        updatedAt: data.updatedAt,
+      } : null,
+    });
   },
 );
 
@@ -104,9 +112,9 @@ export const PUT = withAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
-    let body: { finalJson: MergedHardwareSet[] };
+    let body: { finalJson: MergedHardwareSet[]; trashJson?: TrashItem[] };
     try {
-      body = await req.json() as { finalJson: MergedHardwareSet[] };
+      body = await req.json() as { finalJson: MergedHardwareSet[]; trashJson?: TrashItem[] };
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
     }
@@ -115,7 +123,7 @@ export const PUT = withAuth(
       return NextResponse.json({ error: 'Body must contain a "finalJson" array.' }, { status: 400 });
     }
 
-    const { data, error } = await updateProjectHardwareFinal(projectId, body.finalJson);
+    const { data, error } = await updateProjectHardwareFinal(projectId, body.finalJson, body.trashJson);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({

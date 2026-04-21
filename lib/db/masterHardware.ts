@@ -219,12 +219,12 @@ export async function queueItemsForApproval(
     const db = createSupabaseAdminClient();
     console.log('[master-hw:queue] Supabase admin client created.');
 
-    // Fetch existing keys from both tables in parallel
+    // Fetch existing keys from both tables in parallel.
+    // master_hardware_pending is checked across ALL statuses (not just 'pending') so
+    // approved and rejected items from previous runs are also treated as duplicates.
     const [masterRes, pendingRes] = await Promise.all([
       db.from('master_hardware_items').select('name,manufacturer,description,finish'),
-      db.from('master_hardware_pending')
-        .select('name,manufacturer,description,finish')
-        .eq('status', 'pending'),
+      db.from('master_hardware_pending').select('name,manufacturer,description,finish'),
     ]);
 
     if (masterRes.error) {

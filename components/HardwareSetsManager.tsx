@@ -552,7 +552,8 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                             <thead className="bg-[var(--bg-subtle)] border-b border-[var(--border)]">
                                                                                 <tr>
                                                                                     <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide w-12">Qty</th>
-                                                                                    <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Item / Manufacturer</th>
+                                                                                    <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Item</th>
+                                                                                    <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Manufacturer</th>
                                                                                     <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Description</th>
                                                                                     <th className="px-3 py-2 text-right font-semibold text-[var(--text-muted)] uppercase tracking-wide">Finish</th>
                                                                                 </tr>
@@ -565,7 +566,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                         </td>
                                                                                         <td className="px-3 py-2">
                                                                                             <span className="font-medium text-[var(--text)] block">{item.name}</span>
-                                                                                            <span className="text-[var(--text-faint)]">{item.manufacturer}</span>
+                                                                                        </td>
+                                                                                        <td className="px-3 py-2 text-[var(--text-faint)]">
+                                                                                            {item.manufacturer || '—'}
                                                                                         </td>
                                                                                         <td className="px-3 py-2 text-[var(--text-muted)]">{item.description}</td>
                                                                                         <td className="px-3 py-2 text-right">
@@ -609,6 +612,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                             />
                                                                                         </th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Tag</th>
+                                                                                        <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Door Location</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Rating</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">W × H</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Thk</th>
@@ -631,6 +635,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                                     <input type="checkbox" className="rounded" checked={isSelected} onChange={() => handleToggleDoorSelection(set.id, door.id)} />
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2 font-medium text-[var(--text)]">{door.doorTag}</td>
+                                                                                                <td className="px-3 py-2 text-[var(--text-muted)]">
+                                                                                                    {door.location || '—'}
+                                                                                                </td>
                                                                                                 <td className={`px-3 py-2 ${getCellClass(conflicts.fireRating)}`} title={conflicts.fireRating}>
                                                                                                     {door.fireRating}{conflicts.fireRating && renderConflictIcon(conflicts.fireRating, conflicts.fireRating.includes('CRITICAL'))}
                                                                                                 </td>

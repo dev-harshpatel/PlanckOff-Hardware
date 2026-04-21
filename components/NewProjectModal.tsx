@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ProjectStatus, NewProjectData, Toast, TeamMember } from '../types';
+import { ProjectStatus, NewProjectData, Toast, TeamMember, Project } from '../types';
 import {
   BuildingOffice2Icon,
   CalendarDaysIcon,
@@ -36,6 +36,7 @@ interface NewProjectModalProps {
   isLoading: boolean;
   addToast: (toast: Omit<Toast, 'id'>) => void;
   teamMembers?: TeamMember[];
+  projectToEdit?: Project | null;
 }
 
 const LoadingSpinner: React.FC = () => (
@@ -45,7 +46,7 @@ const LoadingSpinner: React.FC = () => (
   </svg>
 );
 
-const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave, isLoading, addToast, teamMembers = [] }) => {
+const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave, isLoading, addToast, teamMembers = [], projectToEdit = null }) => {
   const [projectData, setProjectData] = useState<NewProjectData>({
     name: '',
     description: '',
@@ -59,24 +60,40 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     assignedTo: ''
   });
   const [locationOptions, setLocationOptions] = useState<CountryOption[]>(PROJECT_LOCATION_OPTIONS);
+  const isEditMode = projectToEdit !== null;
 
   useEffect(() => {
     if (isOpen) {
-      // Reset form when modal opens
-      setProjectData({
-        name: '',
-        description: '',
-        client: '',
-        location: '',
-        country: '',
-        province: '',
-        dueDate: '',
-        status: 'Active',
-        projectNumber: '',
-        assignedTo: teamMembers.length > 0 ? teamMembers[0].id : ''
-      });
+      if (projectToEdit) {
+        setProjectData({
+          name: projectToEdit.name ?? '',
+          description: projectToEdit.description ?? '',
+          client: projectToEdit.client ?? '',
+          location: projectToEdit.location ?? '',
+          country: projectToEdit.country ?? '',
+          province: projectToEdit.province ?? '',
+          dueDate: projectToEdit.dueDate ?? '',
+          status: projectToEdit.status ?? 'Active',
+          projectNumber: projectToEdit.projectNumber ?? '',
+          assignedTo: projectToEdit.assignedTo ?? '',
+        });
+      } else {
+        // Reset form when modal opens
+        setProjectData({
+          name: '',
+          description: '',
+          client: '',
+          location: '',
+          country: '',
+          province: '',
+          dueDate: '',
+          status: 'Active',
+          projectNumber: '',
+          assignedTo: teamMembers.length > 0 ? teamMembers[0].id : ''
+        });
+      }
     }
-  }, [isOpen, teamMembers]);
+  }, [isOpen, teamMembers, projectToEdit]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -155,9 +172,11 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isLoading) onClose(); }}>
       <DialogContent className="max-w-3xl overflow-hidden p-0">
         <DialogHeader className="border-b border-[var(--border-subtle)] px-6 py-5">
-          <DialogTitle className="text-xl">New Project</DialogTitle>
+          <DialogTitle className="text-xl">{isEditMode ? 'Edit Project' : 'New Project'}</DialogTitle>
           <DialogDescription>
-            Capture the core project details before moving into estimating.
+            {isEditMode
+              ? 'Update the project details, dates, assignment, and status.'
+              : 'Capture the core project details before moving into estimating.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -209,7 +228,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="country" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Project Location <span className="text-red-500">*</span>
+              Project Location <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -232,7 +251,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
             <div>
               <Label htmlFor="province" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Project Province <span className="text-red-500">*</span>
+              Project Province <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -279,7 +298,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
             <div>
               <Label htmlFor="dueDate" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Due Date <span className="text-red-500">*</span>
+              Due Date <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -302,7 +321,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           {teamMembers.length > 0 && (
             <div>
               <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Assign To <span className="text-red-500">*</span>
+              Assign To <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -366,7 +385,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             ) : (
               <>
                 <CheckIcon className="h-4 w-4" />
-                Create Project
+                {isEditMode ? 'Save Changes' : 'Create Project'}
               </>
             )}
           </Button>

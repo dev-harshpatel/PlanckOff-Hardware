@@ -67,6 +67,7 @@ function toHardwareItem(raw: ExtractedHardwareSet['hardwareItems'][number], setN
     id: `hs-${setName}-${idx}`,
     name: raw.item,
     quantity: raw.qty,
+    multipliedQuantity: raw.multipliedQuantity,
     manufacturer: raw.manufacturer,
     description: raw.description,
     finish: raw.finish,
@@ -190,7 +191,7 @@ export function transformFromFinalJson(
 
   const setsByName = new Map(hardwareSets.map((s) => [s.name.toLowerCase(), s]));
 
-  const doors: Door[] = [];
+  const doorsWithOrder: Array<{ door: Door; order: number }> = [];
 
   for (const set of finalJson) {
     const assignedSet = setsByName.get(set.setName.toLowerCase()) ?? null;
@@ -284,9 +285,13 @@ export function transformFromFinalJson(
         hardwarePrep: door.hardwarePrep,
       };
 
-      doors.push(builtDoor);
+      doorsWithOrder.push({ door: builtDoor, order: door.scheduleOrder ?? Infinity });
     }
   }
+
+  // Restore the original door schedule row order across all sets
+  doorsWithOrder.sort((a, b) => a.order - b.order);
+  const doors = doorsWithOrder.map((d) => d.door);
 
   return { hardwareSets, doors };
 }

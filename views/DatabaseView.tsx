@@ -20,7 +20,7 @@ import type { MasterHardwareItem, MasterHardwarePending } from '@/lib/db/masterH
 import { MasterItemFormModal } from '../components/MasterItemFormModal';
 import { PendingReviewModal } from '../components/PendingReviewModal';
 
-type SortKey = keyof Pick<MasterHardwareItem, 'name' | 'manufacturer' | 'description' | 'finish' | 'modelNumber'>;
+type SortKey = keyof Pick<MasterHardwareItem, 'name' | 'manufacturer' | 'description' | 'finish'>;
 type SortDir = 'asc' | 'desc';
 
 interface DatabaseViewProps {
@@ -82,8 +82,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
         i.name.toLowerCase().includes(q) ||
         i.manufacturer.toLowerCase().includes(q) ||
         i.description.toLowerCase().includes(q) ||
-        i.finish.toLowerCase().includes(q) ||
-        i.modelNumber.toLowerCase().includes(q),
+        i.finish.toLowerCase().includes(q),
       );
     }
     result.sort((a, b) => {
@@ -105,7 +104,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
 
   // --- CSV export ---
   const handleExportCSV = () => {
-    const cols: (keyof MasterHardwareItem)[] = ['name', 'manufacturer', 'description', 'finish', 'modelNumber'];
+    const cols: (keyof MasterHardwareItem)[] = ['name', 'manufacturer', 'description', 'finish'];
     const header = cols.join(',');
     const rows = items.map(i =>
       cols.map(c => `"${String(i[c] ?? '').replace(/"/g, '""')}"`).join(','),
@@ -335,7 +334,6 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
                     {th('Manufacturer', 'manufacturer')}
                     {th('Description', 'description')}
                     {th('Finish', 'finish')}
-                    {th('Model No.', 'modelNumber')}
                     {canEdit && (
                       <th scope="col" className="px-4 py-2.5 text-center w-20 border-b border-[var(--primary-border)]">
                         <span className="text-[10px] font-semibold text-[var(--primary-text)] uppercase tracking-wider">Actions</span>
@@ -361,12 +359,9 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
                           : <span className="text-[var(--text-faint)] italic text-xs">—</span>
                         }
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)] align-middle text-xs font-mono">
-                        {item.modelNumber || <span className="text-[var(--text-faint)] italic">—</span>}
-                      </td>
                       {canEdit && (
                         <td className="px-4 py-2.5 align-middle">
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={() => handleOpenEdit(item)}
                               className="p-1.5 rounded-md text-[var(--text-faint)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg)] transition-colors"
@@ -393,7 +388,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
 
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={canEdit ? 6 : 5} className="text-center py-16 text-[var(--text-faint)]">
+                      <td colSpan={canEdit ? 5 : 4} className="text-center py-16 text-[var(--text-faint)]">
                         <Database className="w-8 h-8 mx-auto mb-2 opacity-30" />
                         <p className="text-sm">
                           {searchQuery

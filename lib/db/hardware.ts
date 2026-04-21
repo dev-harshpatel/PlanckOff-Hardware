@@ -10,6 +10,7 @@ export interface HardwareItem {
   manufacturer: string;
   description: string;
   finish: string;
+  multipliedQuantity?: number; // qty × number of doors assigned to this set
 }
 
 export interface ExtractedHardwareSet {
@@ -150,6 +151,7 @@ export interface MergedDoor {
   hasDoorCloser?: boolean;
   comments?: string;
   excludeReason?: string;
+  scheduleOrder?: number; // original row index in the uploaded door schedule
   sections?: {
     door: Record<string, string | undefined>;
     frame: Record<string, string | undefined>;
@@ -165,10 +167,21 @@ export interface MergedHardwareSet {
   doors: MergedDoor[];
 }
 
+/** A deleted hardware set or standalone door held in trash_json until restored or purged. */
+export interface TrashItem {
+  id: string;           // stable UUID for this trash entry
+  type: 'set' | 'door';
+  setData?: MergedHardwareSet;  // present when type = 'set'
+  doorData?: MergedDoor;        // present when type = 'door'
+  setName: string;      // display label (set name, or door tag for standalone doors)
+  deletedAt: string;    // ISO timestamp
+}
+
 export interface ProjectHardwareFinal {
   id: string;
   projectId: string;
   finalJson: MergedHardwareSet[];
+  trashJson: TrashItem[];
   pdfExtractionId: string | null;
   doorScheduleId: string | null;
   generatedBy: string | null;
@@ -320,6 +333,7 @@ function toProjectHardwareFinal(row: any): ProjectHardwareFinal {
     id: row.id,
     projectId: row.project_id,
     finalJson: row.final_json ?? [],
+    trashJson: row.trash_json ?? [],
     pdfExtractionId: row.pdf_extraction_id,
     doorScheduleId: row.door_schedule_id,
     generatedBy: row.generated_by,
@@ -368,12 +382,16 @@ export async function upsertProjectHardwareFinal(
 export async function updateProjectHardwareFinal(
   projectId: string,
   finalJson: MergedHardwareSet[],
+  trashJson?: TrashItem[],
 ): Promise<DbResult<ProjectHardwareFinal>> {
   try {
     const db = createSupabaseAdminClient();
+    const patch: Record<string, unknown> = { final_json: finalJson };
+    if (trashJson !== undefined) patch.trash_json = trashJson;
+
     const { data, error } = await db
       .from('project_hardware_finals')
-      .update({ final_json: finalJson })
+      .update(patch)
       .eq('project_id', projectId)
       .select()
       .single();

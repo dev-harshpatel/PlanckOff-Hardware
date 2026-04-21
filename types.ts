@@ -53,6 +53,7 @@ export interface HardwareItem {
   id: string;
   name: string;
   quantity: number;
+  multipliedQuantity?: number; // quantity × number of doors assigned to the set
   manufacturer: string;
   description: string;
   finish: string;

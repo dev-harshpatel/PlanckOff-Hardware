@@ -7,12 +7,14 @@ import HardwareSetsManager from '../components/HardwareSetsManager';
 import DoorScheduleManager from '../components/DoorScheduleManager';
 import { generateReport } from '../utils/reportGenerator';
 // process... imports removed from direct use, but types might be needed
-import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, ChevronUp, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Database } from 'lucide-react';
+import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, ChevronUp, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Database, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
 import { captureTrainingExample } from '../services/mlOpsService';
 import { transformHardwareSets, transformDoors, transformFromFinalJson } from '../utils/hardwareTransformers';
-import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
+import type { MergedHardwareSet, MergedDoor, TrashItem } from '@/lib/db/hardware';
+import UndoToast, { type UndoToastItem } from '../components/UndoToast';
+import HardwareTrashModal from '../components/HardwareTrashModal';
 import UploadConfirmationModal from '../components/UploadConfirmationModal';
 import { type ProcessingTask } from '../components/ProcessingIndicator';
 import ErrorModal from '../components/ErrorModal';
@@ -134,6 +136,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const [isElevationManagerOpen, setIsElevationManagerOpen] = useState(false);
     const isInitialMount = useRef(true);
 
+    // Trash state — deleted sets/doors held here; persisted to trash_json in DB
+    const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+    const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
+
+    // Undo toast queue — each pending delete gets an entry with a 6s countdown
+    const [undoToasts, setUndoToasts] = useState<UndoToastItem[]>([]);
+    // Block auto-save while any undo toast is still live
+    const hasPendingUndoRef = useRef(false);
+
     // Validation Report State
     const [validationReport, setValidationReport] = useState<ValidationReport<any> | null>(null);
     const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
@@ -174,9 +185,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         try {
             const res = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
             if (!res.ok) return false;
-            const json = await res.json() as { data?: { finalJson?: MergedHardwareSet[] } };
+            const json = await res.json() as { data?: { finalJson?: MergedHardwareSet[]; trashJson?: TrashItem[] } };
             const finalJson = json.data?.finalJson;
             if (!finalJson || finalJson.length === 0) return false;
+            if (Array.isArray(json.data?.trashJson)) setTrashItems(json.data!.trashJson);
             const { hardwareSets: hs, doors: ds } = transformFromFinalJson(finalJson);
             if (hs.length > 0) {
                 setHardwareSets(hs);
@@ -248,7 +260,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 // 1. Try the final JSON first (single source of truth)
                 const mergeRes = await fetch(`/api/projects/${project.id}/hardware-merge`, { credentials: 'include' });
                 if (!cancelled && mergeRes.ok) {
-                    const mergeJson = await mergeRes.json() as { data?: { finalJson?: MergedHardwareSet[] } };
+                    const mergeJson = await mergeRes.json() as { data?: { finalJson?: MergedHardwareSet[]; trashJson?: TrashItem[] } };
                     const finalJson = mergeJson.data?.finalJson;
                     if (finalJson && finalJson.length > 0) {
                         // Server finished while we were away — clear the flag
@@ -261,6 +273,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         if (ds.length > 0) {
                             setDoors(ds);
                             isInitialMount.current = true;
+                        }
+                        if (Array.isArray(mergeJson.data?.trashJson)) {
+                            setTrashItems(mergeJson.data!.trashJson);
                         }
                         return; // loaded from final JSON — no need for fallback
                     }
@@ -323,7 +338,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Convert current UI state back to MergedHardwareSet[] and PUT to final JSON
-    const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[]): Promise<void> => {
+    const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[], currentTrash?: TrashItem[]): Promise<void> => {
         try {
             const finalJson: MergedHardwareSet[] = currentSets.map((set): MergedHardwareSet => {
                 const matchedDoors = currentDoors.filter((d) => {
@@ -359,6 +374,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     sections: d.sections as unknown as MergedDoor['sections'],
                 }));
 
+                const doorCount = mergedDoors.reduce((sum, d) => {
+                    const qty = parseInt(d.sections?.door?.['QUANTITY'] ?? String(d.quantity ?? 1)) || 1;
+                    return sum + qty;
+                }, 0);
                 return {
                     setName: set.name,
                     hardwareItems: set.items.map((item) => ({
@@ -367,6 +386,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         manufacturer: item.manufacturer ?? '',
                         description: item.description ?? '',
                         finish: item.finish ?? '',
+                        multipliedQuantity: item.quantity * doorCount,
                     })),
                     notes: set.description ?? '',
                     doors: mergedDoors,
@@ -377,7 +397,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 method: 'PUT',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ finalJson }),
+                body: JSON.stringify({ finalJson, trashJson: currentTrash }),
             });
         } catch (err) {
             console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
@@ -385,6 +405,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     }, [project.id]);
 
     const performSave = useCallback(() => {
+        // Don't save while an undo toast is live — the data is still in flux
+        if (hasPendingUndoRef.current) return;
+
         setSaveStatus('saving');
         try {
             const updatedProject = { ...project, hardwareSets, doors, lastModified: new Date().toISOString().split('T')[0] };
@@ -399,7 +422,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             }
 
             // Persist edits back to the final JSON (fire-and-forget)
-            saveToFinalJson(hardwareSets, doors).catch(() => {/* already logged inside */});
+            saveToFinalJson(hardwareSets, doors, trashItems).catch(() => {/* already logged inside */});
 
             setSaveStatus('saved');
             setTimeout(() => {
@@ -409,7 +432,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             console.error("Auto-save failed:", e);
             setSaveStatus('error');
         }
-    }, [project, hardwareSets, doors, onProjectUpdate, saveToFinalJson]);
+    }, [project, hardwareSets, doors, trashItems, onProjectUpdate, saveToFinalJson]);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -423,7 +446,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             clearTimeout(handler);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hardwareSets, doors]);
+    }, [hardwareSets, doors, trashItems]);
 
     // Processing indicator tasks (bottom-right widget)
     const [processingTasks, setProcessingTasks] = useState<ProcessingTask[]>([]);
@@ -794,13 +817,222 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         }
     };
 
-    const handleDeleteSet = (setId: string) => {
-        setHardwareSets(current => current.filter(s => s.id !== setId));
-    };
+    // ── Undo-toast + trash helpers ────────────────────────────────────────────
 
-    const handleBulkDeleteSets = (setIds: Set<string>) => {
-        setHardwareSets(current => current.filter(s => !setIds.has(s.id)));
-    };
+    const pushUndoToast = useCallback((toast: UndoToastItem) => {
+        hasPendingUndoRef.current = true;
+        setUndoToasts(prev => [...prev, toast]);
+    }, []);
+
+    const dismissUndoToast = useCallback((id: string) => {
+        setUndoToasts(prev => {
+            const next = prev.filter(t => t.id !== id);
+            if (next.length === 0) hasPendingUndoRef.current = false;
+            return next;
+        });
+    }, []);
+
+    const buildTrashItemForSet = useCallback((set: HardwareSet, currentDoors: Door[]): TrashItem => {
+        const matchedDoors: MergedDoor[] = currentDoors
+            .filter(d => d.assignedHardwareSet?.id === set.id || d.providedHardwareSet?.toLowerCase() === set.name.toLowerCase())
+            .map(d => ({
+                doorTag: d.doorTag,
+                hwSet: d.providedHardwareSet ?? '',
+                matchedSetName: set.name,
+                doorLocation: d.location,
+                interiorExterior: d.interiorExterior,
+                quantity: d.quantity,
+                fireRating: d.fireRating,
+                leafCount: d.leafCount !== undefined ? String(d.leafCount) : undefined,
+                doorType: d.type,
+                doorWidth: d.width ? `${Math.floor(d.width / 12)}'-${d.width % 12}"` : undefined,
+                doorHeight: d.height ? `${Math.floor(d.height / 12)}'-${d.height % 12}"` : undefined,
+                thickness: d.thickness ? String(d.thickness) : undefined,
+                doorMaterial: d.doorMaterial,
+                frameMaterial: d.frameMaterial as string | undefined,
+                sections: d.sections as unknown as MergedDoor['sections'],
+            }));
+
+        return {
+            id: `trash-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: 'set',
+            setName: set.name,
+            deletedAt: new Date().toISOString(),
+            setData: {
+                setName: set.name,
+                notes: set.description ?? '',
+                hardwareItems: set.items.map(item => ({
+                    qty: item.quantity,
+                    item: item.name,
+                    manufacturer: item.manufacturer ?? '',
+                    description: item.description ?? '',
+                    finish: item.finish ?? '',
+                })),
+                doors: matchedDoors,
+            },
+        };
+    }, []);
+
+    const handleDeleteSet = useCallback((setId: string) => {
+        const setToDelete = hardwareSets.find(s => s.id === setId);
+        if (!setToDelete) return;
+
+        // Capture snapshot before removing
+        const trashItem = buildTrashItemForSet(setToDelete, doors);
+        const doorsToRemove = doors.filter(d =>
+            d.assignedHardwareSet?.id === setId ||
+            d.providedHardwareSet?.toLowerCase() === setToDelete.name.toLowerCase()
+        );
+
+        // Immediately hide from UI
+        setHardwareSets(prev => prev.filter(s => s.id !== setId));
+        setDoors(prev => prev.filter(d => !doorsToRemove.some(dr => dr.id === d.id)));
+
+        const label = `Set "${setToDelete.name}" deleted — moves to Trash in`;
+        pushUndoToast({
+            id: trashItem.id,
+            label,
+            onUndo: () => {
+                setHardwareSets(prev => {
+                    const idx = hardwareSets.findIndex(s => s.id === setId);
+                    const next = [...prev];
+                    next.splice(idx === -1 ? prev.length : idx, 0, setToDelete);
+                    return next;
+                });
+                setDoors(prev => {
+                    const sortedBack = [...prev, ...doorsToRemove].sort((a, b) => {
+                        const ao = (a as Door & { scheduleOrder?: number }).scheduleOrder ?? Infinity;
+                        const bo = (b as Door & { scheduleOrder?: number }).scheduleOrder ?? Infinity;
+                        return ao - bo;
+                    });
+                    return sortedBack;
+                });
+            },
+            onConfirm: () => {
+                setTrashItems(prev => [...prev, trashItem]);
+                // Trigger a save now that trash is updated
+                setTimeout(() => {
+                    hasPendingUndoRef.current = false;
+                    performSave();
+                }, 0);
+            },
+        });
+    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, performSave]);
+
+    const handleBulkDeleteSets = useCallback((setIds: Set<string>) => {
+        const setsToDelete = hardwareSets.filter(s => setIds.has(s.id));
+        if (setsToDelete.length === 0) return;
+
+        const trashEntries = setsToDelete.map(s => buildTrashItemForSet(s, doors));
+        const doorsToRemove = doors.filter(d =>
+            setsToDelete.some(s =>
+                d.assignedHardwareSet?.id === s.id ||
+                d.providedHardwareSet?.toLowerCase() === s.name.toLowerCase()
+            )
+        );
+
+        setHardwareSets(prev => prev.filter(s => !setIds.has(s.id)));
+        setDoors(prev => prev.filter(d => !doorsToRemove.some(dr => dr.id === d.id)));
+
+        const batchId = `trash-bulk-${Date.now()}`;
+        const label = `${setsToDelete.length} set${setsToDelete.length !== 1 ? 's' : ''} deleted — moves to Trash in`;
+        pushUndoToast({
+            id: batchId,
+            label,
+            onUndo: () => {
+                setHardwareSets(prev => [...prev, ...setsToDelete]);
+                setDoors(prev => [...prev, ...doorsToRemove]);
+            },
+            onConfirm: () => {
+                setTrashItems(prev => [...prev, ...trashEntries]);
+                setTimeout(() => {
+                    hasPendingUndoRef.current = false;
+                    performSave();
+                }, 0);
+            },
+        });
+    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, performSave]);
+
+    // ── Trash restore / permanent delete ─────────────────────────────────────
+
+    const handleRestoreFromTrash = useCallback((trashId: string) => {
+        const item = trashItems.find(t => t.id === trashId);
+        if (!item) return;
+
+        if (item.type === 'set' && item.setData) {
+            // Rebuild a HardwareSet from the stored MergedHardwareSet
+            const restoredSet: HardwareSet = {
+                id: `hs-restored-${Date.now()}`,
+                name: item.setData.setName,
+                description: item.setData.notes ?? '',
+                division: 'Division 08',
+                items: item.setData.hardwareItems.map((hi, idx) => ({
+                    id: `item-restored-${Date.now()}-${idx}`,
+                    name: hi.item,
+                    quantity: hi.qty,
+                    manufacturer: hi.manufacturer,
+                    description: hi.description,
+                    finish: hi.finish,
+                    unitCost: 0,
+                    totalCost: 0,
+                })),
+            };
+            setHardwareSets(prev => [...prev, restoredSet]);
+
+            // Restore matched doors, re-linked to the new set
+            if (item.setData.doors.length > 0) {
+                const restoredDoors: Door[] = item.setData.doors.map((md, idx) => ({
+                    id: `door-restored-${Date.now()}-${idx}`,
+                    doorTag: md.doorTag,
+                    status: 'complete' as const,
+                    assignedHardwareSet: restoredSet,
+                    providedHardwareSet: md.hwSet,
+                    location: md.doorLocation,
+                    interiorExterior: md.interiorExterior,
+                    quantity: md.quantity ?? 1,
+                    fireRating: md.fireRating,
+                    leafCount: md.leafCount !== undefined ? parseInt(md.leafCount, 10) : undefined,
+                    type: md.doorType,
+                    width: undefined,
+                    height: undefined,
+                    thickness: undefined,
+                    doorMaterial: md.doorMaterial ?? '',
+                    frameMaterial: md.frameMaterial as Door['frameMaterial'],
+                    sections: md.sections as unknown as Door['sections'],
+                }));
+                setDoors(prev => [...prev, ...restoredDoors]);
+            }
+        } else if (item.type === 'door' && item.doorData) {
+            const md = item.doorData;
+            const matchedSet = hardwareSets.find(s => s.name.toLowerCase() === md.matchedSetName.toLowerCase()) ?? null;
+            const restoredDoor: Door = {
+                id: `door-restored-${Date.now()}`,
+                doorTag: md.doorTag,
+                status: matchedSet ? 'complete' as const : 'pending' as const,
+                assignedHardwareSet: matchedSet ?? undefined,
+                providedHardwareSet: md.hwSet,
+                location: md.doorLocation,
+                quantity: md.quantity ?? 1,
+                width: undefined,
+                height: undefined,
+                thickness: undefined,
+                doorMaterial: '',
+                sections: md.sections as unknown as Door['sections'],
+            };
+            setDoors(prev => [...prev, restoredDoor]);
+        }
+
+        setTrashItems(prev => prev.filter(t => t.id !== trashId));
+        addToast({ type: 'success', message: `"${item.setName}" restored successfully.` });
+    }, [trashItems, hardwareSets, addToast]);
+
+    const handlePermanentDelete = useCallback((trashId: string) => {
+        setTrashItems(prev => prev.filter(t => t.id !== trashId));
+    }, []);
+
+    const handleClearAllTrash = useCallback(() => {
+        setTrashItems([]);
+    }, []);
 
     const handleSplitSetAndReassign = (newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
         const newSet: HardwareSet = {
@@ -827,6 +1059,50 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const handleDoorsUpdate = useCallback((updater: React.SetStateAction<Door[]>) => {
         setDoors(updater);
     }, []);
+
+    // Called by DoorScheduleManager when user deletes door(s)
+    // Instead of removing immediately + saving, we show an undo toast for 6s first.
+    const handleDeleteDoors = useCallback((doorIdsToDelete: string[]) => {
+        const doorsToDelete = doors.filter(d => doorIdsToDelete.includes(d.id));
+        if (doorsToDelete.length === 0) return;
+
+        const trashEntries: TrashItem[] = doorsToDelete.map(d => ({
+            id: `trash-door-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: 'door' as const,
+            setName: d.doorTag,
+            deletedAt: new Date().toISOString(),
+            doorData: {
+                doorTag: d.doorTag,
+                hwSet: d.providedHardwareSet ?? '',
+                matchedSetName: d.assignedHardwareSet?.name ?? '',
+                doorLocation: d.location,
+                quantity: d.quantity,
+                sections: d.sections as unknown as MergedDoor['sections'],
+            },
+        }));
+
+        setDoors(prev => prev.filter(d => !doorIdsToDelete.includes(d.id)));
+
+        const batchId = `trash-door-bulk-${Date.now()}`;
+        const label = doorsToDelete.length === 1
+            ? `Door "${doorsToDelete[0].doorTag}" deleted — moves to Trash in`
+            : `${doorsToDelete.length} doors deleted — moves to Trash in`;
+
+        pushUndoToast({
+            id: batchId,
+            label,
+            onUndo: () => {
+                setDoors(prev => [...prev, ...doorsToDelete]);
+            },
+            onConfirm: () => {
+                setTrashItems(prev => [...prev, ...trashEntries]);
+                setTimeout(() => {
+                    hasPendingUndoRef.current = false;
+                    performSave();
+                }, 0);
+            },
+        });
+    }, [doors, pushUndoToast, performSave]);
 
     const handleProvidedSetChange = (doorId: string, newSetName: string) => {
         const trimmedName = newSetName.trim();
@@ -910,6 +1186,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 activeTask={doorActiveTask}
                 onCancelTask={doorActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id)) : undefined}
                 canReupload={individualUploadsEnabled}
+                onDeleteDoors={handleDeleteDoors}
             />
         </div>
     );
@@ -960,8 +1237,22 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         </button>
                     </div>
 
-                    {/* Right — process files button + save status */}
-                    <div className="flex items-center gap-3 justify-end min-w-[90px]">
+                    {/* Right — trash + process files button + save status */}
+                    <div className="flex items-center gap-2 justify-end min-w-[90px]">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsTrashModalOpen(true)}
+                            className="gap-1.5 text-[var(--text-muted)] relative"
+                            title="View deleted items"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            {trashItems.length > 0 && (
+                                <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
+                                    {trashItems.length > 9 ? '9+' : trashItems.length}
+                                </span>
+                            )}
+                        </Button>
                         <Button
                             size="sm"
                             onClick={() => setIsCombinedUploadOpen(true)}
@@ -1046,6 +1337,19 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     projectId={project.id}
                 />
             )}
+
+            {/* Undo toast — shown at bottom-center while a delete is pending */}
+            <UndoToast items={undoToasts} onDismiss={dismissUndoToast} />
+
+            {/* Trash modal */}
+            <HardwareTrashModal
+                isOpen={isTrashModalOpen}
+                onClose={() => setIsTrashModalOpen(false)}
+                trashItems={trashItems}
+                onRestore={handleRestoreFromTrash}
+                onPermanentDelete={handlePermanentDelete}
+                onClearAll={handleClearAllTrash}
+            />
 
             {/* Combined Upload Modal — full overlay (hidden when minimized) */}
             {isCombinedUploadOpen && !isCombinedMinimized && (
