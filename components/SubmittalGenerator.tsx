@@ -1,262 +1,269 @@
 import React, { useMemo, useRef } from 'react';
-import { Door, HardwareSet, ElevationType } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import { PrinterIcon } from './icons';
+import type { MergedHardwareSet, MergedDoor, HardwareItem } from '@/lib/db/hardware';
 
 interface SubmittalGeneratorProps {
-    doors: Door[];
-    elevationTypes: ElevationType[];
+  finalJson: MergedHardwareSet[];
+  projectName: string;
 }
 
-interface GroupedDoorType {
-    id: string; // Composite key
-    exampleDoor: Door; // To pull parameters from
-    quantity: number;
-    locations: string[]; // List of tags/locations
-    hardwareSet?: HardwareSet;
-    elevationType?: ElevationType;
+interface SetGroup {
+  /** Fingerprint of normalized hardware items — used for deduplication */
+  fingerprint: string;
+  /** All set names sharing identical items */
+  setNames: string[];
+  /** Canonical hardware items list */
+  items: HardwareItem[];
+  /** All door tags across merged sets */
+  doorTags: string[];
+  /** Total quantity of doors (sum of QUANTITY per door) */
+  totalQuantity: number;
 }
 
-const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ doors, elevationTypes }) => {
-    const componentRef = useRef<HTMLDivElement>(null);
+function itemsFingerprint(items: HardwareItem[]): string {
+  const normalized = [...items]
+    .sort((a, b) => (a.item || '').localeCompare(b.item || ''))
+    .map(item => ({
+      n: (item.item || '').trim().toLowerCase(),
+      q: item.qty,
+      m: (item.manufacturer || '').trim().toLowerCase(),
+      f: (item.finish || '').trim().toLowerCase(),
+      d: (item.description || '').trim().toLowerCase(),
+    }));
+  return JSON.stringify(normalized);
+}
 
-    // Grouping Logic
-    const groupedData = useMemo(() => {
-        const groups: Record<string, GroupedDoorType> = {};
+function doorQuantity(door: MergedDoor): number {
+  const raw = door.sections?.door?.['QUANTITY'] ?? String(door.quantity ?? 1);
+  return parseInt(raw) || 1;
+}
 
-        doors.forEach(door => {
-            // Create a unique key based on physical properties + hardware + elevation
-            // We EXCLUDE location and tag, as we want to count total quantity of this "Type"
-            const keyParts = [
-                door.width,
-                door.height,
-                door.thickness,
-                door.doorMaterial,
-                door.frameMaterial,
-                door.fireRating,
-                door.operation,
-                door.elevationTypeId || 'none',
-                door.assignedHardwareSet?.id || door.providedHardwareSet || 'none',
-                // Add new phase 15 fields
-                door.stcRating || '',
-                door.wallType || '',
-                door.frameType || '',
-                door.leafCount || 1,
-                // Custom fields should also be part of the key if they affect the "Type"
-                JSON.stringify(door.customFields || {})
-            ];
+const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ finalJson, projectName }) => {
+  const componentRef = useRef<HTMLDivElement>(null);
 
-            const key = keyParts.join('|');
+  const groups = useMemo<SetGroup[]>(() => {
+    const map = new Map<string, SetGroup>();
 
-            if (!groups[key]) {
-                groups[key] = {
-                    id: key,
-                    exampleDoor: door,
-                    quantity: 0,
-                    locations: [],
-                    hardwareSet: door.assignedHardwareSet,
-                    elevationType: elevationTypes.find(e => e.id === door.elevationTypeId)
-                };
-            }
+    for (const set of finalJson) {
+      if (!set.hardwareItems?.length) continue;
 
-            groups[key].quantity += door.quantity || 1;
-            groups[key].locations.push(door.doorTag);
+      const fp = itemsFingerprint(set.hardwareItems);
+
+      if (!map.has(fp)) {
+        map.set(fp, {
+          fingerprint: fp,
+          setNames: [],
+          items: set.hardwareItems,
+          doorTags: [],
+          totalQuantity: 0,
         });
+      }
 
-        return Object.values(groups);
-    }, [doors, elevationTypes]);
+      const group = map.get(fp)!;
 
+      if (!group.setNames.includes(set.setName)) {
+        group.setNames.push(set.setName);
+      }
 
-    const handlePrint = useReactToPrint({
-        contentRef: componentRef,
-        documentTitle: 'Door_Schedule_Submittal_Package',
-    });
+      for (const door of set.doors) {
+        group.doorTags.push(String(door.doorTag));
+        group.totalQuantity += doorQuantity(door);
+      }
+    }
 
-    return (
-        <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
-            {/* Toolbar */}
-            <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-4 flex justify-between items-center shadow-sm">
-                <div>
-                    <h2 className="text-xl font-bold text-[var(--text-secondary)]">Submittal Package Preview</h2>
-                    <p className="text-sm text-[var(--text-muted)]">{groupedData.length} Unique Door Types Generated</p>
-                </div>
-                <button
-                    onClick={handlePrint}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
-                >
-                    <PrinterIcon className="w-5 h-5" />
-                    Print / Save to PDF
-                </button>
-            </div>
-
-            {/* Printable Content Container */}
-            <div className="flex-1 overflow-auto p-8">
-                <div ref={componentRef} className="max-w-[210mm] mx-auto bg-white shadow-lg print:shadow-none">
-                    <style type="text/css" media="print">
-                        {`
-                            @media print {
-                                body { -webkit-print-color-adjust: exact; }
-                                @page { size: auto; margin: 20mm; }
-                                .page-break { page-break-after: always; }
-                            }
-                        `}
-                    </style>
-
-                    {groupedData.map((group, index) => (
-                        <div key={group.id} className="p-10 page-break min-h-[297mm] flex flex-col relative border-b-2 border-gray-100 print:border-none">
-
-                            {/* Header */}
-                            <div className="border-b-2 border-slate-800 pb-4 mb-8 flex justify-between items-end">
-                                <div>
-                                    <h1 className="text-3xl font-bold text-slate-900">Door Type Specification</h1>
-                                    <p className="text-slate-500 mt-1">Submittal Data Sheet</p>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Total Quantity</div>
-                                    <div className="text-4xl font-black text-slate-800">{group.quantity}</div>
-                                </div>
-                            </div>
-
-                            {/* Main Grid Layout */}
-                            <div className="grid grid-cols-2 gap-12 flex-grow">
-
-                                {/* Left Column: Parameters */}
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase tracking-wide">Door Parameters</h3>
-                                    <table className="w-full text-sm">
-                                        <tbody className="divide-y divide-slate-100">
-                                            {[
-                                                // Opening Information
-                                                ['Opening Number', group.exampleDoor.doorTag],
-                                                ['Handing', group.exampleDoor.handing || 'Not Specified'],
-                                                ['Operation', group.exampleDoor.operation],
-                                                ['Dimensions', `${group.exampleDoor.width}" x ${group.exampleDoor.height}" x ${group.exampleDoor.thickness}"`],
-                                                ['Undercut', group.exampleDoor.undercut ? `${group.exampleDoor.undercut}"` : 'Standard'],
-                                                ['Leaf Count', group.exampleDoor.leafCount],
-
-                                                // Material Specifications (Phase 19)
-                                                ['Core Type', group.exampleDoor.doorCoreType || group.exampleDoor.doorMaterial],
-                                                group.exampleDoor.doorCoreDetail && ['Core Detail', group.exampleDoor.doorCoreDetail],
-                                                ['Face Type', group.exampleDoor.doorFaceType || '-'],
-                                                group.exampleDoor.doorFaceSpecies && ['Face Species', group.exampleDoor.doorFaceSpecies],
-                                                group.exampleDoor.doorFaceGrade && ['Face Grade', group.exampleDoor.doorFaceGrade],
-                                                group.exampleDoor.doorManufacturer && ['Door Manufacturer', group.exampleDoor.doorManufacturer],
-                                                group.exampleDoor.doorModelNumber && ['Door Model', group.exampleDoor.doorModelNumber],
-
-                                                // Finish System (Phase 19)
-                                                ['Finish Base Prep', group.exampleDoor.finishSystem?.basePrep || group.exampleDoor.doorFinish || '-'],
-                                                ['Finish Type', group.exampleDoor.finishSystem?.finishType || '-'],
-                                                group.exampleDoor.finishSystem?.manufacturer && ['Finish Mfr', group.exampleDoor.finishSystem.manufacturer],
-                                                group.exampleDoor.finishSystem?.productCode && ['Product Code', group.exampleDoor.finishSystem.productCode],
-                                                group.exampleDoor.finishSystem?.colorName && ['Color', group.exampleDoor.finishSystem.colorName],
-                                                group.exampleDoor.finishSystem?.sheen && ['Sheen', group.exampleDoor.finishSystem.sheen],
-
-                                                // Fire Rating (Phase 19 Enhanced)
-                                                ['Fire Rating', group.exampleDoor.fireRating],
-                                                group.exampleDoor.fireRatingLabel && ['Label', group.exampleDoor.fireRatingLabel],
-                                                group.exampleDoor.temperatureRise && ['Temp Rise', group.exampleDoor.temperatureRise],
-                                                group.exampleDoor.positivePresure && ['Positive Pressure', 'Yes'],
-
-                                                // Acoustic
-                                                ['STC Rating', group.exampleDoor.stcRating || '-'],
-
-                                                // Frame Specifications (Phase 19 Enhanced)
-                                                ['Frame Material', group.exampleDoor.frameMaterial],
-                                                group.exampleDoor.frameGauge && ['Frame Gauge', group.exampleDoor.frameGauge],
-                                                group.exampleDoor.frameProfile && ['Frame Profile', group.exampleDoor.frameProfile],
-                                                group.exampleDoor.frameAnchorType && ['Frame Anchors', group.exampleDoor.frameAnchorType],
-                                                ['Frame Type', group.exampleDoor.frameType || '-'],
-                                                ['Wall Type', group.exampleDoor.wallType || '-'],
-                                                ['Jamb Depth', group.exampleDoor.jambDepth || '-'],
-                                                group.exampleDoor.frameFinish && ['Frame Finish', group.exampleDoor.frameFinish],
-                                                group.exampleDoor.frameManufacturer && ['Frame Mfr', group.exampleDoor.frameManufacturer],
-
-                                                // Custom Fields
-                                                ...Object.entries(group.exampleDoor.customFields || {}).map(([k, v]) => [k, v])
-                                            ].filter(Boolean).map(([label, value], i) => (
-                                                <tr key={i}>
-                                                    <td className="py-2 text-slate-500 font-medium w-1/3">{label}</td>
-                                                    <td className="py-2 text-slate-900 font-bold">{value}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-
-                                    {/* Associated Tags */}
-                                    <div className="mt-8">
-                                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Affected Door Tags</h3>
-                                        <div className="flex flex-wrap gap-1">
-                                            {group.locations.slice(0, 50).map((tag, i) => (
-                                                <span key={i} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border border-slate-200">{tag}</span>
-                                            ))}
-                                            {group.locations.length > 50 && (
-                                                <span className="px-1.5 py-0.5 text-slate-400 text-xs italic">...and {group.locations.length - 50} more</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Right Column: Hardware & Elevation */}
-                                <div className="flex flex-col gap-8">
-
-                                    {/* Hardware Set */}
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase tracking-wide">Hardware Set</h3>
-                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="font-bold text-slate-700">{group.hardwareSet?.name || group.exampleDoor.providedHardwareSet || 'Not Defined'}</span>
-                                            </div>
-                                            {group.hardwareSet ? (
-                                                <ul className="space-y-2 text-sm">
-                                                    {group.hardwareSet.items.map((item, i) => (
-                                                        <li key={i} className="flex gap-3 border-b border-slate-200/50 pb-1 last:border-0 last:pb-0">
-                                                            <span className="font-bold text-slate-900 w-6 text-center">{item.quantity}</span>
-                                                            <div className="flex-1">
-                                                                <div className="font-medium text-slate-800">{item.name}</div>
-                                                                <div className="text-xs text-slate-500">{item.manufacturer} • {item.finish}</div>
-                                                            </div>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p className="text-sm text-red-500 italic">No valid hardware set assigned.</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Elevation Image */}
-                                    {group.elevationType && group.elevationType.imageData ? (
-                                        <div className="flex-grow flex flex-col">
-                                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase tracking-wide">Elevation: {group.elevationType.code}</h3>
-                                            <div className="flex-grow border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center p-4 bg-white">
-                                                <img
-                                                    src={group.elevationType.imageData}
-                                                    alt={`Elevation ${group.elevationType.code}`}
-                                                    className="max-h-[300px] object-contain"
-                                                />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="h-48 border-2 border-dashed border-slate-100 rounded-lg flex items-center justify-center text-slate-300">
-                                            No Elevation Linked
-                                        </div>
-                                    )}
-
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="mt-8 pt-4 border-t border-slate-200 text-xs text-slate-400 flex justify-between">
-                                <span>Generated by Planckoff Estimating</span>
-                                <span>Page {index + 1} of {groupedData.length}</span>
-                            </div>
-
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
+    return Array.from(map.values()).sort((a, b) =>
+      a.setNames[0].localeCompare(b.setNames[0]),
     );
+  }, [finalJson]);
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: `Submittal_Package_${projectName.replace(/\s+/g, '_')}`,
+  });
+
+  const setsWithDoors = groups.filter(g => g.doorTags.length > 0);
+  const emptyGroups = groups.filter(g => g.doorTags.length === 0);
+
+  return (
+    <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
+      {/* Toolbar */}
+      <div className="bg-[var(--bg)] border-b border-[var(--border)] px-5 py-2.5 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+          <span>
+            <span className="font-semibold text-[var(--text)]">{setsWithDoors.length}</span>
+            {' '}unique hardware set{setsWithDoors.length !== 1 ? 's' : ''}
+          </span>
+          <span>
+            <span className="font-semibold text-[var(--text)]">
+              {groups.reduce((s, g) => s + g.totalQuantity, 0)}
+            </span>
+            {' '}total door openings
+          </span>
+          {emptyGroups.length > 0 && (
+            <span className="text-amber-600 dark:text-amber-400">
+              · {emptyGroups.length} set{emptyGroups.length !== 1 ? 's' : ''} with no doors assigned
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handlePrint}
+          disabled={groups.length === 0}
+          className="flex items-center gap-2 bg-[var(--primary-action)] text-[var(--text-inverted)] px-4 py-2 rounded-md hover:bg-[var(--primary-action-hover)] text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <PrinterIcon className="w-4 h-4" />
+          Download PDF
+        </button>
+      </div>
+
+      {/* Empty state */}
+      {groups.length === 0 && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-[var(--text-muted)]">
+            <p className="text-sm font-medium">No hardware sets found in final JSON</p>
+            <p className="text-xs mt-1">Run the merge pipeline first to generate the submittal package.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Printable preview */}
+      {groups.length > 0 && (
+        <div className="flex-1 overflow-auto p-6">
+          <div ref={componentRef}>
+            {/* Print-specific font import */}
+            <style>{`
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+              @media print {
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                @page { size: A4; margin: 12mm 14mm; }
+                .page-break { page-break-after: always; break-after: page; }
+                body { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
+              }
+              .submittal-root { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
+            `}</style>
+
+            <div className="submittal-root max-w-[794px] mx-auto">
+              {setsWithDoors.map((group, idx) => (
+                <div
+                  key={group.fingerprint}
+                  className={`bg-white${idx < setsWithDoors.length - 1 ? ' page-break' : ''}`}
+                  style={{ minHeight: '1050px', display: 'flex', flexDirection: 'column', padding: '36px 44px' }}
+                >
+                  {/* ── Top accent bar ── */}
+                  <div style={{ height: 4, background: '#1e293b', borderRadius: 2, marginBottom: 28 }} />
+
+                  {/* ── Page header ── */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, borderBottom: '2px solid #1e293b', paddingBottom: 18 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 6 }}>
+                        Hardware Set Submittal
+                      </p>
+                      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+                        {group.setNames.join(', ')}
+                      </h1>
+                      {group.setNames.length > 1 && (
+                        <p style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                          {group.setNames.length} sets with identical specifications — combined
+                        </p>
+                      )}
+                      <p style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>
+                        {projectName}
+                      </p>
+                    </div>
+
+                    {/* Quantity badge */}
+                    <div style={{ textAlign: 'right', marginLeft: 24, flexShrink: 0 }}>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4 }}>Total Qty</p>
+                      <div style={{
+                        fontSize: 52, fontWeight: 900, color: '#0f172a', lineHeight: 1,
+                        background: '#f1f5f9', borderRadius: 8, padding: '8px 20px', display: 'inline-block',
+                      }}>
+                        {group.totalQuantity}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Two-column body ── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, flex: 1 }}>
+
+                    {/* Left: Hardware items */}
+                    <div>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: 6, marginBottom: 12 }}>
+                        Hardware Items ({group.items.length})
+                      </p>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc' }}>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', width: 28 }}>Qty</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Item</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', width: 70 }}>Mfr</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', width: 50 }}>Finish</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.items.map((item, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '7px 8px', fontWeight: 700, color: '#0f172a', verticalAlign: 'top' }}>{item.qty}</td>
+                              <td style={{ padding: '7px 8px', verticalAlign: 'top' }}>
+                                <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.item}</div>
+                                {item.description && (
+                                  <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>{item.description}</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '7px 8px', color: '#64748b', fontSize: 10, verticalAlign: 'top' }}>{item.manufacturer || '—'}</td>
+                              <td style={{ padding: '7px 8px', color: '#64748b', fontSize: 10, verticalAlign: 'top' }}>{item.finish || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* Notes */}
+                      {finalJson.find(s => s.setName === group.setNames[0])?.notes && (
+                        <div style={{ marginTop: 16, padding: '10px 12px', background: '#f8fafc', borderLeft: '3px solid #cbd5e1', borderRadius: '0 4px 4px 0' }}>
+                          <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 4 }}>Notes</p>
+                          <p style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>
+                            {finalJson.find(s => s.setName === group.setNames[0])?.notes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Door openings */}
+                    <div>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: 6, marginBottom: 12 }}>
+                        Door Openings ({group.doorTags.length})
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {group.doorTags.slice(0, 120).map((tag, i) => (
+                          <span key={i} style={{
+                            padding: '2px 8px', background: '#f1f5f9', border: '1px solid #e2e8f0',
+                            borderRadius: 4, fontSize: 10, fontFamily: 'monospace', color: '#334155', fontWeight: 500,
+                          }}>
+                            {tag}
+                          </span>
+                        ))}
+                        {group.doorTags.length > 120 && (
+                          <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic', alignSelf: 'center' }}>
+                            +{group.doorTags.length - 120} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Footer ── */}
+                  <div style={{ marginTop: 28, paddingTop: 12, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8' }}>
+                    <span>Generated by PlanckOff Estimating · {projectName}</span>
+                    <span>Page {idx + 1} of {setsWithDoors.length}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default SubmittalGenerator;

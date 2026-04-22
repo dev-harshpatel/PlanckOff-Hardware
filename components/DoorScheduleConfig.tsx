@@ -164,117 +164,85 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     };
 
     return (
-        <div className="space-y-6">
-            <div className="bg-[var(--bg)] rounded-2xl shadow-lg border border-[var(--border)] overflow-hidden">
-                {/* Gradient Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-6">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white">Configure Door Schedule Report</h2>
-                            <p className="text-blue-100 text-sm mt-1">Select the columns you want to include in your report</p>
-                        </div>
-                        <div className="flex space-x-3">
-                            {/* Format Selector */}
-                            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/30">
-                                <label className="text-white text-sm font-medium">Format:</label>
-                                <select
-                                    value={exportFormat}
-                                    onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
-                                    className="bg-white/90 text-gray-900 dark:text-gray-900 text-sm font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer"
-                                >
-                                    <option value="excel">Excel (.xlsx)</option>
-                                    <option value="pdf">PDF (.pdf)</option>
-                                </select>
-                            </div>
-
-                            <button
-                                onClick={() => setShowPreview(!showPreview)}
-                                className="px-5 py-2.5 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 text-sm font-semibold transition-all duration-200 border border-white/30 flex items-center space-x-2"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                <span>{showPreview ? "Hide Preview" : "Preview Report"}</span>
-                            </button>
-                            <button
-                                onClick={handleGenerate}
-                                className="px-6 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <span>Export {exportFormat === 'pdf' ? 'PDF' : 'Excel'}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Column Count Indicator */}
-                    <div className="mt-4 flex items-center space-x-2 text-white text-sm">
-                        <div className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/30">
-                            <span className="font-semibold">{selectedColumns.length}</span> columns selected
-                        </div>
-                        {exportFormat === 'pdf' && (
-                            <div className="bg-amber-500/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-amber-400/50 flex items-center space-x-1">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                                <span className="text-xs font-medium">PDF format selected</span>
-                            </div>
-                        )}
-                    </div>
+        <div className="space-y-4">
+            {/* Toolbar */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-[var(--text-muted)]">
+                        <span className="font-semibold text-[var(--text)]">{selectedColumns.length}</span> columns selected
+                    </span>
+                    {exportFormat === 'pdf' && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-[var(--warning-bg)] text-[var(--warning-text)] border border-[var(--warning-border)]">
+                            PDF format
+                        </span>
+                    )}
                 </div>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-md px-2 py-1.5">
+                        <label className="text-xs text-[var(--text-muted)]">Format:</label>
+                        <select
+                            value={exportFormat}
+                            onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
+                            className="text-xs bg-transparent text-[var(--text)] border-none outline-none cursor-pointer"
+                        >
+                            <option value="excel">Excel (.xlsx)</option>
+                            <option value="pdf">PDF (.pdf)</option>
+                        </select>
+                    </div>
+                    <button
+                        onClick={() => setShowPreview(!showPreview)}
+                        className="text-xs px-3 py-1.5 border border-[var(--border)] rounded-md text-[var(--text-secondary)] hover:border-[var(--primary-border)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg)] transition-colors"
+                    >
+                        {showPreview ? 'Hide Preview' : 'Preview Report'}
+                    </button>
+                    <button
+                        onClick={handleGenerate}
+                        className="text-xs px-3 py-1.5 rounded-md bg-[var(--primary-action)] text-[var(--text-inverted)] hover:bg-[var(--primary-action-hover)] transition-colors font-semibold"
+                    >
+                        Export {exportFormat === 'pdf' ? 'PDF' : 'Excel'}
+                    </button>
+                </div>
+            </div>
 
+            <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] overflow-hidden">
                 {!showPreview && (
-                    <div className="p-8 space-y-6">
+                    <div className="p-5 space-y-5">
                         {/* Preset Buttons */}
-                        <div className="bg-[var(--bg-subtle)] rounded-xl p-5 border border-[var(--border)]">
-                            <div className="flex items-center space-x-4">
-                                <div className="flex items-center space-x-2">
-                                    <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                                    </svg>
-                                    <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wide">Quick Presets:</span>
-                                </div>
-                                <div className="flex space-x-2">
-                                    <button onClick={() => handlePreset('basic')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-blue-50 hover:border-blue-500 hover:text-blue-700 font-medium transition-all duration-200 shadow-sm">
-                                        📋 Basic
-                                    </button>
-                                    <button onClick={() => handlePreset('pricing')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-green-50 hover:border-green-500 hover:text-green-700 font-medium transition-all duration-200 shadow-sm">
-                                        💰 Pricing
-                                    </button>
-                                    <button onClick={() => handlePreset('frame-schedule')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-[var(--border-strong)] text-[var(--text-secondary)] rounded-lg hover:bg-purple-50 hover:border-purple-500 hover:text-purple-700 font-medium transition-all duration-200 shadow-sm">
-                                        🖼️ Frame Schedule
-                                    </button>
-                                    <button onClick={() => handlePreset('all')} className="px-4 py-2 text-sm bg-[var(--bg)] border-2 border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 hover:border-indigo-600 font-medium transition-all duration-200 shadow-sm">
-                                        ✅ Select All
-                                    </button>
-                                </div>
-                            </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Presets:</span>
+                            {(['basic', 'pricing', 'frame-schedule', 'all'] as const).map((preset) => (
+                                <button
+                                    key={preset}
+                                    onClick={() => handlePreset(preset)}
+                                    className="text-xs px-3 py-1.5 border border-[var(--border)] rounded-md text-[var(--text-secondary)] bg-[var(--bg)] hover:border-[var(--primary-border)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg)] transition-colors capitalize"
+                                >
+                                    {preset === 'frame-schedule' ? 'Frame Schedule' : preset === 'all' ? 'Select All' : preset.charAt(0).toUpperCase() + preset.slice(1)}
+                                </button>
+                            ))}
                         </div>
 
                         {/* Column Groups */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {Object.entries(COLUMN_GROUPS).map(([group, columns]) => {
                                 const selectedInGroup = columns.filter(col => selectedColumns.includes(col.id)).length;
                                 return (
-                                    <div key={group} className="bg-[var(--bg)] rounded-xl p-5 border-2 border-[var(--border)] hover:border-indigo-300 transition-all duration-200 shadow-sm hover:shadow-md">
-                                        <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-[var(--border)]">
-                                            <h4 className="font-bold text-base text-[var(--text)]">{group}</h4>
-                                            <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-xs font-semibold">
+                                    <div key={group} className="border border-[var(--border)] rounded-md hover:border-[var(--primary-border)] transition-colors">
+                                        <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] bg-[var(--bg-subtle)]">
+                                            <h4 className="text-xs font-semibold text-[var(--text)]">{group}</h4>
+                                            <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--primary-bg)] text-[var(--primary-text)] font-semibold">
                                                 {selectedInGroup}/{columns.length}
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-1 gap-2.5">
+                                        <div className="p-2 space-y-0.5">
                                             {columns.map(col => (
-                                                <label key={col.id} className="flex items-center space-x-3 cursor-pointer group hover:bg-indigo-50 p-2 rounded-lg transition-all duration-150">
+                                                <label key={col.id} className="flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded hover:bg-[var(--primary-bg)] transition-colors group">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedColumns.includes(col.id)}
                                                         onChange={() => toggleColumn(col.id)}
-                                                        className="rounded border-2 border-[var(--border-strong)] text-indigo-600 focus:ring-2 focus:ring-indigo-500 w-5 h-5 cursor-pointer transition-all duration-150"
+                                                        className="rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] w-3.5 h-3.5 cursor-pointer"
                                                     />
-                                                    <span className="text-sm text-[var(--text-secondary)] group-hover:text-indigo-900 font-medium">{col.label}</span>
+                                                    <span className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--primary-text)] transition-colors">{col.label}</span>
                                                 </label>
                                             ))}
                                         </div>

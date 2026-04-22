@@ -131,23 +131,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
 
     return (
         <div className="h-full flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <button
-                        onClick={onBack}
-                        className="flex items-center text-blue-600 hover:text-blue-800 mb-2 transition-colors"
-                    >
-                        <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Back to Reports
-                    </button>
-                    <h3 className="text-2xl font-bold text-[var(--text)]">Hardware Set Report</h3>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        {getTotalItems()} unique items • {getTotalColumns()} columns • {hardwareSets.length} sets
-                    </p>
-                </div>
+            {/* Stats row */}
+            <div className="flex items-center gap-3 mb-5 text-xs text-[var(--text-muted)]">
+                <span><span className="font-semibold text-[var(--text)]">{getTotalItems()}</span> unique items</span>
+                <span className="text-[var(--text-faint)]">·</span>
+                <span><span className="font-semibold text-[var(--text)]">{getTotalColumns()}</span> columns</span>
+                <span className="text-[var(--text-faint)]">·</span>
+                <span><span className="font-semibold text-[var(--text)]">{hardwareSets.length}</span> sets</span>
             </div>
 
             <div className="flex-grow overflow-auto">
@@ -341,13 +331,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                             </div>
 
                             {/* Usage Preview */}
-                            <div className="mb-6 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                <div className="text-xs font-semibold text-purple-900 mb-2">Usage Tracking</div>
-                                <div className="text-xs text-purple-800">
+                            <div className="mb-6 p-3 bg-[var(--primary-bg)] rounded-md border border-[var(--primary-border)]">
+                                <div className="text-xs font-semibold text-[var(--text)] mb-2">Usage Tracking</div>
+                                <div className="text-xs text-[var(--text-muted)] space-y-1">
                                     {usageStats.length > 0 ? (
                                         <>
-                                            <div className="mb-1">• {usageStats.length} unique items</div>
-                                            <div className="mb-1">• {doors.filter(d => d.assignedHardwareSet).length} doors with hardware</div>
+                                            <div>• {usageStats.length} unique items</div>
+                                            <div>• {doors.filter(d => d.assignedHardwareSet).length} doors with hardware</div>
                                             <div>• Cross-referenced across {hardwareSets.length} sets</div>
                                         </>
                                     ) : (
@@ -361,22 +351,22 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                 <button
                                     onClick={handleExport}
                                     disabled={usageStats.length === 0}
-                                    className="w-full px-4 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                    className="w-full px-4 py-2 text-sm bg-[var(--primary-action)] text-[var(--text-inverted)] font-semibold rounded-md hover:bg-[var(--primary-action-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Export Report
                                 </button>
                                 <button
                                     onClick={() => setIsPreviewOpen(true)}
-                                    className="w-full px-4 py-2 bg-[var(--bg)] text-[var(--text-secondary)] font-medium border border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+                                    className="w-full px-4 py-2 text-sm bg-[var(--bg)] text-[var(--text-secondary)] border border-[var(--border)] rounded-md hover:bg-[var(--bg-subtle)] hover:border-[var(--border-strong)] transition-colors"
                                 >
                                     Preview
                                 </button>
                             </div>
 
                             {/* Info */}
-                            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                                <p className="text-xs text-blue-800">
-                                    <strong>Tip:</strong> The Usage/Location column shows which door tags use each hardware item for procurement planning.
+                            <div className="mt-4 p-3 bg-[var(--bg-subtle)] rounded-md border border-[var(--border)]">
+                                <p className="text-xs text-[var(--text-muted)]">
+                                    <span className="font-semibold text-[var(--text)]">Tip:</span> The Usage/Location column shows which door tags use each hardware item for procurement planning.
                                 </p>
                             </div>
                         </div>

@@ -49,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
 
   return (
     <header className="bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-40 flex-shrink-0">
-      <div className="px-6 h-12 flex items-center justify-between">
+      <div className="px-6 h-12 flex items-center justify-between overflow-hidden">
         <div className="flex min-w-0 items-center gap-4">
           <button onClick={() => onNavigate('dashboard')} className="flex items-center flex-shrink-0">
             <Image
@@ -62,18 +62,18 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
           </button>
 
           {currentPage === 'project' && projectName && (
-            <div className="hidden min-w-0 md:block">
+            <div className="hidden min-w-0 max-w-[220px] overflow-hidden md:block lg:max-w-[320px]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-faint)]">
                 Project
               </div>
-              <div className="truncate text-sm font-semibold text-[var(--text)]">
+              <div className="truncate whitespace-nowrap text-sm font-semibold leading-tight text-[var(--text)]">
                 {projectName}
               </div>
             </div>
           )}
         </div>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex flex-shrink-0 items-center gap-1">
           <NavLink
             isActive={currentPage === 'dashboard' || currentPage === 'project'}
             onClick={() => onNavigate('dashboard')}

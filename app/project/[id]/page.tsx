@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -16,13 +15,6 @@ export default function ProjectPage() {
   const { addToast } = useToast();
 
   const activeProject = projects.find((p) => p.id === id);
-
-  useEffect(() => {
-    if (!projectsHydrated) return;
-    if (!activeProject) {
-      router.replace('/');
-    }
-  }, [projectsHydrated, activeProject, router]);
 
   if (!projectsHydrated || !activeProject) {
     return null;
