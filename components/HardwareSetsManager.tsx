@@ -67,6 +67,25 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
     const [activeTab, setActiveTab] = useState<Record<string, 'components' | 'doors' | 'details'>>({});
     const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'doors' | 'items'; direction: 'asc' | 'desc' } | null>(null);
 
+    // Locks in the PDF sequence the first time a non-empty set list arrives.
+    // Subsequent deletes / restores use this order so sets always snap back
+    // to their original PDF position rather than drifting to the end.
+    const pdfOrderRef = useRef<Map<string, number>>(new Map());
+
+    useEffect(() => {
+        if (hardwareSets.length === 0) return;
+        // Re-capture whenever the set names change (new upload / re-process).
+        // Using set names (not ids) as the stable key because ids can be
+        // regenerated on re-upload while the name stays the same.
+        const currentNames = hardwareSets.map(s => s.name).join('|');
+        const capturedNames = Array.from(pdfOrderRef.current.keys()).join('|');
+        if (capturedNames !== currentNames) {
+            const order = new Map<string, number>();
+            hardwareSets.forEach((set, idx) => order.set(set.name, idx));
+            pdfOrderRef.current = order;
+        }
+    }, [hardwareSets]);
+
     const announce = useAnnounce();
 
     // ── All existing logic preserved exactly ─────────────────────────────────
@@ -81,6 +100,20 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
             });
         }
         return counts;
+    }, [doors]);
+
+    // Sum of door.quantity (openings) per set — used for Total Qty calculation
+    const doorQuantityTotals = useMemo(() => {
+        const totals = new Map<string, number>();
+        if (Array.isArray(doors)) {
+            doors.forEach(door => {
+                if (door.assignedHardwareSet?.id) {
+                    const id = door.assignedHardwareSet.id;
+                    totals.set(id, (totals.get(id) || 0) + (door.quantity || 1));
+                }
+            });
+        }
+        return totals;
     }, [doors]);
 
     const filteredAndSortedSets = useMemo(() => {
@@ -100,6 +133,13 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                     return sortConfig.direction === 'asc' ? a.items.length - b.items.length : b.items.length - a.items.length;
                 }
                 return 0;
+            });
+        } else {
+            // Default: preserve PDF sequence using captured order (stable across deletes/restores)
+            result = [...result].sort((a, b) => {
+                const ia = pdfOrderRef.current.get(a.name) ?? 9999;
+                const ib = pdfOrderRef.current.get(b.name) ?? 9999;
+                return ia - ib;
             });
         }
         return result;
@@ -556,10 +596,14 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                     <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Manufacturer</th>
                                                                                     <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Description</th>
                                                                                     <th className="px-3 py-2 text-right font-semibold text-[var(--text-muted)] uppercase tracking-wide">Finish</th>
+                                                                                    <th className="px-3 py-2 text-right font-semibold text-[var(--text-muted)] uppercase tracking-wide">Total Qty</th>
                                                                                 </tr>
                                                                             </thead>
                                                                             <tbody className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto">
-                                                                                {set.items.map((item: HardwareItem) => (
+                                                                                {set.items.map((item: HardwareItem) => {
+                                                                                    const totalDoorQty = doorQuantityTotals.get(set.id) || 0;
+                                                                                    const totalQty = totalDoorQty > 0 ? (item.quantity || 0) * totalDoorQty : null;
+                                                                                    return (
                                                                                     <tr key={item.id} className="hover:bg-[var(--bg-subtle)] transition-colors">
                                                                                         <td className={`px-3 py-2 font-bold ${(!item.quantity || item.quantity <= 0) ? 'text-red-500' : 'text-[var(--primary-text-muted)]'}`}>
                                                                                             {item.quantity}×
@@ -576,8 +620,15 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                                 {item.finish || '—'}
                                                                                             </span>
                                                                                         </td>
+                                                                                        <td className="px-3 py-2 text-right">
+                                                                                            {totalQty !== null
+                                                                                                ? <span className="font-mono text-xs font-semibold text-[var(--primary-text)] bg-[var(--primary-bg)] px-2 py-0.5 rounded">{totalQty}</span>
+                                                                                                : <span className="text-[var(--text-faint)] text-xs">—</span>
+                                                                                            }
+                                                                                        </td>
                                                                                     </tr>
-                                                                                ))}
+                                                                                    );
+                                                                                })}
                                                                             </tbody>
                                                                         </table>
                                                                     </div>
@@ -612,6 +663,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                             />
                                                                                         </th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Tag</th>
+                                                                                        <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Qty</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Door Location</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Rating</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">W × H</th>
@@ -635,6 +687,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                                     <input type="checkbox" className="rounded" checked={isSelected} onChange={() => handleToggleDoorSelection(set.id, door.id)} />
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2 font-medium text-[var(--text)]">{door.doorTag}</td>
+                                                                                                <td className="px-3 py-2 text-[var(--text-muted)] tabular-nums">{door.quantity ?? 1}</td>
                                                                                                 <td className="px-3 py-2 text-[var(--text-muted)]">
                                                                                                     {door.location || '—'}
                                                                                                 </td>

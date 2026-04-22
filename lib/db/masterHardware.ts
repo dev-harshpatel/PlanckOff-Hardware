@@ -266,7 +266,12 @@ export async function queueItemsForApproval(
       submitted_by: submittedBy,
     }));
 
-    const { error: insertError } = await db.from('master_hardware_pending').insert(insertPayload);
+    // Use upsert with ignoreDuplicates so concurrent uploads don't race-insert
+    // duplicates that slip past the application-level dedup above.
+    // The DB partial unique index (status='pending') is the final safety net.
+    const { error: insertError } = await db
+      .from('master_hardware_pending')
+      .upsert(insertPayload, { ignoreDuplicates: true });
 
     if (insertError) {
       console.error('[master-hw:queue] INSERT ERROR:', insertError.message, '| code:', insertError.code, '| details:', insertError.details, '| hint:', insertError.hint);
@@ -328,22 +333,47 @@ export async function reviewPendingBatch(
     console.log(`[master-hw:review] Updated ${allUpdated.length} pending rows to status="${status}"`);
 
     if (action === 'approve' && allUpdated.length > 0) {
-      console.log(`[master-hw:review] Inserting ${allUpdated.length} rows into master_hardware_items...`);
+      // Fetch current master keys so we can skip items that already exist.
+      // This handles the case where the same item was approved twice (e.g. via
+      // two separate pending rows that slipped through before the unique index).
+      const { data: existingMaster, error: masterReadErr } = await db
+        .from('master_hardware_items')
+        .select('name,manufacturer,description,finish');
+      if (masterReadErr) {
+        console.error('[master-hw:review] Failed to read existing master items:', masterReadErr.message);
+        return { data: null, error: { message: masterReadErr.message } };
+      }
+      const existingMasterKeys = new Set((existingMaster ?? []).map(itemKey));
 
-      // Also insert in chunks to avoid body-size limits
-      for (let i = 0; i < allUpdated.length; i += CHUNK_SIZE) {
-        const insertChunk = allUpdated.slice(i, i + CHUNK_SIZE);
-        const { error: insertError } = await db.from('master_hardware_items').insert(
+      const rowsToInsert = allUpdated.filter(row =>
+        !existingMasterKeys.has(itemKey({
+          name:         String(row.name ?? ''),
+          manufacturer: String(row.manufacturer ?? ''),
+          description:  String(row.description ?? ''),
+          finish:       String(row.finish ?? ''),
+        })),
+      );
+
+      console.log(
+        `[master-hw:review] Inserting ${rowsToInsert.length} rows into master_hardware_items ` +
+        `(${allUpdated.length - rowsToInsert.length} already existed — skipped)...`,
+      );
+
+      // Insert in chunks; use upsert+ignoreDuplicates as a DB-level safety net
+      for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
+        const insertChunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error: insertError } = await db.from('master_hardware_items').upsert(
           insertChunk.map(row => ({
-            name: row.name,
-            manufacturer: row.manufacturer,
-            description: row.description,
-            finish: row.finish,
-            model_number: row.model_number,
+            name:              row.name,
+            manufacturer:      row.manufacturer,
+            description:       row.description,
+            finish:            row.finish,
+            model_number:      row.model_number,
             source_project_id: row.source_project_id,
-            source_file_name: row.source_file_name,
-            created_by: reviewedBy,
+            source_file_name:  row.source_file_name,
+            created_by:        reviewedBy,
           })),
+          { ignoreDuplicates: true },
         );
         if (insertError) {
           console.error('[master-hw:review] INSERT INTO master_hardware_items ERROR:', insertError.message, '| code:', insertError.code, '| hint:', insertError.hint);
@@ -351,7 +381,7 @@ export async function reviewPendingBatch(
         }
       }
 
-      console.log(`[master-hw:review] SUCCESS — ${allUpdated.length} items moved to master_hardware_items.`);
+      console.log(`[master-hw:review] SUCCESS — ${rowsToInsert.length} items moved to master_hardware_items.`);
     }
 
     return { data: { processed: allUpdated.length }, error: null };

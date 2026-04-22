@@ -12,6 +12,7 @@ interface ElevationTabProps {
   elevationTypes: ElevationType[];
   projectId: string;
   onElevationTypeUpdate: (updated: ElevationType) => void;
+  mode: 'door' | 'frame';
 }
 
 type UploadState = 'idle' | 'compressing' | 'uploading' | 'error';
@@ -23,15 +24,20 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
   elevationTypes,
   projectId,
   onElevationTypeUpdate,
+  mode,
 }) => {
-  // Excel-imported doors set elevationTypeId to the raw code string (e.g. "A1").
+  // Resolve the elevation code for the active mode.
+  const activeCode = mode === 'door' ? door.elevationTypeId : door.frameElevationType;
+
+  // Excel-imported doors set elevationTypeId / frameElevationType to the raw code string (e.g. "A1").
   // Manually-assigned doors use the UUID. Match both.
-  const elevationType = door.elevationTypeId
+  // Filter by kind so door and frame types with the same code remain separate.
+  // `kind` is undefined on legacy entries — treat those as 'door' for backward compat.
+  const elevationType = activeCode
     ? elevationTypes.find(
         et =>
-          et.id === door.elevationTypeId ||
-          et.code === door.elevationTypeId ||
-          et.name === door.elevationTypeId,
+          (et.kind === mode || (mode === 'door' && et.kind === undefined)) &&
+          (et.id === activeCode || et.code === activeCode || et.name === activeCode),
       )
     : null;
 
@@ -54,13 +60,13 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
   }, [elevationType?.id]);
 
   const handleDescriptionBlur = () => {
-    if (!door.elevationTypeId) return;
+    if (!activeCode) return;
     const typeToUpdate: ElevationType = elevationType ?? {
       id: typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `et-${Date.now()}`,
-      code: door.elevationTypeId,
-      name: door.elevationTypeId,
+      code: activeCode,
+      name: activeCode,
     };
     if (description.trim() === (typeToUpdate.description ?? '')) return;
     onElevationTypeUpdate({ ...typeToUpdate, description: description.trim() || undefined });
@@ -68,7 +74,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
 
   const doUpload = useCallback(
     async (file: File) => {
-      if (!door.elevationTypeId) return;
+      if (!activeCode) return;
       setUploadError(null);
 
       // If the ElevationType doesn't exist yet (door imported from Excel but
@@ -78,8 +84,9 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
         id: typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
           : `et-${Date.now()}`,
-        code: door.elevationTypeId,
-        name: door.elevationTypeId,
+        code: activeCode,
+        name: activeCode,
+        kind: mode,
       };
 
       try {
@@ -92,10 +99,11 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
           await deleteElevationImage(typeToUse.imagePath).catch(() => {});
         }
 
-        const { url, path } = await uploadElevationImage(projectId, typeToUse.code, blob);
+        const { url, path } = await uploadElevationImage(projectId, typeToUse.code, blob, mode);
 
         onElevationTypeUpdate({
           ...typeToUse,
+          kind: mode,
           imageUrl: url,
           imagePath: path,
           imageData: undefined,
@@ -107,7 +115,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
         setUploadError(err instanceof Error ? err.message : 'Upload failed');
       }
     },
-    [door.elevationTypeId, elevationType, projectId, onElevationTypeUpdate],
+    [activeCode, elevationType, projectId, onElevationTypeUpdate],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,16 +144,18 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
   const isUploading = uploadState === 'compressing' || uploadState === 'uploading';
 
   // ── State 1: No elevation type assigned ──────────────────────────────────
-  if (!door.elevationTypeId) {
+  if (!activeCode) {
+    const fieldName = mode === 'door' ? 'Door Elevation Type' : 'Frame Elevation Type';
+    const tabName   = mode === 'door' ? 'Door' : 'Frame';
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto gap-3">
         <div className="p-3 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)]">
           <ImageIcon className="w-6 h-6 text-[var(--text-faint)]" />
         </div>
-        <p className="text-sm font-medium text-[var(--text-muted)]">No Elevation Type set</p>
+        <p className="text-sm font-medium text-[var(--text-muted)]">No {fieldName} set</p>
         <p className="text-xs text-[var(--text-faint)] leading-relaxed">
-          Set the <span className="font-semibold text-[var(--text-secondary)]">Door Elevation Type</span> field
-          in the <span className="font-semibold text-[var(--text-secondary)]">Door</span> tab first,
+          Set the <span className="font-semibold text-[var(--text-secondary)]">{fieldName}</span> field
+          in the <span className="font-semibold text-[var(--text-secondary)]">{tabName}</span> tab first,
           then come back here to upload the elevation drawing.
         </p>
       </div>
@@ -163,7 +173,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
             Elevation Type
           </span>
           <span className="px-2 py-0.5 rounded-full bg-[var(--primary-bg)] border border-[var(--primary-border)] text-xs font-semibold text-[var(--primary-text)]">
-            {elevationType?.code ?? door.elevationTypeId}
+            {elevationType?.code ?? activeCode}
           </span>
         </div>
 
@@ -216,7 +226,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
           <div className="relative group rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--bg-subtle)]">
             <img
               src={imageSource}
-              alt={`Elevation ${elevationType?.code}`}
+              alt={`Elevation ${elevationType?.code ?? activeCode}`}
               className="w-full object-contain max-h-[400px]"
               loading="lazy"
             />
@@ -281,7 +291,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
         >
           <img
             src={imageSource}
-            alt={`Elevation ${elevationType?.code} — full size`}
+            alt={`Elevation ${elevationType?.code ?? activeCode} — full size`}
             className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
             onClick={e => e.stopPropagation()}
           />

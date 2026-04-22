@@ -45,7 +45,7 @@ const ALL_AVAILABLE_COLUMNS: ColumnDef[] = [
     { key: 'quantity',              label: 'Quantity',                width: 'w-20',          type: 'number', align: 'center', isCore: true },
     { key: 'handing',               label: 'Hand of Openings',        width: 'min-w-[120px]', type: 'text' },
     { key: 'operation',             label: 'Door Operation',          width: 'min-w-[120px]', type: 'text' },
-    { key: 'leafCount',             label: 'Leaf Count',              width: 'w-20',          type: 'number', align: 'center' },
+    { key: 'leafCount',             label: 'Leaf Count',              width: 'w-20',          type: 'text', align: 'center' },
     { key: 'interiorExterior',      label: 'Interior/Exterior',       width: 'min-w-[120px]', type: 'text' },
     { key: 'excludeReason',         label: 'Exclude Reason',          width: 'min-w-[130px]', type: 'text' },
     { key: 'width',                 label: 'Width',                   width: 'w-20',          type: 'number', align: 'center', isCore: true },
@@ -572,9 +572,24 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                 }
 
                 // Parse numbers for known numeric fields
-                if (['quantity', 'width', 'height', 'thickness', 'leafCount'].includes(editingCell.field as string)) {
+                if (['quantity', 'width', 'height', 'thickness'].includes(editingCell.field as string)) {
                     newVal = parseFloat(newVal as string);
                     if (isNaN(newVal as number)) newVal = 0;
+                }
+
+                if (editingCell.field === 'leafCount') {
+                    return {
+                        ...d,
+                        leafCountDisplay: String(tempValue).trim() || undefined,
+                        leafCount: (() => {
+                            const raw = String(tempValue).trim().toLowerCase();
+                            const numeric = parseFloat(String(tempValue));
+                            if (!isNaN(numeric)) return numeric;
+                            if (['single', 'singles', 'single leaf', '1 leaf'].includes(raw)) return 1;
+                            if (['double', 'pair', 'double leaf', '2 leaf', '2 leaves'].includes(raw)) return 2;
+                            return d.leafCount;
+                        })(),
+                    };
                 }
 
                 return {
@@ -688,6 +703,19 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
         const isEditable = typeof value !== 'object';
 
+        // For thickness: prefer the raw string from sections (preserves Excel value like "1 3/4\"")
+        // over the parsed numeric door.thickness (which would show "1.75").
+        if (colKey === 'thickness') {
+            const rawSec = (door.sections as unknown as { door?: Record<string, string | undefined> } | undefined)?.door;
+            const rawThick = rawSec?.['THICKNESS'] ?? rawSec?.['DOOR THICKNESS'];
+            if (rawThick) value = rawThick;
+        }
+
+        if (colKey === 'leafCount') {
+            const rawSec = (door.sections as unknown as { door?: Record<string, string | undefined> } | undefined)?.door;
+            value = door.leafCountDisplay ?? rawSec?.['LEAF COUNT'] ?? value;
+        }
+
         let displayContent: React.ReactNode;
         if (value !== undefined && value !== null && value !== '') {
             if (typeof value === 'object') {
@@ -719,10 +747,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         return sortConfig.direction === 'asc'
             ? <ChevronUp className="w-3 h-3 text-[var(--primary-text-muted)]" />
             : <ChevronDown className="w-3 h-3 text-[var(--primary-text-muted)]" />;
-    };
-
-    const handleElevationChange = (doorId: string, typeId: string) => {
-        onDoorsUpdate(prev => prev.map(d => d.id === doorId ? { ...d, elevationTypeId: typeId } : d));
     };
 
     // Columns in current drag order
@@ -1260,19 +1284,19 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                         if (!visibleColumns.has(col.key)) return null;
 
                                         if (col.key === 'elevationTypeId') {
+                                            const rawValue = door.elevationTypeId;
+                                            const matchedType = rawValue
+                                                ? elevationTypes.find(t =>
+                                                    t.id === rawValue || t.code === rawValue || t.name === rawValue,
+                                                )
+                                                : undefined;
+                                            const displayValue = matchedType?.code ?? matchedType?.name ?? rawValue;
+
                                             return (
                                                 <td key={col.key} className="px-2 py-2">
-                                                    <select
-                                                        value={door.elevationTypeId || ''}
-                                                        onChange={(e) => handleElevationChange(door.id, e.target.value)}
-                                                        className="w-full text-xs p-1 border-transparent bg-transparent hover:border-[var(--border-strong)] rounded focus:border-[var(--primary-ring)] focus:ring-1 focus:ring-[var(--primary-ring)] cursor-pointer"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                        <option value="" className="text-[var(--text-faint)]">--</option>
-                                                        {elevationTypes.map(t => (
-                                                            <option key={t.id} value={t.id}>{t.code}</option>
-                                                        ))}
-                                                    </select>
+                                                    <div className="p-1 rounded min-h-[24px] flex items-center truncate text-[var(--text-secondary)]">
+                                                        {displayValue || <span className="text-[var(--text-faint)] text-xs">—</span>}
+                                                    </div>
                                                 </td>
                                             );
                                         }

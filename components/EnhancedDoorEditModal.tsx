@@ -128,6 +128,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     onElevationTypeUpdate,
 }) => {
     const [activeTab, setActiveTab] = useState<TabId>('door');
+    const [elevationMode, setElevationMode] = useState<'door' | 'frame'>('door');
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
     const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
 
@@ -433,12 +434,41 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
 
                     {/* ── ELEVATION TAB ── */}
                     {activeTab === 'elevation' && (
-                        <ElevationTab
-                            door={editedDoor}
-                            elevationTypes={elevationTypes}
-                            projectId={projectId}
-                            onElevationTypeUpdate={onElevationTypeUpdate}
-                        />
+                        <div className="space-y-4">
+                            {/* Sub-picker: Door Elevation vs Frame Elevation */}
+                            <div className="flex items-center gap-1 p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] w-fit">
+                                <button
+                                    onClick={() => setElevationMode('door')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                        elevationMode === 'door'
+                                            ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm border border-[var(--border)]'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                                    }`}
+                                >
+                                    <DoorOpen className="w-3.5 h-3.5" />
+                                    Door Elevation
+                                </button>
+                                <button
+                                    onClick={() => setElevationMode('frame')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                        elevationMode === 'frame'
+                                            ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm border border-[var(--border)]'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                                    }`}
+                                >
+                                    <Frame className="w-3.5 h-3.5" />
+                                    Frame Elevation
+                                </button>
+                            </div>
+
+                            <ElevationTab
+                                door={editedDoor}
+                                elevationTypes={elevationTypes}
+                                projectId={projectId}
+                                onElevationTypeUpdate={onElevationTypeUpdate}
+                                mode={elevationMode}
+                            />
+                        </div>
                     )}
                 </div>
 

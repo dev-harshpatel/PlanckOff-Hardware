@@ -20,7 +20,8 @@
       "Bash(pdftotext /d/Projects/learning-projects/PlanckOff-Hardware/docs/Data/hardware-pdf.pdf -)",
       "Bash(node -e \"const pkg = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(pkg.version\\);\")",
       "Bash(node --input-type=module)",
-      "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, exports: Object.keys\\(p.exports || {}\\).slice\\(0,10\\)}, null, 2\\)\\);\")"
+      "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, exports: Object.keys\\(p.exports || {}\\).slice\\(0,10\\)}, null, 2\\)\\);\")",
+      "Bash(npm run *)"
     ]
   }
 }

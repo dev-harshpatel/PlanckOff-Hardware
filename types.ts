@@ -223,7 +223,7 @@ export interface DoorSectionData {
   quantity?: number;
   handOfOpenings?: string;
   doorOperation?: string;
-  leafCount?: number;
+  leafCount?: string;
   interiorExterior?: string;
   excludeReason?: string;
   width?: string;
@@ -350,6 +350,7 @@ export interface Door {
   buildingTag?: string;
   buildingLocation?: string;
   leafCount?: number;
+  leafCountDisplay?: string;
   excludeReason?: string;
   doorCore?: string;
   doorFace?: string;
@@ -378,6 +379,7 @@ export interface ElevationType {
   name: string;
   code: string;
   description?: string;
+  kind?: 'door' | 'frame'; // undefined = legacy door elevation (backward compat)
   imageData?: string;   // legacy base64 (ElevationManager — kept for backward compat)
   imageUrl?: string;    // Supabase Storage public URL
   imagePath?: string;   // Storage path (used for deletion/replacement)

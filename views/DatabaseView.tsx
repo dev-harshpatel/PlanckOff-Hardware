@@ -61,10 +61,14 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
   const loadPending = useCallback(async () => {
     try {
       const res = await fetch('/api/master-hardware/pending', { credentials: 'include' });
-      const json = await res.json() as { data?: MasterHardwarePending[] };
-      if (res.ok) setPending(json.data ?? []);
-    } catch {
-      // non-critical — badge just won't show
+      const json = await res.json() as { data?: MasterHardwarePending[]; error?: string };
+      if (res.ok) {
+        setPending(json.data ?? []);
+      } else {
+        console.warn('[DatabaseView] loadPending failed:', json.error ?? res.status);
+      }
+    } catch (err) {
+      console.warn('[DatabaseView] loadPending error:', err);
     }
   }, []);
 

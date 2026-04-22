@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { BackgroundUploadProvider } from '@/contexts/BackgroundUploadContext';
 import { AnnouncementProvider } from '@/contexts/AnnouncementContext';
+import { ProcessingWidgetProvider } from '@/contexts/ProcessingWidgetContext';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -19,9 +20,11 @@ export function Providers({ children }: ProvidersProps) {
         <AuthProvider>
           <ProjectProvider>
             <BackgroundUploadProvider>
-              <AnnouncementProvider>
-                {children}
-              </AnnouncementProvider>
+              <ProcessingWidgetProvider>
+                <AnnouncementProvider>
+                  {children}
+                </AnnouncementProvider>
+              </ProcessingWidgetProvider>
             </BackgroundUploadProvider>
           </ProjectProvider>
         </AuthProvider>

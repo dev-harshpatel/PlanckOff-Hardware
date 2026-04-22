@@ -21,6 +21,7 @@ interface HeaderProps {
   onNavigate: (page: Page) => void;
   user: AuthUser;
   onLogout: () => Promise<void>;
+  pendingCount?: number;
 }
 
 const NavLink: React.FC<{
@@ -42,7 +43,7 @@ const NavLink: React.FC<{
 
 const TEAM_ROLES: RoleName[] = ['Administrator', 'Team Lead'];
 
-const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, user, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, user, onLogout, pendingCount = 0 }) => {
   const { theme, setTheme } = useTheme();
   const canManageTeam = TEAM_ROLES.includes(user.role);
 
@@ -83,7 +84,15 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
             isActive={currentPage === 'database'}
             onClick={() => onNavigate('database')}
           >
-            Database
+            <span className="relative inline-flex items-center">
+              Database
+              {pendingCount > 0 && (
+                <span className="absolute -top-1 -right-2.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                </span>
+              )}
+            </span>
           </NavLink>
           {canManageTeam && (
             <NavLink

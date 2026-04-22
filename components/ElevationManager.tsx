@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import {
-    AlertTriangle, ImageIcon, Layers, Loader2,
+    AlertTriangle, DoorOpen, Frame, ImageIcon, Layers, Loader2,
     Pencil, Plus, RefreshCw, Trash2, Upload, X,
 } from 'lucide-react';
 import { ElevationType } from '../types';
@@ -36,7 +36,14 @@ const resolveImage = (type: ElevationType) => type.imageUrl ?? type.imageData ??
 
 const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onUpdate, onClose, projectId }) => {
     const [types, setTypes] = useState<ElevationType[]>(elevationTypes);
+    const [managerKind, setManagerKind] = useState<'door' | 'frame'>('door');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Filter displayed types by the selected kind (legacy undefined = door)
+    const visibleTypes = useMemo(() =>
+        types.filter(t => t.kind === managerKind || (managerKind === 'door' && t.kind === undefined)),
+        [types, managerKind],
+    );
 
     // ── Form state ────────────────────────────────────────────────────────────
     const [editingId, setEditingId] = useState<string | null>(null); // null = add mode
@@ -54,14 +61,14 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
     const isEditMode = editingId !== null;
     const editingType = isEditMode ? types.find(t => t.id === editingId) ?? null : null;
 
-    // Duplicate detection: only active in add mode, ignores the type being edited
+    // Duplicate detection: only active in add mode, scoped to the current kind
     const duplicate = useMemo(() => {
         if (isEditMode) return null;
         const trimmed = formCode.trim();
         if (!trimmed) return null;
-        const match = types.find(t => t.code === trimmed || t.name === trimmed);
+        const match = visibleTypes.find(t => t.code === trimmed || t.name === trimmed);
         return match && (match.imageUrl || match.imageData) ? match : null;
-    }, [formCode, types, isEditMode]);
+    }, [formCode, visibleTypes, isEditMode]);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const resetForm = () => {
@@ -136,7 +143,8 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                     await deleteElevationImage(editingType.imagePath).catch(() => {});
                 }
                 const blob = await compressElevationImage(pendingFile);
-                const uploaded = await uploadElevationImage(projectId, trimmedCode, blob);
+                const kindForUpload = (isEditMode ? editingType?.kind : managerKind) ?? 'door';
+                const uploaded = await uploadElevationImage(projectId, trimmedCode, blob, kindForUpload);
                 imageUrl = uploaded.url;
                 imagePath = uploaded.path;
             }
@@ -144,7 +152,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
             let updated: ElevationType[];
 
             if (isEditMode && editingType) {
-                // Update the existing entry
+                // Update the existing entry (preserve kind)
                 const upserted: ElevationType = {
                     ...editingType,
                     code: trimmedCode,
@@ -156,11 +164,15 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                 };
                 updated = types.map(t => t.id === editingType.id ? upserted : t);
             } else {
-                // Check if code already exists (add mode duplicate)
-                const existing = types.find(t => t.code === trimmedCode || t.name === trimmedCode);
+                // Check if code already exists for the same kind (add mode duplicate)
+                const existing = types.find(
+                    t => (t.kind === managerKind || (managerKind === 'door' && t.kind === undefined)) &&
+                        (t.code === trimmedCode || t.name === trimmedCode),
+                );
                 if (existing) {
                     const upserted: ElevationType = {
                         ...existing,
+                        kind: managerKind,
                         imageUrl,
                         imagePath,
                         description: formDescription.trim() || existing.description,
@@ -172,6 +184,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                         id: crypto.randomUUID(),
                         name: trimmedCode,
                         code: trimmedCode,
+                        kind: managerKind,
                         description: formDescription.trim() || undefined,
                         imageUrl,
                         imagePath,
@@ -224,16 +237,41 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                         <div>
                             <h2 className="text-sm font-semibold text-[var(--text)]">Manage Elevation Types</h2>
                             <p className="text-xs text-[var(--primary-text-muted)] mt-0.5">
-                                {types.length} type{types.length !== 1 ? 's' : ''} defined
+                                {visibleTypes.length} {managerKind} type{visibleTypes.length !== 1 ? 's' : ''} · {types.length} total
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 text-[var(--text-faint)] hover:text-[var(--text-muted)] hover:bg-[var(--primary-bg-hover)] rounded-lg transition-colors"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {/* Door / Frame picker */}
+                        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--primary-bg-hover)] border border-[var(--primary-border)]">
+                            <button
+                                onClick={() => { setManagerKind('door'); resetForm(); }}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                                    managerKind === 'door'
+                                        ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm'
+                                        : 'text-[var(--primary-text-muted)] hover:text-[var(--text)]'
+                                }`}
+                            >
+                                <DoorOpen className="w-3 h-3" /> Door
+                            </button>
+                            <button
+                                onClick={() => { setManagerKind('frame'); resetForm(); }}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                                    managerKind === 'frame'
+                                        ? 'bg-[var(--bg)] text-[var(--text)] shadow-sm'
+                                        : 'text-[var(--primary-text-muted)] hover:text-[var(--text)]'
+                                }`}
+                            >
+                                <Frame className="w-3 h-3" /> Frame
+                            </button>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-1.5 text-[var(--text-faint)] hover:text-[var(--text-muted)] hover:bg-[var(--primary-bg-hover)] rounded-lg transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* ── Body ── */}
@@ -248,7 +286,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                            {types.map(type => {
+                            {visibleTypes.map(type => {
                                 const thumb = resolveImage(type);
                                 const isBeingEdited = type.id === editingId;
                                 return (
@@ -299,10 +337,10 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                 );
                             })}
 
-                            {types.length === 0 && (
+                            {visibleTypes.length === 0 && (
                                 <div className="flex flex-col items-center gap-2 py-10 text-center">
                                     <Layers className="w-7 h-7 text-[var(--text-faint)] opacity-50" />
-                                    <p className="text-xs text-[var(--text-faint)]">No elevation types yet.</p>
+                                    <p className="text-xs text-[var(--text-faint)]">No {managerKind} elevation types yet.</p>
                                     <p className="text-[10px] text-[var(--text-faint)]">Add one using the form →</p>
                                 </div>
                             )}
@@ -314,8 +352,8 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
 
                         <SectionDivider>
                             {isEditMode
-                                ? <><Pencil className="w-3 h-3" /> Edit Type — {editingType?.code}</>
-                                : <><Plus className="w-3 h-3" /> Add New Type</>
+                                ? <><Pencil className="w-3 h-3" /> Edit {managerKind === 'frame' ? 'Frame' : 'Door'} Type — {editingType?.code}</>
+                                : <><Plus className="w-3 h-3" /> Add New {managerKind === 'frame' ? 'Frame' : 'Door'} Elevation Type</>
                             }
                         </SectionDivider>
 

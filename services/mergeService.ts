@@ -104,6 +104,7 @@ function toMergedDoor(row: DoorScheduleRow, matchedSetName: string, scheduleOrde
     fireRating: row.fireRating,
     leafCount: row.leafCount,
     doorType: row.doorType,
+    doorElevationType: row.doorElevationType,
     doorWidth: row.doorWidth,
     doorHeight: row.doorHeight,
     thickness: row.thickness,

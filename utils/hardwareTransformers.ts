@@ -58,6 +58,28 @@ function parseThickness(val: string | undefined): number {
   return parseFraction(val) ?? 0;
 }
 
+function parseLeafCountValue(val: string | number | undefined): number | undefined {
+  if (val === undefined || val === null) return undefined;
+
+  const raw = String(val).trim();
+  if (!raw) return undefined;
+
+  const numeric = parseInt(raw, 10);
+  if (!isNaN(numeric)) return numeric;
+
+  const normalized = raw.toLowerCase();
+  if (['single', 'singles', 'single leaf', '1 leaf'].includes(normalized)) return 1;
+  if (['double', 'pair', 'double leaf', '2 leaf', '2 leaves'].includes(normalized)) return 2;
+
+  return undefined;
+}
+
+function getLeafCountDisplayValue(val: string | number | undefined): string | undefined {
+  if (val === undefined || val === null) return undefined;
+  const raw = String(val).trim();
+  return raw || undefined;
+}
+
 // ---------------------------------------------------------------------------
 // ExtractedHardwareSet → HardwareSet (UI type)
 // ---------------------------------------------------------------------------
@@ -105,6 +127,7 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
     const rawThickness = row.sections
       ? (row.sections.door['THICKNESS'] ?? row.sections.door['DOOR THICKNESS'] ?? row.thickness)
       : row.thickness;
+    const rawLeafCount = (row.sections ? row.sections.door['LEAF COUNT'] : undefined) ?? row.leafCount;
 
     return {
       id: `door-import-${idx}-${row.doorTag}`,
@@ -121,17 +144,17 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
       interiorExterior: (row.sections ? row.sections.door['INTERIOR/EXTERIOR'] : undefined) ?? row.interiorExterior,
       quantity: row.quantity ?? 1,
       location: (row.sections ? row.sections.door['DOOR LOCATION'] : undefined) ?? row.doorLocation,
-      type: row.leafCount ? (parseInt(row.leafCount, 10) > 1 ? 'Pair' : 'Single') : undefined,
+      type: (() => {
+        const leafCount = parseLeafCountValue(rawLeafCount);
+        return leafCount !== undefined ? (leafCount > 1 ? 'Pair' : 'Single') : undefined;
+      })(),
 
       buildingTag: (row.sections ? row.sections.door['BUILDING TAG'] : undefined) ?? row.buildingTag,
       buildingLocation: (row.sections ? row.sections.door['BUILDING LOCATION'] : undefined) ?? row.buildingLocation,
       handing: ((row.sections ? row.sections.door['HAND OF OPENINGS'] : undefined) ?? row.handOfOpenings) as Door['handing'],
       operation: (row.sections ? row.sections.door['DOOR OPERATION'] : undefined) ?? row.doorOperation,
-      leafCount: (() => {
-        const raw = (row.sections ? row.sections.door['LEAF COUNT'] : undefined) ?? row.leafCount;
-        const n = raw !== undefined ? parseInt(String(raw), 10) : NaN;
-        return isNaN(n) ? undefined : n;
-      })(),
+      leafCount: parseLeafCountValue(rawLeafCount),
+      leafCountDisplay: getLeafCountDisplayValue(rawLeafCount),
       excludeReason: (row.sections ? row.sections.door['EXCLUDE REASON'] : undefined) ?? row.excludeReason,
       stcRating: (row.sections ? row.sections.door['STC RATING'] : undefined) ?? row.stcRating,
       undercut: (row.sections ? row.sections.door['DOOR UNDERCUT'] : undefined) ?? row.doorUndercut,
@@ -216,11 +239,8 @@ export function transformFromFinalJson(
         door.sections?.door['DOOR THICKNESS'] ??
         door.thickness;
 
-      const leafCountRaw =
-        door.sections?.door['LEAF COUNT'] ?? door.leafCount;
-      const leafCountNum = leafCountRaw !== undefined
-        ? parseInt(String(leafCountRaw), 10)
-        : NaN;
+      const leafCountRaw = door.sections?.door['LEAF COUNT'] ?? door.leafCount;
+      const leafCountNum = parseLeafCountValue(leafCountRaw);
 
       const providedHardwareSet = door.sections?.hardware?.['HARDWARE SET'] ?? door.hwSet ?? door.matchedSetName;
 
@@ -239,8 +259,9 @@ export function transformFromFinalJson(
         interiorExterior: (door.sections?.door['INTERIOR/EXTERIOR']) ?? door.interiorExterior,
         quantity: door.quantity ?? 1,
         location: door.sections?.door['DOOR LOCATION'] ?? door.doorLocation,
-        type: !isNaN(leafCountNum) ? (leafCountNum > 1 ? 'Pair' : 'Single') : undefined,
-        leafCount: !isNaN(leafCountNum) ? leafCountNum : undefined,
+        type: leafCountNum !== undefined ? (leafCountNum > 1 ? 'Pair' : 'Single') : undefined,
+        leafCount: leafCountNum,
+        leafCountDisplay: getLeafCountDisplayValue(leafCountRaw),
 
         buildingTag: door.sections?.door['BUILDING TAG'],
         buildingLocation: door.sections?.door['BUILDING LOCATION'],
@@ -254,7 +275,10 @@ export function transformFromFinalJson(
         doorEdge: door.sections?.door['DOOR EDGE'],
         doorGauge: door.sections?.door['DOOR GUAGE'],
         doorIncludeExclude: door.sections?.door['DOOR INCLUDE/EXCLUDE'],
-        elevationTypeId: door.sections?.door['DOOR ELEVATION TYPE'],
+        elevationTypeId:
+          door.sections?.door['DOOR ELEVATION TYPE'] ??
+          door.doorElevationType ??
+          door.doorType,
 
         frameMaterial: door.sections?.frame['FRAME MATERIAL'] as Door['frameMaterial'],
         wallType: door.sections?.frame['WALL TYPE'],

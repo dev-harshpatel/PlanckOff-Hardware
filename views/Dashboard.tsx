@@ -68,12 +68,72 @@ const KANBAN_COLUMNS: {
     { id: 'Archived',     label: 'Archived',      dot: 'bg-purple-400',              countBg: 'bg-purple-50',            countText: 'text-purple-700' },
 ];
 
+const STATUS_FILTERS: Array<{
+    id: ProjectStatus | 'All';
+    label: string;
+    dot: string;
+    countBg: string;
+    countText: string;
+}> = [
+    ...KANBAN_COLUMNS,
+    {
+        id: 'All',
+        label: 'All',
+        dot: 'bg-[var(--text-secondary)]',
+        countBg: 'bg-[var(--primary-bg)]',
+        countText: 'text-[var(--primary-text)]',
+    },
+];
+
 const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     Active:         { text: 'text-[var(--success-text)]', bg: 'bg-[var(--success-bg)]', dot: 'bg-[var(--success-dot)]' },
     'Under Review': { text: 'text-[var(--warning-text)]', bg: 'bg-[var(--warning-bg)]', dot: 'bg-[var(--warning-dot)]' },
     Submitted:      { text: 'text-[var(--primary-text)]', bg: 'bg-[var(--primary-bg)]', dot: 'bg-[var(--primary-action)]' },
     'On Hold':      { text: 'text-[var(--text-muted)]',   bg: 'bg-[var(--bg-muted)]',   dot: 'bg-[var(--text-faint)]' },
     Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
+};
+
+type ProjectStatusOverrides = Record<string, ProjectStatus>;
+
+const getProjectStatus = (project: Project, overrides?: ProjectStatusOverrides): ProjectStatus => {
+    return overrides?.[project.id] ?? project.status ?? 'Active';
+};
+
+const applyProjectStatusOverrides = (projects: Project[], overrides: ProjectStatusOverrides): Project[] => {
+    return projects.map(project => {
+        const optimisticStatus = overrides[project.id];
+        return optimisticStatus ? { ...project, status: optimisticStatus } : project;
+    });
+};
+
+const buildProjectStats = (projects: Project[]): Record<string, number> => {
+    const counts: Record<string, number> = {};
+    KANBAN_COLUMNS.forEach(col => { counts[col.id] = 0; });
+
+    projects.forEach(project => {
+        const status = getProjectStatus(project);
+        if (counts[status] !== undefined) counts[status]++;
+        else counts['Active']++;
+    });
+
+    return counts;
+};
+
+const filterProjectsByDashboardState = (
+    projects: Project[],
+    searchQuery: string,
+    selectedMemberFilter: string,
+    selectedStatusFilter: ProjectStatus | 'All',
+): Project[] => {
+    return projects.filter(project => {
+        const matchesSearch =
+            project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (project.client && project.client.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesMember = selectedMemberFilter === 'All Members' || project.assignedTo === selectedMemberFilter;
+        const currentStatus = getProjectStatus(project);
+        const matchesStatus = selectedStatusFilter === 'All' || currentStatus === selectedStatusFilter;
+        return matchesSearch && matchesMember && matchesStatus;
+    });
 };
 
 const ProjectCard: React.FC<{
@@ -84,12 +144,29 @@ const ProjectCard: React.FC<{
     onDelete: (id: string) => void;
     userRole: RoleName;
     teamMembers: TeamMember[];
-}> = ({ project, onSelect, onSave, onEdit, onDelete, userRole, teamMembers }) => {
+    draggable?: boolean;
+    isDragging?: boolean;
+    onDragStart?: (project: Project) => void;
+    onDragEnd?: () => void;
+}> = ({
+    project,
+    onSelect,
+    onSave,
+    onEdit,
+    onDelete,
+    userRole,
+    teamMembers,
+    draggable = false,
+    isDragging = false,
+    onDragStart,
+    onDragEnd,
+}) => {
     const [showAssignMenu, setShowAssignMenu] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState('');
     const [isAssigning, setIsAssigning] = useState(false);
     const assignMenuRef = useRef<HTMLDivElement | null>(null);
+    const suppressClickRef = useRef(false);
 
     const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
     const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
@@ -131,9 +208,32 @@ const ProjectCard: React.FC<{
 
     const statusStyle = STAT_COLORS[project.status || 'Active'] ?? STAT_COLORS['Active'];
 
+    const handleCardClick = () => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+        }
+        onSelect();
+    };
+
     return (
         <>
-            <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] hover:border-[var(--primary-border)] hover:shadow-sm transition-all p-4 group relative cursor-pointer" onClick={onSelect}>
+            <div
+                className={`bg-[var(--bg)] rounded-md border hover:border-[var(--primary-border)] hover:shadow-sm transition-all p-4 group relative cursor-pointer ${isDragging ? 'opacity-50 border-[var(--primary-ring)] shadow-sm' : 'border-[var(--border)]'}`}
+                onClick={handleCardClick}
+                draggable={draggable}
+                onDragStart={(e) => {
+                    if (!draggable) return;
+                    suppressClickRef.current = true;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', project.id);
+                    onDragStart?.(project);
+                }}
+                onDragEnd={() => {
+                    suppressClickRef.current = false;
+                    onDragEnd?.();
+                }}
+            >
                 {/* Card header */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
@@ -270,27 +370,63 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
     const [isTrashOpen, setIsTrashOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('All Members');
+    const [selectedStatusFilter, setSelectedStatusFilter] = useState<ProjectStatus | 'All'>('All');
+    const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
+    const [dropTargetStatus, setDropTargetStatus] = useState<ProjectStatus | null>(null);
+    const [optimisticStatuses, setOptimisticStatuses] = useState<ProjectStatusOverrides>({});
+    const [updatingProjectIds, setUpdatingProjectIds] = useState<Set<string>>(new Set());
 
-    const stats = useMemo(() => {
-        const counts: Record<string, number> = {};
-        KANBAN_COLUMNS.forEach(col => { counts[col.id] = 0; });
-        projects.forEach(p => {
-            const status = p.status || 'Active';
-            if (counts[status] !== undefined) counts[status]++;
-            else counts['Active']++;
+    const effectiveProjects = useMemo(
+        () => applyProjectStatusOverrides(projects, optimisticStatuses),
+        [projects, optimisticStatuses],
+    );
+
+    useEffect(() => {
+        setOptimisticStatuses(current => {
+            let changed = false;
+            const next: ProjectStatusOverrides = {};
+
+            Object.entries(current).forEach(([projectId, status]) => {
+                const persistedProject = projects.find(project => project.id === projectId);
+                if (!persistedProject) {
+                    changed = true;
+                    return;
+                }
+
+                const persistedStatus = persistedProject.status ?? 'Active';
+                if (persistedStatus !== status) {
+                    next[projectId] = status;
+                } else {
+                    changed = true;
+                }
+            });
+
+            return changed ? next : current;
         });
-        return counts;
     }, [projects]);
 
+    const stats = useMemo(() => buildProjectStats(effectiveProjects), [effectiveProjects]);
+
     const filteredProjects = useMemo(() => {
-        return projects.filter(project => {
-            const matchesSearch =
-                project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (project.client && project.client.toLowerCase().includes(searchQuery.toLowerCase()));
-            const matchesMember = selectedMemberFilter === 'All Members' || project.assignedTo === selectedMemberFilter;
-            return matchesSearch && matchesMember;
-        });
-    }, [projects, searchQuery, selectedMemberFilter]);
+        return filterProjectsByDashboardState(
+            effectiveProjects,
+            searchQuery,
+            selectedMemberFilter,
+            selectedStatusFilter,
+        );
+    }, [effectiveProjects, searchQuery, selectedMemberFilter, selectedStatusFilter]);
+
+    const filteredProjectCount = filteredProjects.length;
+
+    const selectedFilterMeta = STATUS_FILTERS.find(filter => filter.id === selectedStatusFilter) ?? STATUS_FILTERS[0];
+
+    const sectionTitle = selectedStatusFilter === 'All'
+        ? 'All Projects'
+        : `${selectedStatusFilter} Projects`;
+
+    const sectionDescription = selectedStatusFilter === 'All'
+        ? 'Current status across all projects'
+        : `Showing all ${selectedStatusFilter.toLowerCase()} projects in a single view`;
 
     const memberFilterOptions = useMemo(() => [
         { value: 'All Members', label: 'All Members' },
@@ -339,6 +475,74 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
     };
 
     const canCreate = userRole === 'Administrator' || userRole === 'Team Lead';
+    const canDragProjects = userRole === 'Administrator' || userRole === 'Team Lead';
+
+    const handleProjectDropToStatus = async (targetStatus: ProjectStatus) => {
+        if (!draggedProjectId) return;
+
+        const project = effectiveProjects.find(p => p.id === draggedProjectId);
+        if (!project) {
+            setDraggedProjectId(null);
+            setDropTargetStatus(null);
+            return;
+        }
+
+        if (updatingProjectIds.has(project.id)) return;
+
+        const currentStatus = getProjectStatus(project);
+        if (currentStatus === targetStatus) {
+            setDraggedProjectId(null);
+            setDropTargetStatus(null);
+            return;
+        }
+
+        const previousStatus = currentStatus;
+
+        setOptimisticStatuses(current => ({
+            ...current,
+            [project.id]: targetStatus,
+        }));
+        setUpdatingProjectIds(current => {
+            const next = new Set(current);
+            next.add(project.id);
+            return next;
+        });
+        setDraggedProjectId(null);
+        setDropTargetStatus(null);
+
+        try {
+            await onProjectUpdate({
+                ...project,
+                status: targetStatus,
+            });
+            addToast({
+                type: 'success',
+                message: `Project "${project.name}" moved to ${targetStatus}.`,
+            });
+        } catch (error) {
+            const details = error instanceof Error ? error.message : 'Could not update project status.';
+            addToast({
+                type: 'error',
+                message: `Failed to move "${project.name}"`,
+                details,
+            });
+            setOptimisticStatuses(current => {
+                const next = { ...current };
+                if (previousStatus === (projects.find(p => p.id === project.id)?.status ?? 'Active')) {
+                    delete next[project.id];
+                } else {
+                    next[project.id] = previousStatus;
+                }
+                return next;
+            });
+        } finally {
+            setUpdatingProjectIds(current => {
+                const next = new Set(current);
+                next.delete(project.id);
+                return next;
+            });
+        }
+    };
 
     return (
         <>
@@ -385,14 +589,23 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
                     {/* Stat pills */}
                     <div className="flex items-center gap-2 mt-4 flex-wrap">
-                        {KANBAN_COLUMNS.map(col => {
-                            const count = stats[col.id] ?? 0;
+                        {STATUS_FILTERS.map(col => {
+                            const count = col.id === 'All' ? projects.length : (stats[col.id] ?? 0);
+                            const isActive = selectedStatusFilter === col.id;
                             return (
-                                <div key={col.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]`}>
+                                <button
+                                    key={col.id}
+                                    type="button"
+                                    onClick={() => setSelectedStatusFilter(col.id)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-colors ${isActive
+                                        ? 'border-[var(--primary-ring)] bg-[var(--bg)] shadow-sm'
+                                        : 'border-[var(--primary-border)] bg-[var(--bg)] hover:bg-[var(--bg-subtle)]'
+                                    }`}
+                                >
                                     <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
                                     <span className="text-xs text-[var(--text-muted)] font-medium">{col.label}</span>
                                     <span className={`text-xs font-bold ${col.countText}`}>{count}</span>
-                                </div>
+                                </button>
                             );
                         })}
                         <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]">
@@ -435,49 +648,124 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     </div>
                 </div>
 
-                {/* Kanban board */}
+                {/* Projects content */}
                 <div className="flex-grow overflow-x-auto overflow-y-hidden px-6 py-5">
-                    <div className="flex gap-4 h-full min-w-[1200px]">
-                        {KANBAN_COLUMNS.map(col => {
-                            const colProjects = filteredProjects.filter(p => (p.status || 'Active') === col.id);
-                            return (
-                                <div key={col.id} className="flex-1 min-w-[240px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
-                                    {/* Column header */}
-                                    <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
-                                            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{col.label}</span>
-                                        </div>
-                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.countBg} ${col.countText}`}>
-                                            {colProjects.length}
-                                        </span>
-                                    </div>
-
-                                    {/* Column cards (scrollable) */}
-                                    <div className="flex-grow overflow-y-auto bg-[var(--bg-subtle)] p-2.5 space-y-2">
-                                        {colProjects.length > 0 ? (
-                                            colProjects.map(project => (
-                                                <ProjectCard
-                                                    key={project.id}
-                                                    project={project}
-                                                    onSelect={() => onSelectProject(project.id)}
-                                                    onSave={onProjectUpdate}
-                                                    onEdit={handleOpenEdit}
-                                                    onDelete={onDeleteProject}
-                                                    userRole={userRole}
-                                                    teamMembers={teamMembers}
-                                                />
-                                            ))
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center h-24 border border-dashed border-[var(--border)] rounded-md bg-[var(--bg)]/60 text-center">
-                                                <span className="text-xs text-[var(--text-faint)]">No projects</span>
+                    {selectedStatusFilter === 'All' ? (
+                        <div className="flex gap-4 h-full min-w-[1200px]">
+                            {KANBAN_COLUMNS.map(col => {
+                                const colProjects = filteredProjects.filter(p => (p.status || 'Active') === col.id);
+                                const isDropTarget = dropTargetStatus === col.id;
+                                return (
+                                    <div key={col.id} className="flex-1 min-w-[240px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
+                                        <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
+                                                <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{col.label}</span>
                                             </div>
-                                        )}
+                                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.countBg} ${col.countText}`}>
+                                                {colProjects.length}
+                                            </span>
+                                        </div>
+
+                                        <div
+                                            className={`flex-grow overflow-y-auto bg-[var(--bg-subtle)] p-2.5 space-y-2 transition-colors ${isDropTarget ? 'bg-[var(--primary-bg)]/70' : ''}`}
+                                            onDragOver={(e) => {
+                                                if (!canDragProjects || !draggedProjectId) return;
+                                                e.preventDefault();
+                                                e.dataTransfer.dropEffect = 'move';
+                                                if (dropTargetStatus !== col.id) {
+                                                    setDropTargetStatus(col.id);
+                                                }
+                                            }}
+                                            onDragLeave={(e) => {
+                                                if (!canDragProjects) return;
+                                                const nextTarget = e.relatedTarget as Node | null;
+                                                if (!e.currentTarget.contains(nextTarget)) {
+                                                    setDropTargetStatus(current => current === col.id ? null : current);
+                                                }
+                                            }}
+                                            onDrop={(e) => {
+                                                if (!canDragProjects) return;
+                                                e.preventDefault();
+                                                void handleProjectDropToStatus(col.id);
+                                            }}
+                                        >
+                                            {colProjects.length > 0 ? (
+                                                colProjects.map(project => (
+                                                    <ProjectCard
+                                                        key={project.id}
+                                                        project={project}
+                                                        onSelect={() => onSelectProject(project.id)}
+                                                        onSave={onProjectUpdate}
+                                                        onEdit={handleOpenEdit}
+                                                        onDelete={onDeleteProject}
+                                                        userRole={userRole}
+                                                        teamMembers={teamMembers}
+                                                        draggable={canDragProjects && !updatingProjectIds.has(project.id)}
+                                                        isDragging={draggedProjectId === project.id || updatingProjectIds.has(project.id)}
+                                                        onDragStart={(dragProject) => setDraggedProjectId(dragProject.id)}
+                                                        onDragEnd={() => {
+                                                            setDraggedProjectId(null);
+                                                            setDropTargetStatus(null);
+                                                        }}
+                                                    />
+                                                ))
+                                            ) : (
+                                                <div className={`flex flex-col items-center justify-center h-24 border border-dashed rounded-md text-center transition-colors ${isDropTarget ? 'border-[var(--primary-border)] bg-[var(--bg)]' : 'border-[var(--border)] bg-[var(--bg)]/60'}`}>
+                                                    <span className="text-xs text-[var(--text-faint)]">No projects</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="h-full overflow-y-auto">
+                            <div className="flex items-center justify-between mb-5">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilterMeta.countBg}`}>
+                                        <span className={`w-2.5 h-2.5 rounded-full ${selectedFilterMeta.dot}`} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-[var(--text)]">{sectionTitle}</h2>
+                                        <p className="text-sm text-[var(--text-muted)]">{sectionDescription}</p>
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--border)] bg-[var(--bg)]">
+                                    <span className="text-xs text-[var(--text-muted)] font-medium">Showing</span>
+                                    <span className={`text-xs font-bold ${selectedFilterMeta.countText}`}>{filteredProjectCount}</span>
+                                </div>
+                            </div>
+
+                            {filteredProjects.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                    {filteredProjects.map(project => (
+                                        <ProjectCard
+                                            key={project.id}
+                                            project={project}
+                                            onSelect={() => onSelectProject(project.id)}
+                                            onSave={onProjectUpdate}
+                                            onEdit={handleOpenEdit}
+                                            onDelete={onDeleteProject}
+                                            userRole={userRole}
+                                            teamMembers={teamMembers}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center min-h-[240px] border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg)] text-center px-6">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${selectedFilterMeta.countBg}`}>
+                                        <span className={`w-3 h-3 rounded-full ${selectedFilterMeta.dot}`} />
+                                    </div>
+                                    <h3 className="text-base font-semibold text-[var(--text)]">No {selectedStatusFilter.toLowerCase()} projects found</h3>
+                                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                                        Try changing the member filter or search text to widen the results.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

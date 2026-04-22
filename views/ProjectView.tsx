@@ -7,7 +7,7 @@ import HardwareSetsManager from '../components/HardwareSetsManager';
 import DoorScheduleManager from '../components/DoorScheduleManager';
 import { generateReport } from '../utils/reportGenerator';
 // process... imports removed from direct use, but types might be needed
-import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, ChevronUp, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Database, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
 import { captureTrainingExample } from '../services/mlOpsService';
@@ -21,9 +21,25 @@ import ErrorModal from '../components/ErrorModal';
 import ValidationReportModal from '../components/ValidationReportModal';
 import ResizablePanels from '../components/ResizablePanels';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
+import { useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+const parseLeafCount = (value?: string): number | undefined => {
+    if (!value) return undefined;
+    const raw = value.trim();
+    if (!raw) return undefined;
+
+    const numeric = parseInt(raw, 10);
+    if (!isNaN(numeric)) return numeric;
+
+    const normalized = raw.toLowerCase();
+    if (['single', 'singles', 'single leaf', '1 leaf'].includes(normalized)) return 1;
+    if (['double', 'pair', 'double leaf', '2 leaf', '2 leaves'].includes(normalized)) return 2;
+
+    return undefined;
+};
 
 const SaveStatusIndicator: React.FC<{ status: SaveStatus; onRetry: () => void }> = ({ status, onRetry }) => {
     switch (status) {
@@ -71,6 +87,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
     // Background Upload Context (used for progress widget display only)
     const { tasks } = useBackgroundUpload();
+    const { widget, setWidget, clearWidget, registerExpandHandler, unregisterExpandHandler } = useProcessingWidget();
     const processedTaskIds = useRef<Set<string>>(new Set());
 
     // Initialize processed tasks with already completed ones to avoid re-processing on mount
@@ -361,8 +378,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     interiorExterior: d.interiorExterior,
                     quantity: d.quantity,
                     fireRating: d.fireRating,
-                    leafCount: d.leafCount !== undefined ? String(d.leafCount) : undefined,
+                    leafCount: d.leafCountDisplay ?? (d.leafCount !== undefined ? String(d.leafCount) : undefined),
                     doorType: d.type,
+                    doorElevationType: d.elevationTypeId,
                     doorWidth: d.width ? `${Math.floor(d.width / 12)}'-${d.width % 12}"` : undefined,
                     doorHeight: d.height ? `${Math.floor(d.height / 12)}'-${d.height % 12}"` : undefined,
                     thickness: d.thickness ? String(d.thickness) : undefined,
@@ -475,6 +493,52 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const [combinedCurrentStep, setCombinedCurrentStep] = useState('');
     const [combinedLogs, setCombinedLogs] = useState<{ level: 'info' | 'success' | 'warn' | 'error'; msg: string }[]>([]);
     const logsEndRef = useRef<HTMLDivElement>(null);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [isCombinedOverwriteOpen, setIsCombinedOverwriteOpen] = useState(false);
+    const [isCombinedOverwriteChecking, setIsCombinedOverwriteChecking] = useState(false);
+
+    const resetCombinedModal = () => {
+        setIsCombinedUploadOpen(false);
+        setCombinedExcelFile(null);
+        setCombinedPdfFile(null);
+        setCombinedLogs([]);
+        setCombinedProgress(0);
+        setCombinedCurrentStep('');
+        setElapsedSeconds(0);
+        clearWidget();
+    };
+
+    const formatElapsed = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}m ${sec.toString().padStart(2, '0')}s` : `${sec}s`;
+    };
+
+    // Register expand handler so AppShell's global pill can re-open the modal on this page.
+    // Also auto-restore the modal when navigating back to this project mid-processing.
+    useEffect(() => {
+        registerExpandHandler(() => {
+            setIsCombinedUploadOpen(true);
+            setIsCombinedMinimized(false);
+            setWidget({ isMinimized: false });
+        });
+        // Capture widget snapshot at mount — stale closure is intentional here (mount-only)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const snap = widget;
+        if (snap.isActive && snap.projectId === project.id) {
+            // User navigated back to this project while processing was running.
+            // Re-open the modal so they can see progress without needing another click.
+            setIsCombinedUploadOpen(true);
+            setIsCombinedMinimized(false);
+            setCombinedProgress(snap.progress);
+            setCombinedCurrentStep(snap.step);
+            setIsCombinedProcessing(snap.isProcessing);
+            setWidget({ isMinimized: false });
+        }
+        return () => unregisterExpandHandler();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Legacy errors
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -682,6 +746,35 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         if (file) processDoorSchedule(file);
     };
 
+    // Overwrite check for combined upload — runs before processCombinedUpload
+    const handleCombinedProcessClick = async () => {
+        if (!combinedExcelFile || !combinedPdfFile) return;
+        setIsCombinedOverwriteChecking(true);
+        try {
+            const [dsRes, pdfRes] = await Promise.all([
+                fetch(`/api/projects/${project.id}/door-schedule`, { credentials: 'include' }),
+                fetch(`/api/projects/${project.id}/hardware-pdf`, { credentials: 'include' }),
+            ]);
+            const dsJson = dsRes.ok ? await dsRes.json() : null;
+            const pdfJson = pdfRes.ok ? await pdfRes.json() : null;
+            const hasExisting = !!dsJson?.data || !!pdfJson?.data;
+            if (hasExisting) {
+                setIsCombinedOverwriteOpen(true);
+            } else {
+                processCombinedUpload(combinedExcelFile, combinedPdfFile);
+            }
+        } finally {
+            setIsCombinedOverwriteChecking(false);
+        }
+    };
+
+    const handleConfirmCombinedOverwrite = () => {
+        setIsCombinedOverwriteOpen(false);
+        if (combinedExcelFile && combinedPdfFile) {
+            processCombinedUpload(combinedExcelFile, combinedPdfFile);
+        }
+    };
+
     const addLog = useCallback((level: 'info' | 'success' | 'warn' | 'error', msg: string) => {
         setCombinedLogs(prev => [...prev, { level, msg }]);
         // Auto-scroll handled by useEffect watching combinedLogs
@@ -695,12 +788,25 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setIsCombinedProcessing(true);
         setCombinedProgress(0);
         setCombinedLogs([]);
+        setElapsedSeconds(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
         sessionStorage.setItem(`planckoff_proc_${project.id}`, Date.now().toString());
+        setWidget({
+            isActive: true,
+            isProcessing: true,
+            progress: 0,
+            step: '',
+            elapsedSeconds: 0,
+            projectId: project.id,
+            projectPath: `/project/${project.id}`,
+        });
 
         const step = (msg: string, progress: number) => {
             setCombinedCurrentStep(msg);
             setCombinedProgress(progress);
             addLog('info', msg);
+            setWidget({ step: msg, progress });
         };
 
         try {
@@ -803,7 +909,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             addToast({ type: 'error', message: `Processing failed: ${msg}` });
         } finally {
             setIsCombinedProcessing(false);
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
             sessionStorage.removeItem(`planckoff_proc_${project.id}`);
+            setWidget({ isProcessing: false });
         }
     };
 
@@ -843,8 +951,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 interiorExterior: d.interiorExterior,
                 quantity: d.quantity,
                 fireRating: d.fireRating,
-                leafCount: d.leafCount !== undefined ? String(d.leafCount) : undefined,
+                leafCount: d.leafCountDisplay ?? (d.leafCount !== undefined ? String(d.leafCount) : undefined),
                 doorType: d.type,
+                doorElevationType: d.elevationTypeId,
                 doorWidth: d.width ? `${Math.floor(d.width / 12)}'-${d.width % 12}"` : undefined,
                 doorHeight: d.height ? `${Math.floor(d.height / 12)}'-${d.height % 12}"` : undefined,
                 thickness: d.thickness ? String(d.thickness) : undefined,
@@ -991,8 +1100,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     interiorExterior: md.interiorExterior,
                     quantity: md.quantity ?? 1,
                     fireRating: md.fireRating,
-                    leafCount: md.leafCount !== undefined ? parseInt(md.leafCount, 10) : undefined,
+                    leafCount: parseLeafCount(md.leafCount),
+                    leafCountDisplay: md.leafCount,
                     type: md.doorType,
+                    elevationTypeId: md.doorElevationType ?? md.doorType,
                     width: undefined,
                     height: undefined,
                     thickness: undefined,
@@ -1013,6 +1124,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 providedHardwareSet: md.hwSet,
                 location: md.doorLocation,
                 quantity: md.quantity ?? 1,
+                leafCount: parseLeafCount(md.leafCount),
+                leafCountDisplay: md.leafCount,
+                type: md.doorType,
+                elevationTypeId: md.doorElevationType ?? md.doorType,
                 width: undefined,
                 height: undefined,
                 thickness: undefined,
@@ -1315,6 +1430,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 entityName="hardware sets"
             />
 
+            <UploadConfirmationModal
+                isOpen={isCombinedOverwriteOpen}
+                onClose={() => setIsCombinedOverwriteOpen(false)}
+                onConfirm={handleConfirmCombinedOverwrite}
+                files={[...(combinedExcelFile ? [combinedExcelFile] : []), ...(combinedPdfFile ? [combinedPdfFile] : [])]}
+                isLoading={false}
+                title="Re-upload — Project Already Has Data"
+                entityName="door schedule and hardware sets"
+            />
+
             <ErrorModal
                 isOpen={isErrorModalOpen}
                 onClose={() => setIsErrorModalOpen(false)}
@@ -1362,11 +1487,22 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                 <h2 className="text-sm font-semibold text-[var(--text)]">
                                     Process Door Schedule &amp; Hardware PDF
                                 </h2>
+                                {isCombinedProcessing && (
+                                    <span className="flex items-center gap-1 text-xs font-mono text-[var(--text-muted)] bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-0.5">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        {formatElapsed(elapsedSeconds)}
+                                    </span>
+                                )}
+                                {!isCombinedProcessing && elapsedSeconds > 0 && (
+                                    <span className="text-xs font-mono text-green-600 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded px-2 py-0.5">
+                                        {formatElapsed(elapsedSeconds)}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex items-center gap-1">
                                 {isCombinedProcessing && (
                                     <button
-                                        onClick={() => setIsCombinedMinimized(true)}
+                                        onClick={() => { setIsCombinedMinimized(true); setWidget({ isMinimized: true }); }}
                                         className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"
                                         aria-label="Minimize"
                                         title="Minimize — processing continues in background"
@@ -1375,16 +1511,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => {
-                                        if (!isCombinedProcessing) {
-                                            setIsCombinedUploadOpen(false);
-                                            setCombinedExcelFile(null);
-                                            setCombinedPdfFile(null);
-                                            setCombinedLogs([]);
-                                            setCombinedProgress(0);
-                                            setCombinedCurrentStep('');
-                                        }
-                                    }}
+                                    onClick={() => { if (!isCombinedProcessing) resetCombinedModal(); }}
                                     className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                     disabled={isCombinedProcessing}
                                     aria-label="Close"
@@ -1475,14 +1602,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             {combinedProgress === 100 && !isCombinedProcessing ? (
                                 <Button
                                     size="sm"
-                                    onClick={() => {
-                                        setIsCombinedUploadOpen(false);
-                                        setCombinedExcelFile(null);
-                                        setCombinedPdfFile(null);
-                                        setCombinedLogs([]);
-                                        setCombinedProgress(0);
-                                        setCombinedCurrentStep('');
-                                    }}
+                                    onClick={resetCombinedModal}
                                     className="gap-1.5"
                                 >
                                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1493,32 +1613,26 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => {
-                                            setIsCombinedUploadOpen(false);
-                                            setCombinedExcelFile(null);
-                                            setCombinedPdfFile(null);
-                                            setCombinedLogs([]);
-                                            setCombinedProgress(0);
-                                            setCombinedCurrentStep('');
-                                        }}
+                                        onClick={resetCombinedModal}
                                         disabled={isCombinedProcessing}
                                     >
                                         Cancel
                                     </Button>
                                     <Button
                                         size="sm"
-                                        onClick={() => {
-                                            if (combinedExcelFile && combinedPdfFile) {
-                                                processCombinedUpload(combinedExcelFile, combinedPdfFile);
-                                            }
-                                        }}
-                                        disabled={!combinedExcelFile || !combinedPdfFile || isCombinedProcessing}
+                                        onClick={handleCombinedProcessClick}
+                                        disabled={!combinedExcelFile || !combinedPdfFile || isCombinedProcessing || isCombinedOverwriteChecking}
                                         className="gap-1.5"
                                     >
                                         {isCombinedProcessing ? (
                                             <>
                                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                 Processing…
+                                            </>
+                                        ) : isCombinedOverwriteChecking ? (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Checking…
                                             </>
                                         ) : (
                                             <>
@@ -1548,36 +1662,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 </div>
             )}
 
-            {isCombinedUploadOpen && isCombinedMinimized && (
-                <div className="fixed bottom-6 right-6 z-50">
-                    <button
-                        onClick={() => setIsCombinedMinimized(false)}
-                        className="flex items-center gap-3 bg-[var(--bg)] border border-[var(--border)] rounded-full shadow-lg px-4 py-2.5 hover:bg-[var(--bg-muted)] transition-colors group"
-                    >
-                        <div className="relative">
-                            {isCombinedProcessing ? (
-                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                            ) : combinedProgress === 100 ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            ) : (
-                                <Database className="h-4 w-4 text-[var(--text-muted)]" />
-                            )}
-                        </div>
-                        <div className="flex flex-col items-start min-w-0">
-                            <span className="text-xs font-medium text-[var(--text)] truncate max-w-[180px]">
-                                {combinedCurrentStep || 'Processing files…'}
-                            </span>
-                            <div className="w-full h-1 bg-[var(--bg-muted)] rounded-full mt-1 overflow-hidden">
-                                <div
-                                    className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                    style={{ width: `${combinedProgress}%` }}
-                                />
-                            </div>
-                        </div>
-                        <ChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text)] flex-shrink-0" />
-                    </button>
-                </div>
-            )}
+            {/* Local floating pill hidden — global pill in AppShell handles all navigation contexts */}
         </main>
     );
 };

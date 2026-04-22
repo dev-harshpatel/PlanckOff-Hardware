@@ -133,6 +133,7 @@ export interface MergedDoor {
   fireRating?: string;
   leafCount?: string;
   doorType?: string;
+  doorElevationType?: string;
   doorWidth?: string;
   doorHeight?: string;
   thickness?: string;

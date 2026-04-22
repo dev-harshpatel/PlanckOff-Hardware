@@ -190,7 +190,12 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
             quantity:             getNum('quantity', 1),
             handing:              opt('handing') as Door['handing'],
             operation:            opt('operation'),
-            leafCount:            getNum('leafCount', 1),
+            leafCount:            (() => {
+                const raw = opt('leafCount');
+                const num = raw !== undefined ? parseFloat(raw) : NaN;
+                return isNaN(num) ? undefined : num;
+            })(),
+            leafCountDisplay:     opt('leafCount'),
             interiorExterior:     opt('interiorExterior'),
             excludeReason:        opt('excludeReason'),
 
@@ -248,7 +253,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
                         quantity:         getNum('quantity', 1),
                         handOfOpenings:   opt('handing'),
                         doorOperation:    opt('operation'),
-                        leafCount:        getNum('leafCount', 1),
+                        leafCount:        opt('leafCount'),
                         interiorExterior: opt('interiorExterior'),
                         excludeReason:    opt('excludeReason'),
                         width:            getVal('width', ''),

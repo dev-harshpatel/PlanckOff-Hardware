@@ -44,9 +44,10 @@ export async function uploadElevationImage(
   projectId: string,
   elevationTypeCode: string,
   blob: Blob,
+  kind: 'door' | 'frame' = 'door',
 ): Promise<{ url: string; path: string }> {
   const safeCode = elevationTypeCode.replace(/[^a-zA-Z0-9\-_]/g, '_');
-  const path = `${projectId}/${safeCode}-${Date.now()}.webp`;
+  const path = `${projectId}/${kind}/${safeCode}-${Date.now()}.webp`;
 
   const { error } = await supabase.storage
     .from(BUCKET)
