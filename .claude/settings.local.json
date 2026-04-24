@@ -21,7 +21,11 @@
       "Bash(node -e \"const pkg = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(pkg.version\\);\")",
       "Bash(node --input-type=module)",
       "Bash(node -e \"const p = require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, exports: Object.keys\\(p.exports || {}\\).slice\\(0,10\\)}, null, 2\\)\\);\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(data[0]['text'][:8000]\\)\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(0,10000\\)\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(10000,22000\\)\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(22000,35000\\)\\);\")"
     ]
   }
 }
