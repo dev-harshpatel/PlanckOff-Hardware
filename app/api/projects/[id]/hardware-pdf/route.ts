@@ -114,6 +114,7 @@ export const POST = withAuth(
 
     let queuedCount = 0;
     let skippedCount = 0;
+    let queueWarning: string | null = null;
     if (candidateItems.length > 0) {
       const queueResult = await queueItemsForApproval(
         candidateItems,
@@ -125,9 +126,11 @@ export const POST = withAuth(
         queuedCount = queueResult.data.queued;
         skippedCount = queueResult.data.skipped;
       } else {
-        console.error('[hw-pdf:master] queueItemsForApproval returned error:', queueResult.error?.message);
+        queueWarning = queueResult.error?.message ?? 'Unknown queue error';
+        console.error('[hw-pdf:master] queueItemsForApproval returned error:', queueWarning);
       }
     } else {
+      queueWarning = 'No queue candidates were generated from the extracted hardware items.';
       console.warn('[hw-pdf:master] candidateItems is empty — nothing queued. Check that hardwareItems[].item field is non-blank.');
     }
 
@@ -148,6 +151,7 @@ export const POST = withAuth(
         warnings: result.warnings,
         masterQueued: queuedCount,
         masterSkipped: skippedCount,
+        masterQueueWarning: queueWarning,
       },
     });
   },

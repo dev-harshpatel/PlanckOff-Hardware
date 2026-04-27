@@ -33,6 +33,14 @@ function parseMm(val: string): number | null {
   return null;
 }
 
+function parseQuantityValue(val: string | number | undefined): number | undefined {
+  if (typeof val === 'number') return isNaN(val) ? undefined : val;
+  if (val === undefined) return undefined;
+
+  const numeric = parseFloat(String(val).trim());
+  return isNaN(numeric) ? undefined : numeric;
+}
+
 function parseFraction(val: string): number | null {
   // "1 3/4" or "1 3/4\""
   const match = val.replace(/["″]/, '').trim().match(/^(\d+)\s+(\d+)\/(\d+)$/);
@@ -97,13 +105,20 @@ function toHardwareItem(raw: ExtractedHardwareSet['hardwareItems'][number], setN
 }
 
 export function transformHardwareSets(sets: ExtractedHardwareSet[]): HardwareSet[] {
-  return sets.map((set) => ({
-    id: `hs-pdf-${set.setName.toLowerCase().replace(/\s+/g, '-')}`,
-    name: set.setName,
-    description: set.notes ?? '',
-    division: 'Division 08',
-    items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
-  }));
+  const seenIds = new Map<string, number>();
+  return sets.map((set) => {
+    const base = `hs-pdf-${set.setName.toLowerCase().replace(/\s+/g, '-')}`;
+    const count = seenIds.get(base) ?? 0;
+    seenIds.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count}`;
+    return {
+      id,
+      name: set.setName,
+      description: set.notes ?? '',
+      division: 'Division 08',
+      items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -117,17 +132,18 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
     const providedSet = row.hwSet?.trim() ?? '';
     const assignedSet = providedSet ? (setsByName.get(providedSet.toLowerCase()) ?? null) : null;
 
-    // When sections are present, read dimensions from section keys with fallbacks
-    const rawWidth = row.sections
-      ? (row.sections.door['WIDTH'] ?? row.sections.door['DOOR WIDTH'] ?? row.doorWidth)
-      : row.doorWidth;
-    const rawHeight = row.sections
-      ? (row.sections.door['HEIGHT'] ?? row.sections.door['DOOR HEIGHT'] ?? row.doorHeight)
-      : row.doorHeight;
-    const rawThickness = row.sections
-      ? (row.sections.door['THICKNESS'] ?? row.sections.door['DOOR THICKNESS'] ?? row.thickness)
-      : row.thickness;
-    const rawLeafCount = (row.sections ? row.sections.door['LEAF COUNT'] : undefined) ?? row.leafCount;
+    // basic_information section (new format) → door section (old format) → flat field
+    // This three-way fallback ensures backward compatibility with existing DB records.
+    const bi = row.sections?.basic_information;
+    const d  = row.sections?.door;
+    const fr = row.sections?.frame;
+    const hw = row.sections?.hardware;
+
+    const rawWidth     = bi?.['WIDTH'] ?? bi?.['DOOR WIDTH'] ?? d?.['WIDTH'] ?? d?.['DOOR WIDTH'] ?? row.doorWidth;
+    const rawHeight    = bi?.['HEIGHT'] ?? bi?.['DOOR HEIGHT'] ?? d?.['HEIGHT'] ?? d?.['DOOR HEIGHT'] ?? row.doorHeight;
+    const rawThickness = bi?.['THICKNESS'] ?? bi?.['DOOR THICKNESS'] ?? d?.['THICKNESS'] ?? d?.['DOOR THICKNESS'] ?? row.thickness;
+    const rawLeafCount = bi?.['LEAF COUNT'] ?? d?.['LEAF COUNT'] ?? row.leafCount;
+    const rawQuantity  = bi?.['QUANTITY'] ?? d?.['QUANTITY'] ?? row.quantity;
 
     return {
       id: `door-import-${idx}-${row.doorTag}`,
@@ -138,54 +154,56 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
       height: parseDimension(rawHeight),
       thickness: parseThickness(rawThickness),
 
-      doorMaterial: (row.sections ? row.sections.door['DOOR MATERIAL'] : undefined) ?? row.doorMaterial ?? '',
-      doorFinish: (row.sections ? row.sections.door['DOOR FINISH'] : undefined) ?? row.doorFinish,
-      fireRating: (row.sections ? row.sections.door['FIRE RATING'] : undefined) ?? row.fireRating,
-      interiorExterior: (row.sections ? row.sections.door['INTERIOR/EXTERIOR'] : undefined) ?? row.interiorExterior,
-      quantity: row.quantity ?? 1,
-      location: (row.sections ? row.sections.door['DOOR LOCATION'] : undefined) ?? row.doorLocation,
+      // Basic-information fields (moved from door section in new format)
+      fireRating:       bi?.['FIRE RATING']       ?? d?.['FIRE RATING']       ?? row.fireRating,
+      interiorExterior: bi?.['INTERIOR/EXTERIOR']  ?? d?.['INTERIOR/EXTERIOR'] ?? row.interiorExterior,
+      quantity: parseQuantityValue(rawQuantity) ?? 1,
+      location:         bi?.['DOOR LOCATION']      ?? d?.['DOOR LOCATION']     ?? row.doorLocation,
       type: (() => {
         const leafCount = parseLeafCountValue(rawLeafCount);
         return leafCount !== undefined ? (leafCount > 1 ? 'Pair' : 'Single') : undefined;
       })(),
-
-      buildingTag: (row.sections ? row.sections.door['BUILDING TAG'] : undefined) ?? row.buildingTag,
-      buildingLocation: (row.sections ? row.sections.door['BUILDING LOCATION'] : undefined) ?? row.buildingLocation,
-      handing: ((row.sections ? row.sections.door['HAND OF OPENINGS'] : undefined) ?? row.handOfOpenings) as Door['handing'],
-      operation: (row.sections ? row.sections.door['DOOR OPERATION'] : undefined) ?? row.doorOperation,
+      buildingTag:      bi?.['BUILDING TAG']        ?? d?.['BUILDING TAG']       ?? row.buildingTag,
+      buildingLocation: bi?.['BUILDING LOCATION']   ?? d?.['BUILDING LOCATION']  ?? row.buildingLocation,
+      handing:          (bi?.['HAND OF OPENINGS']   ?? d?.['HAND OF OPENINGS']   ?? row.handOfOpenings) as Door['handing'],
+      operation:        bi?.['DOOR OPERATION']      ?? d?.['DOOR OPERATION']     ?? row.doorOperation,
       leafCount: parseLeafCountValue(rawLeafCount),
       leafCountDisplay: getLeafCountDisplayValue(rawLeafCount),
-      excludeReason: (row.sections ? row.sections.door['EXCLUDE REASON'] : undefined) ?? row.excludeReason,
-      stcRating: (row.sections ? row.sections.door['STC RATING'] : undefined) ?? row.stcRating,
-      undercut: (row.sections ? row.sections.door['DOOR UNDERCUT'] : undefined) ?? row.doorUndercut,
-      doorCore: (row.sections ? row.sections.door['DOOR CORE'] : undefined) ?? row.doorCore,
-      doorFace: (row.sections ? row.sections.door['DOOR FACE'] : undefined) ?? row.doorFace,
-      doorEdge: (row.sections ? row.sections.door['DOOR EDGE'] : undefined) ?? row.doorEdge,
-      doorGauge: (row.sections ? row.sections.door['DOOR GUAGE'] : undefined) ?? row.doorGauge,
-      doorIncludeExclude: (row.sections ? row.sections.door['DOOR INCLUDE/EXCLUDE'] : undefined) ?? row.doorIncludeExclude,
-      elevationTypeId: (row.sections ? row.sections.door['DOOR ELEVATION TYPE'] : undefined) ?? row.doorElevationType,
+      excludeReason:    bi?.['EXCLUDE REASON']      ?? d?.['EXCLUDE REASON']     ?? row.excludeReason,
 
-      frameMaterial: ((row.sections ? row.sections.frame['FRAME MATERIAL'] : undefined) ?? row.frameMaterial) as Door['frameMaterial'],
-      frameGauge: (row.sections ? row.sections.frame['FRAME GUAGE'] : undefined) ?? row.frameGauge ?? row.frameType,
-      wallType: (row.sections ? row.sections.frame['WALL TYPE'] : undefined) ?? row.wallType,
-      throatThickness: (row.sections ? row.sections.frame['THROAT THICKNESS'] : undefined) ?? row.throatThickness,
-      frameAnchor: (row.sections ? row.sections.frame['FRAME ANCHOR'] : undefined) ?? row.frameAnchor,
-      baseAnchor: (row.sections ? row.sections.frame['BASE ANCHOR'] : undefined) ?? row.baseAnchor,
-      numberOfAnchors: (row.sections ? row.sections.frame['NO OF ANCHOR'] : undefined) ?? row.numberOfAnchors,
-      frameProfile: ((row.sections ? row.sections.frame['FRAME PROFILE'] : undefined) ?? row.frameProfile) as Door['frameProfile'],
-      frameElevationType: (row.sections ? row.sections.frame['FRAME ELEVATION TYPE'] : undefined) ?? row.frameElevationType,
-      frameAssembly: (row.sections ? row.sections.frame['FRAME ASSEMBLY'] : undefined) ?? row.frameAssembly,
-      frameFinish: (row.sections ? row.sections.frame['FRAME FINISH'] : undefined) ?? row.frameFinish,
-      prehung: (row.sections ? row.sections.frame['PREHUNG'] : undefined) ?? row.prehung,
-      frameHead: (row.sections ? row.sections.frame['FRAME HEAD'] : undefined) ?? row.frameHead,
-      casing: (row.sections ? row.sections.frame['CASING'] : undefined) ?? row.casing,
-      frameIncludeExclude: (row.sections ? row.sections.frame['FRAME INCLUDE/EXCLUDE'] : undefined) ?? row.frameIncludeExclude,
+      // Door-section fields (material / finish / spec — remain in door section)
+      doorMaterial:       d?.['DOOR MATERIAL']      ?? row.doorMaterial ?? '',
+      doorFinish:         d?.['DOOR FINISH']        ?? row.doorFinish,
+      stcRating:          d?.['STC RATING']         ?? row.stcRating,
+      undercut:           d?.['DOOR UNDERCUT']      ?? row.doorUndercut,
+      doorCore:           d?.['DOOR CORE']          ?? row.doorCore,
+      doorFace:           d?.['DOOR FACE']          ?? row.doorFace,
+      doorEdge:           d?.['DOOR EDGE']          ?? row.doorEdge,
+      doorGauge:          d?.['DOOR GUAGE']         ?? row.doorGauge,
+      doorIncludeExclude: d?.['DOOR INCLUDE/EXCLUDE'] ?? row.doorIncludeExclude,
+      elevationTypeId:    d?.['DOOR ELEVATION TYPE']  ?? row.doorElevationType,
 
-      hardwareIncludeExclude: (row.sections ? row.sections.hardware['HARDWARE INCLUDE/EXCLUDE'] : undefined) ?? row.hardwareIncludeExclude,
+      // Frame section
+      frameMaterial:    (fr?.['FRAME MATERIAL']      ?? row.frameMaterial) as Door['frameMaterial'],
+      frameGauge:        fr?.['FRAME GUAGE']         ?? row.frameGauge ?? row.frameType,
+      wallType:          fr?.['WALL TYPE']           ?? row.wallType,
+      throatThickness:   fr?.['THROAT THICKNESS']    ?? row.throatThickness,
+      frameAnchor:       fr?.['FRAME ANCHOR']        ?? row.frameAnchor,
+      baseAnchor:        fr?.['BASE ANCHOR']         ?? row.baseAnchor,
+      numberOfAnchors:   fr?.['NO OF ANCHOR']        ?? row.numberOfAnchors,
+      frameProfile:      (fr?.['FRAME PROFILE']      ?? row.frameProfile) as Door['frameProfile'],
+      frameElevationType: fr?.['FRAME ELEVATION TYPE'] ?? row.frameElevationType,
+      frameAssembly:     fr?.['FRAME ASSEMBLY']      ?? row.frameAssembly,
+      frameFinish:       fr?.['FRAME FINISH']        ?? row.frameFinish,
+      prehung:           fr?.['PREHUNG']             ?? row.prehung,
+      frameHead:         fr?.['FRAME HEAD']          ?? row.frameHead,
+      casing:            fr?.['CASING']              ?? row.casing,
+      frameIncludeExclude: fr?.['FRAME INCLUDE/EXCLUDE'] ?? row.frameIncludeExclude,
+
+      // Hardware section
+      hardwareIncludeExclude: hw?.['HARDWARE INCLUDE/EXCLUDE'] ?? row.hardwareIncludeExclude,
 
       // Carry raw sections through as-is for preservation
-      // (cast required: DoorScheduleRow.sections uses raw Excel column names,
-      //  Door.sections uses structured camelCase keys — shape mismatch is intentional here)
       sections: row.sections as unknown as Door['sections'],
 
       providedHardwareSet: providedSet || undefined,
@@ -204,17 +222,25 @@ export function transformFromFinalJson(
   finalJson: MergedHardwareSet[],
 ): { hardwareSets: HardwareSet[]; doors: Door[] } {
   // Build HardwareSet[] from the merged sets
-  const hardwareSets: HardwareSet[] = finalJson.map((set) => ({
-    id: `hs-pdf-${set.setName.toLowerCase().replace(/\s+/g, '-')}`,
-    name: set.setName,
-    description: set.notes ?? '',
-    division: 'Division 08',
-    items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
-  }));
+  const seenIds = new Map<string, number>();
+  const hardwareSets: HardwareSet[] = finalJson.map((set) => {
+    const base = `hs-pdf-${set.setName.toLowerCase().replace(/\s+/g, '-')}`;
+    const count = seenIds.get(base) ?? 0;
+    seenIds.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count}`;
+    return {
+      id,
+      name: set.setName,
+      description: set.notes ?? '',
+      division: 'Division 08',
+      items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
+    };
+  });
 
   const setsByName = new Map(hardwareSets.map((s) => [s.name.toLowerCase(), s]));
 
   const doorsWithOrder: Array<{ door: Door; order: number }> = [];
+  let doorCounter = 0;
 
   for (const set of finalJson) {
     const assignedSet = setsByName.get(set.setName.toLowerCase()) ?? null;
@@ -225,27 +251,31 @@ export function transformFromFinalJson(
     );
 
     for (const door of uniqueDoorsInSet) {
-      // Resolve dimensions: prefer sections, fall back to flat fields
+      const bi = door.sections?.basic_information;
+      const ds = door.sections?.door;
+
+      // Resolve dimensions: prefer basic_information, then door section, then flat fields
       const rawWidth =
-        door.sections?.door['WIDTH'] ??
-        door.sections?.door['DOOR WIDTH'] ??
+        bi?.['WIDTH'] ?? bi?.['DOOR WIDTH'] ??
+        ds?.['WIDTH'] ?? ds?.['DOOR WIDTH'] ??
         door.doorWidth;
       const rawHeight =
-        door.sections?.door['HEIGHT'] ??
-        door.sections?.door['DOOR HEIGHT'] ??
+        bi?.['HEIGHT'] ?? bi?.['DOOR HEIGHT'] ??
+        ds?.['HEIGHT'] ?? ds?.['DOOR HEIGHT'] ??
         door.doorHeight;
       const rawThickness =
-        door.sections?.door['THICKNESS'] ??
-        door.sections?.door['DOOR THICKNESS'] ??
+        bi?.['THICKNESS'] ?? bi?.['DOOR THICKNESS'] ??
+        ds?.['THICKNESS'] ?? ds?.['DOOR THICKNESS'] ??
         door.thickness;
 
-      const leafCountRaw = door.sections?.door['LEAF COUNT'] ?? door.leafCount;
+      const leafCountRaw = bi?.['LEAF COUNT'] ?? ds?.['LEAF COUNT'] ?? door.leafCount;
       const leafCountNum = parseLeafCountValue(leafCountRaw);
+      const rawQuantity = bi?.['QUANTITY'] ?? ds?.['QUANTITY'] ?? door.quantity;
 
       const providedHardwareSet = door.sections?.hardware?.['HARDWARE SET'] ?? door.hwSet ?? door.matchedSetName;
 
       const builtDoor: Door = {
-        id: `door-final-${set.setName}-${door.doorTag}`,
+        id: `door-final-${doorCounter++}-${door.doorTag}`,
         doorTag: String(door.doorTag),
         status: assignedSet ? 'complete' : 'pending',
 
@@ -253,48 +283,48 @@ export function transformFromFinalJson(
         height: parseDimension(rawHeight),
         thickness: parseThickness(rawThickness),
 
-        doorMaterial: (door.sections?.door['DOOR MATERIAL']) ?? door.doorMaterial ?? '',
-        doorFinish: door.sections?.door['DOOR FINISH'],
-        fireRating: (door.sections?.door['FIRE RATING']) ?? door.fireRating,
-        interiorExterior: (door.sections?.door['INTERIOR/EXTERIOR']) ?? door.interiorExterior,
-        quantity: door.quantity ?? 1,
-        location: door.sections?.door['DOOR LOCATION'] ?? door.doorLocation,
+        doorMaterial: ds?.['DOOR MATERIAL'] ?? door.doorMaterial ?? '',
+        doorFinish: ds?.['DOOR FINISH'],
+        fireRating: bi?.['FIRE RATING'] ?? ds?.['FIRE RATING'] ?? door.fireRating,
+        interiorExterior: bi?.['INTERIOR/EXTERIOR'] ?? ds?.['INTERIOR/EXTERIOR'] ?? door.interiorExterior,
+        quantity: parseQuantityValue(rawQuantity) ?? 1,
+        location: bi?.['DOOR LOCATION'] ?? ds?.['DOOR LOCATION'] ?? door.doorLocation,
         type: leafCountNum !== undefined ? (leafCountNum > 1 ? 'Pair' : 'Single') : undefined,
         leafCount: leafCountNum,
         leafCountDisplay: getLeafCountDisplayValue(leafCountRaw),
 
-        buildingTag: door.sections?.door['BUILDING TAG'],
-        buildingLocation: door.sections?.door['BUILDING LOCATION'],
-        handing: door.sections?.door['HAND OF OPENINGS'] as Door['handing'],
-        operation: door.sections?.door['DOOR OPERATION'],
-        excludeReason: (door.sections?.door['EXCLUDE REASON']) ?? door.excludeReason,
-        stcRating: door.sections?.door['STC RATING'],
-        undercut: door.sections?.door['DOOR UNDERCUT'],
-        doorCore: door.sections?.door['DOOR CORE'],
-        doorFace: door.sections?.door['DOOR FACE'],
-        doorEdge: door.sections?.door['DOOR EDGE'],
-        doorGauge: door.sections?.door['DOOR GUAGE'],
-        doorIncludeExclude: door.sections?.door['DOOR INCLUDE/EXCLUDE'],
+        buildingTag: bi?.['BUILDING TAG'] ?? ds?.['BUILDING TAG'],
+        buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'],
+        handing: (bi?.['HAND OF OPENINGS'] ?? ds?.['HAND OF OPENINGS']) as Door['handing'],
+        operation: bi?.['DOOR OPERATION'] ?? ds?.['DOOR OPERATION'],
+        excludeReason: bi?.['EXCLUDE REASON'] ?? ds?.['EXCLUDE REASON'] ?? door.excludeReason,
+        stcRating: ds?.['STC RATING'],
+        undercut: ds?.['DOOR UNDERCUT'],
+        doorCore: ds?.['DOOR CORE'],
+        doorFace: ds?.['DOOR FACE'],
+        doorEdge: ds?.['DOOR EDGE'],
+        doorGauge: ds?.['DOOR GUAGE'],
+        doorIncludeExclude: ds?.['DOOR INCLUDE/EXCLUDE'],
         elevationTypeId:
-          door.sections?.door['DOOR ELEVATION TYPE'] ??
+          ds?.['DOOR ELEVATION TYPE'] ??
           door.doorElevationType ??
           door.doorType,
 
-        frameMaterial: door.sections?.frame['FRAME MATERIAL'] as Door['frameMaterial'],
-        wallType: door.sections?.frame['WALL TYPE'],
-        throatThickness: door.sections?.frame['THROAT THICKNESS'],
-        frameAnchor: door.sections?.frame['FRAME ANCHOR'],
-        baseAnchor: door.sections?.frame['BASE ANCHOR'],
-        numberOfAnchors: door.sections?.frame['NO OF ANCHOR'],
-        frameProfile: door.sections?.frame['FRAME PROFILE'] as Door['frameProfile'],
-        frameElevationType: door.sections?.frame['FRAME ELEVATION TYPE'],
-        frameAssembly: door.sections?.frame['FRAME ASSEMBLY'],
-        frameGauge: door.sections?.frame['FRAME GUAGE'],
-        frameFinish: door.sections?.frame['FRAME FINISH'],
-        prehung: door.sections?.frame['PREHUNG'],
-        frameHead: door.sections?.frame['FRAME HEAD'],
-        casing: door.sections?.frame['CASING'],
-        frameIncludeExclude: door.sections?.frame['FRAME INCLUDE/EXCLUDE'],
+        frameMaterial: door.sections?.frame?.['FRAME MATERIAL'] as Door['frameMaterial'],
+        wallType: door.sections?.frame?.['WALL TYPE'],
+        throatThickness: door.sections?.frame?.['THROAT THICKNESS'],
+        frameAnchor: door.sections?.frame?.['FRAME ANCHOR'],
+        baseAnchor: door.sections?.frame?.['BASE ANCHOR'],
+        numberOfAnchors: door.sections?.frame?.['NO OF ANCHOR'],
+        frameProfile: door.sections?.frame?.['FRAME PROFILE'] as Door['frameProfile'],
+        frameElevationType: door.sections?.frame?.['FRAME ELEVATION TYPE'],
+        frameAssembly: door.sections?.frame?.['FRAME ASSEMBLY'],
+        frameGauge: door.sections?.frame?.['FRAME GUAGE'],
+        frameFinish: door.sections?.frame?.['FRAME FINISH'],
+        prehung: door.sections?.frame?.['PREHUNG'],
+        frameHead: door.sections?.frame?.['FRAME HEAD'],
+        casing: door.sections?.frame?.['CASING'],
+        frameIncludeExclude: door.sections?.frame?.['FRAME INCLUDE/EXCLUDE'],
 
         hardwareIncludeExclude: door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE'],
 

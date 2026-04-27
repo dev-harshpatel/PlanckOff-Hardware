@@ -6,6 +6,16 @@ import {
   Clock, FolderOpen, Loader2,
 } from 'lucide-react';
 import { Project } from '../types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface TrashBinProps {
   isOpen: boolean;
@@ -74,6 +84,7 @@ const CountdownBadge: React.FC<CountdownBadgeProps> = ({ daysLeft }) => {
 const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, onPermDelete }) => {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   if (!isOpen) return null;
 
@@ -82,8 +93,14 @@ const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, 
     try { await onRestore(id); } finally { setRestoringId(null); }
   };
 
-  const handlePermDelete = async (id: string, name: string) => {
-    if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
+  const handlePermDelete = (id: string, name: string) => {
+    setPendingDelete({ id, name });
+  };
+
+  const confirmPermDelete = async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
     setDeletingId(id);
     try { await onPermDelete(id); } finally { setDeletingId(null); }
   };
@@ -231,6 +248,21 @@ const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, 
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-[var(--text)]">&ldquo;{pendingDelete?.name}&rdquo;</span> will be permanently deleted and cannot be recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPermDelete}>Delete permanently</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

@@ -36,6 +36,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
   const [pending, setPending] = useState<MasterHardwarePending[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pendingLoadError, setPendingLoadError] = useState<string | null>(null);
 
   // --- ui state ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,13 +65,28 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       const json = await res.json() as { data?: MasterHardwarePending[]; error?: string };
       if (res.ok) {
         setPending(json.data ?? []);
+        setPendingLoadError(null);
       } else {
-        console.warn('[DatabaseView] loadPending failed:', json.error ?? res.status);
+        const message = json.error ?? 'Failed to load pending review items.';
+        setPendingLoadError(message);
+        console.warn('[DatabaseView] loadPending failed:', message);
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load pending review items.';
+      setPendingLoadError(message);
       console.warn('[DatabaseView] loadPending error:', err);
     }
   }, []);
+
+  useEffect(() => {
+    if (pendingLoadError) {
+      addToast({
+        type: 'warning',
+        message: 'Pending review items could not be loaded.',
+        details: pendingLoadError,
+      });
+    }
+  }, [pendingLoadError, addToast]);
 
   useEffect(() => {
     setIsLoading(true);

@@ -11,9 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { parseDoorSchedule } from '@/services/doorScheduleService';
+import type { DoorScheduleResult } from '@/services/doorScheduleService';
 import { extractDoorScheduleFromPdf } from '@/services/doorSchedulePdfService';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
 import {
@@ -27,6 +30,29 @@ import { queueItemsForApproval } from '@/lib/db/masterHardware';
 export const maxDuration = 120;
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
+function saveExcelDebugFiles(projectId: string, filename: string, result: DoorScheduleResult): void {
+  if (process.env.NODE_ENV !== 'development') return;
+  try {
+    const debugDir = path.join(process.cwd(), 'debug-extractions', 'excel-extraction');
+    fs.mkdirSync(debugDir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const prefix = `${projectId.slice(0, 8)}_${timestamp}`;
+    fs.writeFileSync(
+      path.join(debugDir, `${prefix}_parsed.json`),
+      JSON.stringify(result.rows, null, 2),
+      'utf-8',
+    );
+    fs.writeFileSync(
+      path.join(debugDir, `${prefix}_meta.json`),
+      JSON.stringify({ fileName: filename, rowCount: result.rowCount, warnings: result.warnings }, null, 2),
+      'utf-8',
+    );
+    console.log(`[process] Excel debug files → debug-extractions/excel-extraction/${prefix}_*`);
+  } catch (err) {
+    console.error('[process] Excel debug write FAILED — path:', path.join(process.cwd(), 'debug-extractions', 'excel-extraction'), '— error:', err);
+  }
+}
 
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
@@ -82,6 +108,9 @@ export const POST = withAuth(
         { status: 422 },
       );
     }
+
+    // Always save debug files — even on 0 rows so format mismatches are visible.
+    if (!scheduleIsPdf) saveExcelDebugFiles(projectId, scheduleField.name, scheduleResult);
 
     if (scheduleResult.rowCount === 0) {
       return NextResponse.json(
@@ -148,6 +177,7 @@ export const POST = withAuth(
 
     console.log(`[process:master] Candidate items after filter: ${candidateItems.length}`);
 
+    let masterQueueWarning: string | null = null;
     if (candidateItems.length > 0) {
       const queueResult = await queueItemsForApproval(
         candidateItems,
@@ -158,9 +188,11 @@ export const POST = withAuth(
       if (queueResult.data) {
         console.log(`[process:master] Queued ${queueResult.data.queued} new items, skipped ${queueResult.data.skipped} duplicates.`);
       } else {
-        console.error('[process:master] queueItemsForApproval error:', queueResult.error?.message);
+        masterQueueWarning = queueResult.error?.message ?? 'Unknown queue error';
+        console.error('[process:master] queueItemsForApproval error:', masterQueueWarning);
       }
     } else {
+      masterQueueWarning = 'No queue candidates were generated from the extracted hardware items.';
       console.warn('[process:master] No candidate items — check that hardwareItems[].item field is populated.');
     }
 
@@ -187,6 +219,7 @@ export const POST = withAuth(
         unmatchedDoorCount: mergeResult.unmatchedDoorCount,
         unmatchedDoorCodes: mergeResult.unmatchedDoorCodes,
         pdfSetsWithNoDoors: mergeResult.pdfSetsWithNoDoors,
+        masterQueueWarning,
         warnings: [...scheduleResult.warnings, ...pdfResult.warnings, ...mergeResult.warnings],
         rowCount: scheduleResult.rowCount,
         itemCount: pdfResult.itemCount,

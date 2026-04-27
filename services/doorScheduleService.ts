@@ -101,12 +101,6 @@ const HEADER_MAP: Record<string, keyof DoorScheduleRow> = {
   'comments': 'comments', 'comment': 'comments', 'notes': 'comments',
 };
 
-const BOOLEAN_FIELDS = new Set<keyof DoorScheduleRow>([
-  'hasCardReader', 'hasKeyPad', 'hasAutoOperator', 'hasPrivacySet',
-  'hasKeyedLock', 'hasPushPlate', 'hasAntiBarricade', 'hasKickPlate',
-  'hasFrameProtection', 'hasDoorCloser',
-]);
-
 // ---------------------------------------------------------------------------
 // Header normalisation
 // ---------------------------------------------------------------------------
@@ -120,20 +114,9 @@ function normaliseHeader(raw: string): keyof DoorScheduleRow | null {
 // Value coercion
 // ---------------------------------------------------------------------------
 
-function coerceBoolean(val: unknown): boolean {
-  if (typeof val === 'boolean') return val;
-  const s = String(val ?? '').trim().toLowerCase();
-  return s === 'y' || s === 'yes' || s === 'true' || s === '1';
-}
-
 function coerceString(val: unknown): string {
   if (val === null || val === undefined) return '';
-  return String(val).trim();
-}
-
-function coerceNumber(val: unknown): number | undefined {
-  const n = Number(val);
-  return isNaN(n) ? undefined : n;
+  return String(val);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,24 +128,16 @@ function mapRow(rawRow: Record<string, unknown>, headerMap: Map<string, keyof Do
 
   for (const [rawHeader, fieldName] of headerMap.entries()) {
     const val = rawRow[rawHeader];
-    if (val === undefined || val === null || val === '') continue;
-
-    if (BOOLEAN_FIELDS.has(fieldName)) {
-      (row as Record<string, unknown>)[fieldName] = coerceBoolean(val);
-    } else if (fieldName === 'quantity') {
-      row.quantity = coerceNumber(val);
-    } else {
-      (row as Record<string, unknown>)[fieldName] = coerceString(val);
-    }
+    (row as Record<string, unknown>)[fieldName] = coerceString(val);
   }
 
-  // doorTag is mandatory — always coerce to string (Excel stores it as number)
+  // doorTag is mandatory — always store the original display text.
   if (row.doorTag !== undefined) {
     row.doorTag = coerceString(row.doorTag);
   }
 
   // Skip rows with no door tag
-  if (!row.doorTag) return null;
+  if (!String(row.doorTag ?? '').trim()) return null;
 
   return row as DoorScheduleRow;
 }
@@ -199,7 +174,7 @@ const DOOR_SHEET_SIGNALS = new Set([
  * Section-label values used in row 0 of the new sectioned Excel format.
  * When a row contains ONLY these values (plus empty strings), it's a section header row.
  */
-const SECTION_LABEL_TOKENS = new Set(['DOOR', 'FRAME', 'HARDWARE']);
+const SECTION_LABEL_TOKENS = new Set(['BASIC INFORMATION', 'DOOR', 'FRAME', 'HARDWARE']);
 
 /** Returns true if the row is a section-label row (new 2-row header format). */
 function isSectionLabelRow(cells: string[]): boolean {
@@ -272,14 +247,17 @@ function selectTargetSheet(workbook: XLSX.WorkBook): {
 // ---------------------------------------------------------------------------
 
 // Builds the column-index → section name map for the sectioned format.
-function buildColSectionMap(sectionLabelRow: string[]): Record<number, 'door' | 'frame' | 'hardware'> {
-  const map: Record<number, 'door' | 'frame' | 'hardware'> = {};
-  let current: 'door' | 'frame' | 'hardware' = 'door';
+function buildColSectionMap(
+  sectionLabelRow: string[],
+): Record<number, 'basic_information' | 'door' | 'frame' | 'hardware'> {
+  const map: Record<number, 'basic_information' | 'door' | 'frame' | 'hardware'> = {};
+  let current: 'basic_information' | 'door' | 'frame' | 'hardware' = 'basic_information';
   sectionLabelRow.forEach((cell, idx) => {
     const val = cell.toUpperCase();
-    if (val === 'DOOR')     current = 'door';
-    if (val === 'FRAME')    current = 'frame';
-    if (val === 'HARDWARE') current = 'hardware';
+    if (val === 'BASIC INFORMATION') current = 'basic_information';
+    if (val === 'DOOR')              current = 'door';
+    if (val === 'FRAME')             current = 'frame';
+    if (val === 'HARDWARE')          current = 'hardware';
     map[idx] = current;
   });
   return map;
@@ -337,28 +315,38 @@ function parseExcel(buffer: Buffer): { rows: DoorScheduleRow[]; warnings: string
   for (const rawRow of rawRows) {
     if (isSectioned) {
       // --- Sectioned format: emit ONLY doorTag + hwSet at top level, rest goes into sections ---
+      const basicInfoSec: Record<string, string | undefined> = {};
       const doorSec: Record<string, string | undefined> = {};
       const frameSec: Record<string, string | undefined> = {};
       const hwSec: Record<string, string | undefined> = {};
 
       fieldNameCells.forEach((fieldName, colIdx) => {
         if (!fieldName) return;
-        const section = colSectionMap[colIdx] ?? 'door';
+        const section = colSectionMap[colIdx] ?? 'basic_information';
         const rawVal = rawRow[fieldName];
-        const val = rawVal !== undefined && rawVal !== null && rawVal !== '' ? String(rawVal).trim() : undefined;
+        const val = String(rawVal ?? '');
         // Store using the original Excel column name so keys are consistent within each section.
-        if (section === 'door')          doorSec[fieldName] = val;
-        else if (section === 'frame')    frameSec[fieldName] = val;
-        else                             hwSec[fieldName] = val;
+        if (section === 'basic_information') basicInfoSec[fieldName] = val;
+        else if (section === 'door')         doorSec[fieldName] = val;
+        else if (section === 'frame')        frameSec[fieldName] = val;
+        else                                 hwSec[fieldName] = val;
       });
 
       // doorTag and hwSet are the only join/identity keys kept at the top level.
-      const doorTag = coerceString(rawRow['DOOR TAG'] ?? rawRow['door tag'] ?? rawRow['Door Tag']);
-      if (!doorTag) continue; // skip rows without a door tag
+      // Case-insensitive lookup handles any capitalisation from the Excel template.
+      const rawKeys = Object.keys(rawRow);
+      const doorTagKey = rawKeys.find((k) => k.trim().toLowerCase() === 'door tag');
+      const hwSetKey   = rawKeys.find((k) => k.trim().toLowerCase() === 'hardware set');
+      const doorTag = coerceString(doorTagKey ? rawRow[doorTagKey] : '');
+      if (!doorTag.trim()) continue; // skip rows without a door tag
 
-      const hwSet = coerceString(rawRow['HARDWARE SET'] ?? rawRow['hardware set'] ?? rawRow['Hardware Set'] ?? '');
+      const hwSet = coerceString(hwSetKey ? rawRow[hwSetKey] : '');
 
-      rows.push({ doorTag, hwSet, sections: { door: doorSec, frame: frameSec, hardware: hwSec } });
+      rows.push({
+        doorTag,
+        hwSet,
+        sections: { basic_information: basicInfoSec, door: doorSec, frame: frameSec, hardware: hwSec },
+      });
     } else {
       // --- Legacy flat format ---
       const row = mapRow(rawRow, headerMap);

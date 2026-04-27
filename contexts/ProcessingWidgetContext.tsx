@@ -2,6 +2,11 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 
+export interface ProcessingLogEntry {
+  level: 'info' | 'success' | 'warn' | 'error';
+  msg: string;
+}
+
 export interface ProcessingWidgetState {
   isActive: boolean;
   isMinimized: boolean;
@@ -11,6 +16,7 @@ export interface ProcessingWidgetState {
   elapsedSeconds: number;
   projectId: string | null;
   projectPath: string | null; // e.g. /project/abc-123
+  logs: ProcessingLogEntry[];
 }
 
 interface ProcessingWidgetContextType {
@@ -33,6 +39,7 @@ const DEFAULT: ProcessingWidgetState = {
   elapsedSeconds: 0,
   projectId: null,
   projectPath: null,
+  logs: [],
 };
 
 const ProcessingWidgetContext = createContext<ProcessingWidgetContextType | null>(null);

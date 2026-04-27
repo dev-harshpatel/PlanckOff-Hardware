@@ -214,8 +214,8 @@ export interface ElectrificationSpec {
     latchBoltMonitor?: boolean;
 }
 
-// Sectioned data from structured Excel uploads (mirrors the DOOR / FRAME / HARDWARE column groups)
-export interface DoorSectionData {
+// Sectioned data from structured Excel uploads (mirrors the BASIC INFORMATION / DOOR / FRAME / HARDWARE column groups)
+export interface BasicInformationSectionData {
   doorTag?: string;
   buildingTag?: string;
   buildingLocation?: string;
@@ -230,6 +230,9 @@ export interface DoorSectionData {
   height?: string;
   thickness?: string;
   fireRating?: string;
+}
+
+export interface DoorSectionData {
   doorMaterial?: string;
   doorElevationType?: string;
   doorCore?: string;
@@ -266,6 +269,7 @@ export interface HardwareSectionData {
 }
 
 export interface DoorScheduleSections {
+  basic_information: BasicInformationSectionData;
   door: DoorSectionData;
   frame: FrameSectionData;
   hardware: HardwareSectionData;

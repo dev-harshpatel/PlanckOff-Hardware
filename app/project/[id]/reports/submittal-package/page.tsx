@@ -6,13 +6,14 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useEffect, useState } from 'react';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 import type { HardwareSet, Door } from '@/types';
+import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransformers';
 import { Package, Loader2 } from 'lucide-react';
 
 const SubmittalGenerator = dynamic(() => import('@/components/SubmittalGenerator'), { ssr: false });
 
 /**
- * Reconstruct MergedHardwareSet[] from the UI-layer HardwareSet[] + Door[]
- * used as a fallback when project_hardware_finals has no row yet.
+ * Reconstruct MergedHardwareSet[] from HardwareSet[] + Door[].
+ * Used when final_json is empty but raw table data exists.
  */
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
   return hardwareSets
@@ -72,31 +73,66 @@ export default function SubmittalPackagePage() {
 
     fetch(`/api/projects/${id}/hardware-merge`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then((json: { data?: { finalJson?: MergedHardwareSet[] } | null } | null) => {
+      .then(async (json: { data?: { finalJson?: MergedHardwareSet[] } | null } | null) => {
         const apiData = json?.data?.finalJson;
 
         if (apiData && apiData.length > 0) {
-          // API has data — use it (most up-to-date, includes multipliedQuantity etc.)
+          // final_json has data — use it as the authoritative source
           setFinalJson(apiData);
           setSource('api');
-        } else {
-          // Fallback: reconstruct from project context (hardwareSets + doors)
-          const reconstructed = reconstructFinalJson(
-            activeProject.hardwareSets ?? [],
-            activeProject.doors ?? [],
-          );
-          setFinalJson(reconstructed);
-          setSource('fallback');
+          return;
+        }
+
+        // final_json is empty. Fetch from raw tables (same fallback as ProjectView)
+        // and write back to final_json so it becomes the source of truth.
+        const [hwRes, dsRes] = await Promise.all([
+          fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' }),
+          fetch(`/api/projects/${id}/door-schedule`, { credentials: 'include' }),
+        ]);
+
+        const hwJson = hwRes.ok ? await hwRes.json() : null;
+        const dsJson = dsRes.ok ? await dsRes.json() : null;
+
+        const sets = hwJson?.data?.extractedJson
+          ? transformHardwareSets(hwJson.data.extractedJson)
+          : [];
+
+        const loadedDoors = dsJson?.data?.scheduleJson
+          ? transformDoors(dsJson.data.scheduleJson, sets)
+          : [];
+
+        const reconstructed = reconstructFinalJson(sets, loadedDoors);
+        setFinalJson(reconstructed);
+        setSource(reconstructed.length > 0 ? 'fallback' : null);
+
+        // Write back to final_json so reports are consistent going forward
+        if (reconstructed.length > 0) {
+          fetch(`/api/projects/${id}/hardware-merge`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ finalJson: reconstructed }),
+          }).catch(() => {});
         }
       })
-      .catch(() => {
-        // Network error: still try the fallback
-        const reconstructed = reconstructFinalJson(
-          activeProject.hardwareSets ?? [],
-          activeProject.doors ?? [],
-        );
-        setFinalJson(reconstructed);
-        setSource('fallback');
+      .catch(async () => {
+        // Network error — still try raw tables
+        try {
+          const [hwRes, dsRes] = await Promise.all([
+            fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' }),
+            fetch(`/api/projects/${id}/door-schedule`, { credentials: 'include' }),
+          ]);
+          const hwJson = hwRes.ok ? await hwRes.json() : null;
+          const dsJson = dsRes.ok ? await dsRes.json() : null;
+          const sets = hwJson?.data?.extractedJson ? transformHardwareSets(hwJson.data.extractedJson) : [];
+          const loadedDoors = dsJson?.data?.scheduleJson ? transformDoors(dsJson.data.scheduleJson, sets) : [];
+          const reconstructed = reconstructFinalJson(sets, loadedDoors);
+          setFinalJson(reconstructed);
+          setSource(reconstructed.length > 0 ? 'fallback' : null);
+        } catch {
+          setFinalJson([]);
+          setSource(null);
+        }
       })
       .finally(() => setLoading(false));
   }, [id, activeProject?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -132,11 +168,17 @@ export default function SubmittalPackagePage() {
             Loading…
           </div>
         )}
-        {!loading && finalJson && (
+        {!loading && finalJson && finalJson.length > 0 && (
           <SubmittalGenerator
             finalJson={finalJson}
             projectName={activeProject.name}
           />
+        )}
+        {!loading && (!finalJson || finalJson.length === 0) && (
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
+            <p>No hardware sets found in final JSON</p>
+            <p className="text-xs">Run the merge pipeline first to generate the submittal package.</p>
+          </div>
         )}
       </div>
     </div>

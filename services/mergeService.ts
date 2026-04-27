@@ -80,7 +80,19 @@ function matchSetName(
   const exact = setIndex.get(normalize(hwSet));
   if (exact) return { setName: exact, matchType: 'exact' };
 
-  // 2. Prefix (strip trailing letters) — only use if exactly one set matches
+  // 2. Numeric equivalence — "1" should match "001", "07" should match "007"
+  // Excel sheets use plain numbers while the PDF extractor zero-pads to 3 digits.
+  const hwSetNumeric = parseInt(hwSet.trim(), 10);
+  if (!isNaN(hwSetNumeric)) {
+    for (const [normKey, originalName] of setIndex) {
+      const keyNumeric = parseInt(normKey, 10);
+      if (!isNaN(keyNumeric) && keyNumeric === hwSetNumeric) {
+        return { setName: originalName, matchType: 'exact' };
+      }
+    }
+  }
+
+  // 3. Prefix (strip trailing letters) — only use if exactly one set matches
   const prefix = prefixIndex.get(prefixName(hwSet));
   if (prefix && prefix.length === 1) return { setName: prefix[0], matchType: 'prefix' };
 
@@ -237,7 +249,7 @@ export function mergeHardwareData(
   const sets: MergedHardwareSet[] = pdfSets.map((pdfSet) => {
     const assignedDoors = doorsBySet.get(pdfSet.setName) ?? [];
     const doorCount = assignedDoors.reduce((sum, d) => {
-      const qty = parseInt(d.sections?.door?.['QUANTITY'] ?? String(d.quantity ?? 1)) || 1;
+      const qty = parseInt(d.sections?.basic_information?.['QUANTITY'] ?? d.sections?.door?.['QUANTITY'] ?? String(d.quantity ?? 1)) || 1;
       return sum + qty;
     }, 0);
     return {

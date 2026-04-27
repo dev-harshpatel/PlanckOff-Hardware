@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ActiveUploadTask {
     fileName: string;
@@ -282,12 +283,18 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         window.localStorage.setItem(storageKey, JSON.stringify(payload));
     }, [projectId, visibleColumns, columnOrder, customColumns, columnPrefsLoaded]);
 
-    // Close filter menu on outside click
+    // Close filter menu on outside click.
+    // Skip when the click lands inside a Radix UI portal (e.g. the Select dropdown
+    // content is rendered in document.body, outside filterMenuRef, which would
+    // otherwise close the panel before the value change fires).
     useEffect(() => {
         if (!isFilterMenuOpen) return;
         const handler = (e: MouseEvent) => {
-            if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
-                setIsFilterMenuOpen(false);
+            const target = e.target as Element;
+            if (filterMenuRef.current && !filterMenuRef.current.contains(target)) {
+                if (!target.closest?.('[data-radix-popper-content-wrapper]')) {
+                    setIsFilterMenuOpen(false);
+                }
             }
         };
         document.addEventListener('mousedown', handler);
@@ -838,6 +845,22 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         });
     };
 
+    const allSelectableColumnKeys = useMemo(
+        () => [...ALL_AVAILABLE_COLUMNS.map(col => col.key), ...customColumns.map(col => col.id)],
+        [customColumns]
+    );
+
+    const areAllColumnsSelected = allSelectableColumnKeys.length > 0
+        && allSelectableColumnKeys.every(key => visibleColumns.has(key));
+
+    const toggleAllColumns = () => {
+        setVisibleColumns(() => (
+            areAllColumnsSelected
+                ? new Set()
+                : new Set(allSelectableColumnKeys)
+        ));
+    };
+
     const addCustomColumn = () => {
         if (!newColumnName.trim()) {
             addToast({ type: 'warning', message: 'Please enter a column name' });
@@ -890,6 +913,15 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         </div>
                     </div>
                     <div className="overflow-y-auto p-2 flex-1">
+                        <label className="flex items-center gap-2.5 px-2 py-2 mb-1 hover:bg-[var(--bg-subtle)] rounded cursor-pointer border-b border-[var(--border-subtle)]">
+                            <input
+                                type="checkbox"
+                                checked={areAllColumnsSelected}
+                                onChange={toggleAllColumns}
+                                className="rounded text-[var(--primary-action)] focus:ring-[var(--primary-ring)] w-3.5 h-3.5"
+                            />
+                            <span className="text-sm font-medium text-[var(--text)]">Select all columns</span>
+                        </label>
                         <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider px-2 py-1.5">Standard Columns</p>
                         {ALL_AVAILABLE_COLUMNS.map(col => (
                             <label key={col.key} className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-[var(--bg-subtle)] rounded cursor-pointer">
@@ -1073,35 +1105,31 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             <p className="text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider">Material Filters</p>
                             <div>
                                 <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Door Material</label>
-                                <div className="relative">
-                                    <select
-                                        value={doorMaterialFilter}
-                                        onChange={(e) => setDoorMaterialFilter(e.target.value)}
-                                        className="w-full pl-2.5 pr-7 py-1.5 border border-[var(--border)] rounded-md bg-[var(--bg)] text-xs text-[var(--text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] appearance-none"
-                                    >
-                                        <option value="all">All</option>
+                                <Select value={doorMaterialFilter} onValueChange={setDoorMaterialFilter}>
+                                    <SelectTrigger className="h-7 text-xs px-2.5">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
                                         {uniqueDoorMaterials.map(mat => (
-                                            <option key={mat} value={mat}>{mat}</option>
+                                            <SelectItem key={mat} value={mat}>{mat}</SelectItem>
                                         ))}
-                                    </select>
-                                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-faint)]" />
-                                </div>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="text-[10px] font-medium text-[var(--text-muted)] mb-1 block">Frame Material</label>
-                                <div className="relative">
-                                    <select
-                                        value={frameMaterialFilter}
-                                        onChange={(e) => setFrameMaterialFilter(e.target.value)}
-                                        className="w-full pl-2.5 pr-7 py-1.5 border border-[var(--border)] rounded-md bg-[var(--bg)] text-xs text-[var(--text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] appearance-none"
-                                    >
-                                        <option value="all">All</option>
+                                <Select value={frameMaterialFilter} onValueChange={setFrameMaterialFilter}>
+                                    <SelectTrigger className="h-7 text-xs px-2.5">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
                                         {uniqueFrameMaterials.map(mat => (
-                                            <option key={mat} value={mat}>{mat}</option>
+                                            <SelectItem key={mat} value={mat}>{mat}</SelectItem>
                                         ))}
-                                    </select>
-                                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-faint)]" />
-                                </div>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             {(doorMaterialFilter !== 'all' || frameMaterialFilter !== 'all') && (
                                 <button
@@ -1427,6 +1455,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     isOpen={reportModalOpen}
                     onClose={() => setReportModalOpen(false)}
                     report={lastErrorTask.result!}
+                    title="Upload Validation Report"
                     fileName={lastErrorTask.file.name}
                 />
             )}
@@ -1434,10 +1463,30 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             {editModalDoor && (
                 <EnhancedDoorEditModal
                     door={editModalDoor}
-                    onSave={(updatedDoor) => {
+                    onSave={async (updatedDoor) => {
                         const migratedDoor = migrateDoorData(updatedDoor);
+                        // Update in-memory state immediately
                         onDoorsUpdate(prev => prev.map(d => d.id === migratedDoor.id ? migratedDoor : d));
                         setEditModalDoor(null);
+                        // Persist sections back to DB — scheduleJson is source of truth
+                        if (migratedDoor.sections) {
+                            try {
+                                const res = await fetch(`/api/projects/${projectId}/door-schedule`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        doorTag: migratedDoor.doorTag,
+                                        sections: migratedDoor.sections,
+                                    }),
+                                });
+                                if (!res.ok) {
+                                    const err = await res.json().catch(() => ({}));
+                                    console.error('[DoorScheduleManager] Persist failed:', err);
+                                }
+                            } catch (err) {
+                                console.error('[DoorScheduleManager] Persist fetch error:', err);
+                            }
+                        }
                         addToast({
                             type: 'success',
                             message: `Door ${migratedDoor.doorTag} updated successfully`

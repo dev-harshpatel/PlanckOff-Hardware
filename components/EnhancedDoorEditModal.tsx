@@ -7,7 +7,7 @@ import HingeSpecEditor from './HingeSpecEditor';
 import { ElevationTab } from './ElevationTab';
 import { validateDoor, ValidationResult } from '../utils/doorValidation';
 import { generateHardwarePrepString } from '../utils/hardwareDataMigration';
-import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, PackageOpen } from 'lucide-react';
+import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, PackageOpen, ClipboardList } from 'lucide-react';
 
 interface EnhancedDoorEditModalProps {
     door: Door;
@@ -19,14 +19,19 @@ interface EnhancedDoorEditModalProps {
     onElevationTypeUpdate: (updated: ElevationType) => void;
 }
 
-type TabId = 'door' | 'frame' | 'hardware' | 'elevation';
+type TabId = 'basic' | 'door' | 'frame' | 'hardware' | 'elevation';
 
 type RawSection = Record<string, string | undefined>;
 
-const DOOR_GROUPS: { header: string; cols: number; keys: string[] }[] = [
-    { header: 'Identity', cols: 2, keys: ['DOOR TAG', 'BUILDING TAG', 'BUILDING LOCATION', 'BUILDING AREA', 'DOOR LOCATION', 'QUANTITY', 'HAND OF OPENINGS', 'DOOR OPERATION', 'LEAF COUNT', 'INTERIOR/EXTERIOR', 'EXCLUDE REASON'] },
+const BASIC_INFO_GROUPS: { header: string; cols: number; keys: string[] }[] = [
+    { header: 'Identity', cols: 2, keys: ['DOOR TAG', 'BUILDING TAG', 'BUILDING LOCATION', 'BUILDING AREA', 'DOOR LOCATION', 'INTERIOR/EXTERIOR'] },
+    { header: 'Operation', cols: 3, keys: ['QUANTITY', 'LEAF COUNT', 'HAND OF OPENINGS', 'DOOR OPERATION', 'EXCLUDE REASON'] },
     { header: 'Dimensions', cols: 3, keys: ['WIDTH', 'HEIGHT', 'THICKNESS'] },
-    { header: 'Material & Finish', cols: 2, keys: ['FIRE RATING', 'DOOR MATERIAL', 'DOOR ELEVATION TYPE', 'DOOR CORE', 'DOOR FACE', 'DOOR EDGE', 'DOOR GUAGE', 'DOOR FINISH', 'STC RATING', 'DOOR UNDERCUT', 'DOOR INCLUDE/EXCLUDE'] },
+    { header: 'Classification', cols: 2, keys: ['FIRE RATING'] },
+];
+
+const DOOR_GROUPS: { header: string; cols: number; keys: string[] }[] = [
+    { header: 'Material & Finish', cols: 2, keys: ['DOOR MATERIAL', 'DOOR ELEVATION TYPE', 'DOOR CORE', 'DOOR FACE', 'DOOR EDGE', 'DOOR GUAGE', 'DOOR FINISH', 'STC RATING', 'DOOR UNDERCUT', 'DOOR INCLUDE/EXCLUDE'] },
 ];
 
 const FRAME_GROUPS: { header: string; cols: number; keys: string[] }[] = [
@@ -35,6 +40,9 @@ const FRAME_GROUPS: { header: string; cols: number; keys: string[] }[] = [
     { header: 'Profile & Assembly', cols: 2, keys: ['FRAME PROFILE', 'FRAME ELEVATION TYPE', 'FRAME ASSEMBLY', 'FRAME GUAGE'] },
     { header: 'Finish & Details', cols: 2, keys: ['FRAME FINISH', 'PREHUNG', 'FRAME HEAD', 'CASING', 'FRAME INCLUDE/EXCLUDE'] },
 ];
+
+const DEFAULT_BASIC_INFO_SEC = (): RawSection =>
+    Object.fromEntries(BASIC_INFO_GROUPS.flatMap(g => g.keys).map(k => [k, '']));
 
 const DEFAULT_DOOR_SEC = (): RawSection =>
     Object.fromEntries(DOOR_GROUPS.flatMap(g => g.keys).map(k => [k, '']));
@@ -60,13 +68,45 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     </div>
 );
 
+const INCLUDE_EXCLUDE_OPTS = ['', 'INCLUDE', 'EXCLUDE'];
+
 const SectionFields: React.FC<{
     data: RawSection;
     groups: typeof DOOR_GROUPS;
     onChange: (key: string, value: string) => void;
-}> = ({ data, groups, onChange }) => {
+    dropdownFields?: Record<string, string[]>;
+}> = ({ data, groups, onChange, dropdownFields }) => {
     const allGroupedKeys = new Set(groups.flatMap(g => g.keys));
     const extraKeys = Object.keys(data).filter(k => !allGroupedKeys.has(k));
+
+    const renderField = (key: string) => {
+        const opts = dropdownFields?.[key];
+        if (opts) {
+            const currentVal = data[key] ?? '';
+            // If the Excel value isn't in the predefined list (e.g. different casing),
+            // add it as an option so it still displays correctly.
+            const allOpts = currentVal && !opts.includes(currentVal)
+                ? [...opts, currentVal]
+                : opts;
+            return (
+                <select
+                    className={selectCls}
+                    value={currentVal}
+                    onChange={e => onChange(key, e.target.value)}
+                >
+                    {allOpts.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                </select>
+            );
+        }
+        return (
+            <input
+                type="text"
+                className={inputCls}
+                value={data[key] ?? ''}
+                onChange={e => onChange(key, e.target.value)}
+            />
+        );
+    };
 
     return (
         <div className="space-y-1 max-w-2xl">
@@ -82,12 +122,7 @@ const SectionFields: React.FC<{
                                     <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">
                                         {prettifyKey(key)}
                                     </label>
-                                    <input
-                                        type="text"
-                                        className={inputCls}
-                                        value={data[key] ?? ''}
-                                        onChange={e => onChange(key, e.target.value)}
-                                    />
+                                    {renderField(key)}
                                 </div>
                             ))}
                         </div>
@@ -103,12 +138,7 @@ const SectionFields: React.FC<{
                                 <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">
                                     {prettifyKey(key)}
                                 </label>
-                                <input
-                                    type="text"
-                                    className={inputCls}
-                                    value={data[key] ?? ''}
-                                    onChange={e => onChange(key, e.target.value)}
-                                />
+                                {renderField(key)}
                             </div>
                         ))}
                     </div>
@@ -127,25 +157,118 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     projectId,
     onElevationTypeUpdate,
 }) => {
-    const [activeTab, setActiveTab] = useState<TabId>('door');
+    const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [elevationMode, setElevationMode] = useState<'door' | 'frame'>('door');
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
     const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
 
-    // Raw section state — initialized from door.sections (uppercase Excel keys)
+    // Raw section state — initialized from door.sections (uppercase Excel keys).
     // For new doors without sections, seed with empty-string defaults so all fields render.
-    const rawSections = door.sections as unknown as { door: RawSection; frame: RawSection; hardware: RawSection } | undefined;
-    const [doorSec, setDoorSec] = useState<RawSection>(() => {
-        const existing = rawSections?.door ?? {};
+    const rawSections = door.sections as unknown as {
+        basic_information?: RawSection;
+        door: RawSection;
+        frame: RawSection;
+        hardware: RawSection;
+    } | undefined;
+
+    const biKeys = new Set(BASIC_INFO_GROUPS.flatMap(g => g.keys));
+
+    // Convert numeric inches back to feet-inches string for display (e.g. 36 → "3'-0\"")
+    const fmtInches = (v: number | undefined): string =>
+        v ? `${Math.floor(v / 12)}'-${v % 12}"` : '';
+
+    const [basicInfoSec, setBasicInfoSec] = useState<RawSection>(() => {
+        // 1. New sectioned format — basic_information section has data
+        const existing = rawSections?.basic_information ?? {};
         if (Object.keys(existing).length > 0) return { ...existing };
-        return { ...DEFAULT_DOOR_SEC(), 'DOOR TAG': door.doorTag || '' };
-    });
-    const [frameSec, setFrameSec] = useState<RawSection>(() => {
-        const existing = rawSections?.frame ?? {};
-        if (Object.keys(existing).length > 0) return { ...existing };
-        return DEFAULT_FRAME_SEC();
+        // 2. Old sectioned format — basic-info fields lived inside the door section
+        const fromDoor = Object.fromEntries([...biKeys].map(k => [k, rawSections?.door?.[k] ?? '']));
+        if (Object.values(fromDoor).some(v => v)) return fromDoor;
+        // 3. Flat Excel format — data lives in typed Door fields, not sections
+        return {
+            ...DEFAULT_BASIC_INFO_SEC(),
+            'DOOR TAG':          door.doorTag              || '',
+            'BUILDING TAG':      door.buildingTag          || '',
+            'BUILDING LOCATION': door.buildingLocation     || '',
+            'BUILDING AREA':     '',
+            'DOOR LOCATION':     door.location             || '',
+            'INTERIOR/EXTERIOR': door.interiorExterior     || '',
+            'QUANTITY':          door.quantity != null ? String(door.quantity) : '',
+            'LEAF COUNT':        door.leafCountDisplay      || (door.leafCount != null ? String(door.leafCount) : ''),
+            'HAND OF OPENINGS':  door.handing              || '',
+            'DOOR OPERATION':    door.operation            || '',
+            'EXCLUDE REASON':    door.excludeReason        || '',
+            'WIDTH':             fmtInches(door.width),
+            'HEIGHT':            fmtInches(door.height),
+            'THICKNESS':         door.thickness != null ? String(door.thickness) : '',
+            'FIRE RATING':       door.fireRating           || '',
+        };
     });
 
+    const [doorSec, setDoorSec] = useState<RawSection>(() => {
+        const existing = rawSections?.door ?? {};
+        const doorOnly = Object.fromEntries(Object.entries(existing).filter(([k]) => !biKeys.has(k)));
+
+        // Typed Door fields provide fallback values for any key that's empty in section data
+        const typedFallback: RawSection = {
+            'DOOR MATERIAL':        door.doorMaterial          || '',
+            'DOOR ELEVATION TYPE':  door.elevationTypeId       || '',
+            'DOOR CORE':            door.doorCore              || '',
+            'DOOR FACE':            door.doorFace              || '',
+            'DOOR EDGE':            door.doorEdge              || '',
+            'DOOR GUAGE':           door.doorGauge             || '',
+            'DOOR FINISH':          door.doorFinish            || '',
+            'STC RATING':           door.stcRating             || '',
+            'DOOR UNDERCUT':        door.undercut              || '',
+            'DOOR INCLUDE/EXCLUDE': door.doorIncludeExclude    || '',
+        };
+
+        if (Object.keys(doorOnly).length > 0) {
+            // Merge: section data wins when non-empty; typed Door field fills any empty gaps
+            const merged: RawSection = { ...typedFallback };
+            for (const [k, v] of Object.entries(doorOnly)) {
+                if (v !== undefined && v !== '') merged[k] = v;
+                else if (!(k in merged)) merged[k] = v ?? '';
+            }
+            return merged;
+        }
+        return { ...DEFAULT_DOOR_SEC(), ...typedFallback };
+    });
+
+    const [frameSec, setFrameSec] = useState<RawSection>(() => {
+        const existing = rawSections?.frame ?? {};
+
+        const typedFallback: RawSection = {
+            'FRAME MATERIAL':        door.frameMaterial         || '',
+            'WALL TYPE':             door.wallType              || '',
+            'THROAT THICKNESS':      door.throatThickness       || '',
+            'FRAME ANCHOR':          door.frameAnchor           || '',
+            'BASE ANCHOR':           door.baseAnchor            || '',
+            'NO OF ANCHOR':          door.numberOfAnchors       || '',
+            'FRAME PROFILE':         door.frameProfile          || '',
+            'FRAME ELEVATION TYPE':  door.frameElevationType    || '',
+            'FRAME ASSEMBLY':        door.frameAssembly         || '',
+            'FRAME GUAGE':           door.frameGauge            || '',
+            'FRAME FINISH':          door.frameFinish           || '',
+            'PREHUNG':               door.prehung               || '',
+            'FRAME HEAD':            door.frameHead             || '',
+            'CASING':                door.casing                || '',
+            'FRAME INCLUDE/EXCLUDE': door.frameIncludeExclude   || '',
+        };
+
+        if (Object.keys(existing).length > 0) {
+            // Merge: section data wins when non-empty; typed Door field fills any empty gaps
+            const merged: RawSection = { ...typedFallback };
+            for (const [k, v] of Object.entries(existing)) {
+                if (v !== undefined && v !== '') merged[k] = v;
+                else if (!(k in merged)) merged[k] = v ?? '';
+            }
+            return merged;
+        }
+        return { ...DEFAULT_FRAME_SEC(), ...typedFallback };
+    });
+
+    const updateBasicInfoSec = (key: string, value: string) => setBasicInfoSec(prev => ({ ...prev, [key]: value }));
     const updateDoorSec = (key: string, value: string) => setDoorSec(prev => ({ ...prev, [key]: value }));
     const updateFrameSec = (key: string, value: string) => setFrameSec(prev => ({ ...prev, [key]: value }));
 
@@ -169,51 +292,54 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     };
 
     const handleSave = () => {
-        // Sync section edits back to typed Door fields
         const updatedSections = {
-            ...(rawSections ?? { door: {}, frame: {}, hardware: {} }),
+            ...(rawSections ?? {}),
+            basic_information: basicInfoSec,
             door: doorSec,
             frame: frameSec,
+            hardware: rawSections?.hardware ?? {},
         };
 
         const doorToSave: Door = {
             ...editedDoor,
             hardwarePrep: generateHardwarePrepString(editedDoor.hardwarePrepSpec) || editedDoor.hardwarePrep,
             sections: updatedSections as unknown as Door['sections'],
-            // Sync typed fields from section edits so the rest of the app stays in sync
-            doorTag: doorSec['DOOR TAG'] ?? editedDoor.doorTag,
-            location: doorSec['DOOR LOCATION'] ?? editedDoor.location,
-            buildingTag: doorSec['BUILDING TAG'] ?? editedDoor.buildingTag,
-            buildingLocation: doorSec['BUILDING LOCATION'] ?? editedDoor.buildingLocation,
-            interiorExterior: doorSec['INTERIOR/EXTERIOR'] ?? editedDoor.interiorExterior,
-            excludeReason: doorSec['EXCLUDE REASON'] ?? editedDoor.excludeReason,
-            fireRating: doorSec['FIRE RATING'] ?? editedDoor.fireRating,
-            doorMaterial: doorSec['DOOR MATERIAL'] ?? editedDoor.doorMaterial,
-            doorCore: doorSec['DOOR CORE'] ?? editedDoor.doorCore,
-            doorFace: doorSec['DOOR FACE'] ?? editedDoor.doorFace,
-            doorEdge: doorSec['DOOR EDGE'] ?? editedDoor.doorEdge,
-            doorGauge: doorSec['DOOR GUAGE'] ?? editedDoor.doorGauge,
-            doorFinish: doorSec['DOOR FINISH'] ?? editedDoor.doorFinish,
-            stcRating: doorSec['STC RATING'] ?? editedDoor.stcRating,
-            undercut: doorSec['DOOR UNDERCUT'] ?? editedDoor.undercut,
+            // Sync typed fields from basic_information section
+            doorTag:          basicInfoSec['DOOR TAG']          ?? editedDoor.doorTag,
+            location:         basicInfoSec['DOOR LOCATION']     ?? editedDoor.location,
+            buildingTag:      basicInfoSec['BUILDING TAG']      ?? editedDoor.buildingTag,
+            buildingLocation: basicInfoSec['BUILDING LOCATION'] ?? editedDoor.buildingLocation,
+            interiorExterior: basicInfoSec['INTERIOR/EXTERIOR'] ?? editedDoor.interiorExterior,
+            excludeReason:    basicInfoSec['EXCLUDE REASON']    ?? editedDoor.excludeReason,
+            fireRating:       basicInfoSec['FIRE RATING']       ?? editedDoor.fireRating,
+            handing:         (basicInfoSec['HAND OF OPENINGS']  ?? editedDoor.handing) as Door['handing'],
+            operation:        basicInfoSec['DOOR OPERATION']    ?? editedDoor.operation,
+            // Sync typed fields from door section
+            doorMaterial:     doorSec['DOOR MATERIAL']          ?? editedDoor.doorMaterial,
+            doorCore:         doorSec['DOOR CORE']              ?? editedDoor.doorCore,
+            doorFace:         doorSec['DOOR FACE']              ?? editedDoor.doorFace,
+            doorEdge:         doorSec['DOOR EDGE']              ?? editedDoor.doorEdge,
+            doorGauge:        doorSec['DOOR GUAGE']             ?? editedDoor.doorGauge,
+            doorFinish:       doorSec['DOOR FINISH']            ?? editedDoor.doorFinish,
+            stcRating:        doorSec['STC RATING']             ?? editedDoor.stcRating,
+            undercut:         doorSec['DOOR UNDERCUT']          ?? editedDoor.undercut,
             doorIncludeExclude: doorSec['DOOR INCLUDE/EXCLUDE'] ?? editedDoor.doorIncludeExclude,
-            elevationTypeId: doorSec['DOOR ELEVATION TYPE'] ?? editedDoor.elevationTypeId,
-            handing: (doorSec['HAND OF OPENINGS'] ?? editedDoor.handing) as Door['handing'],
-            operation: doorSec['DOOR OPERATION'] ?? editedDoor.operation,
-            frameMaterial: (frameSec['FRAME MATERIAL'] ?? editedDoor.frameMaterial) as Door['frameMaterial'],
-            wallType: frameSec['WALL TYPE'] ?? editedDoor.wallType,
-            throatThickness: frameSec['THROAT THICKNESS'] ?? editedDoor.throatThickness,
-            frameAnchor: frameSec['FRAME ANCHOR'] ?? editedDoor.frameAnchor,
-            baseAnchor: frameSec['BASE ANCHOR'] ?? editedDoor.baseAnchor,
-            numberOfAnchors: frameSec['NO OF ANCHOR'] ?? editedDoor.numberOfAnchors,
-            frameProfile: (frameSec['FRAME PROFILE'] ?? editedDoor.frameProfile) as Door['frameProfile'],
+            elevationTypeId:  doorSec['DOOR ELEVATION TYPE']    ?? editedDoor.elevationTypeId,
+            // Sync typed fields from frame section
+            frameMaterial:   (frameSec['FRAME MATERIAL']        ?? editedDoor.frameMaterial) as Door['frameMaterial'],
+            wallType:         frameSec['WALL TYPE']             ?? editedDoor.wallType,
+            throatThickness:  frameSec['THROAT THICKNESS']      ?? editedDoor.throatThickness,
+            frameAnchor:      frameSec['FRAME ANCHOR']          ?? editedDoor.frameAnchor,
+            baseAnchor:       frameSec['BASE ANCHOR']           ?? editedDoor.baseAnchor,
+            numberOfAnchors:  frameSec['NO OF ANCHOR']          ?? editedDoor.numberOfAnchors,
+            frameProfile:    (frameSec['FRAME PROFILE']         ?? editedDoor.frameProfile) as Door['frameProfile'],
             frameElevationType: frameSec['FRAME ELEVATION TYPE'] ?? editedDoor.frameElevationType,
-            frameAssembly: frameSec['FRAME ASSEMBLY'] ?? editedDoor.frameAssembly,
-            frameGauge: frameSec['FRAME GUAGE'] ?? editedDoor.frameGauge,
-            frameFinish: frameSec['FRAME FINISH'] ?? editedDoor.frameFinish,
-            prehung: frameSec['PREHUNG'] ?? editedDoor.prehung,
-            frameHead: frameSec['FRAME HEAD'] ?? editedDoor.frameHead,
-            casing: frameSec['CASING'] ?? editedDoor.casing,
+            frameAssembly:    frameSec['FRAME ASSEMBLY']        ?? editedDoor.frameAssembly,
+            frameGauge:       frameSec['FRAME GUAGE']           ?? editedDoor.frameGauge,
+            frameFinish:      frameSec['FRAME FINISH']          ?? editedDoor.frameFinish,
+            prehung:          frameSec['PREHUNG']               ?? editedDoor.prehung,
+            frameHead:        frameSec['FRAME HEAD']            ?? editedDoor.frameHead,
+            casing:           frameSec['CASING']                ?? editedDoor.casing,
             frameIncludeExclude: frameSec['FRAME INCLUDE/EXCLUDE'] ?? editedDoor.frameIncludeExclude,
         };
         onSave(doorToSave);
@@ -224,10 +350,11 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const [isIssuesOpen, setIsIssuesOpen] = useState(false);
 
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-        { id: 'door',      label: 'Door',      icon: <DoorOpen className="w-3.5 h-3.5" /> },
-        { id: 'frame',     label: 'Frame',     icon: <Frame    className="w-3.5 h-3.5" /> },
-        { id: 'hardware',  label: 'Hardware',  icon: <Wrench   className="w-3.5 h-3.5" /> },
-        { id: 'elevation', label: 'Elevation', icon: <Image    className="w-3.5 h-3.5" /> },
+        { id: 'basic',     label: 'Basic Info', icon: <ClipboardList className="w-3.5 h-3.5" /> },
+        { id: 'door',      label: 'Door',       icon: <DoorOpen      className="w-3.5 h-3.5" /> },
+        { id: 'frame',     label: 'Frame',      icon: <Frame         className="w-3.5 h-3.5" /> },
+        { id: 'hardware',  label: 'Hardware',   icon: <Wrench        className="w-3.5 h-3.5" /> },
+        { id: 'elevation', label: 'Elevation',  icon: <Image         className="w-3.5 h-3.5" /> },
     ];
 
     return (
@@ -297,10 +424,20 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                 {/* Tab Content */}
                 <div className="flex-1 overflow-y-auto p-6">
 
+                    {/* ── BASIC INFO TAB ── */}
+                    {activeTab === 'basic' && (
+                        Object.keys(basicInfoSec).length > 0
+                            ? <SectionFields data={basicInfoSec} groups={BASIC_INFO_GROUPS} onChange={updateBasicInfoSec} />
+                            : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
+                                <ClipboardList className="w-8 h-8 opacity-40" />
+                                No basic information data available. Upload a sectioned Excel schedule to populate fields.
+                              </div>
+                    )}
+
                     {/* ── DOOR TAB ── */}
                     {activeTab === 'door' && (
                         Object.keys(doorSec).length > 0
-                            ? <SectionFields data={doorSec} groups={DOOR_GROUPS} onChange={updateDoorSec} />
+                            ? <SectionFields data={doorSec} groups={DOOR_GROUPS} onChange={updateDoorSec} dropdownFields={{ 'DOOR INCLUDE/EXCLUDE': INCLUDE_EXCLUDE_OPTS }} />
                             : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
                                 <DoorOpen className="w-8 h-8 opacity-40" />
                                 No door section data available. Upload a sectioned Excel schedule to populate fields.
@@ -310,7 +447,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                     {/* ── FRAME TAB ── */}
                     {activeTab === 'frame' && (
                         Object.keys(frameSec).length > 0
-                            ? <SectionFields data={frameSec} groups={FRAME_GROUPS} onChange={updateFrameSec} />
+                            ? <SectionFields data={frameSec} groups={FRAME_GROUPS} onChange={updateFrameSec} dropdownFields={{ 'FRAME INCLUDE/EXCLUDE': INCLUDE_EXCLUDE_OPTS }} />
                             : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
                                 <Frame className="w-8 h-8 opacity-40" />
                                 No frame section data available. Upload a sectioned Excel schedule to populate fields.
@@ -348,9 +485,17 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                             </div>
                             <div className="pt-2">
                                 <Label>Hardware Include / Exclude</Label>
-                                <input type="text" className={inputCls}
+                                <select className={selectCls}
                                     value={editedDoor.hardwareIncludeExclude || ''}
-                                    onChange={e => updateField('hardwareIncludeExclude', e.target.value || undefined)} />
+                                    onChange={e => updateField('hardwareIncludeExclude', e.target.value || undefined)}>
+                                    {(() => {
+                                        const cur = editedDoor.hardwareIncludeExclude || '';
+                                        const opts = cur && !INCLUDE_EXCLUDE_OPTS.includes(cur)
+                                            ? [...INCLUDE_EXCLUDE_OPTS, cur]
+                                            : INCLUDE_EXCLUDE_OPTS;
+                                        return opts.map(o => <option key={o} value={o}>{o || '—'}</option>);
+                                    })()}
+                                </select>
                             </div>
 
                             {/* Matched Hardware Set Items Table */}

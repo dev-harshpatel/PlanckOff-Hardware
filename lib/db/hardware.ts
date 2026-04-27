@@ -29,7 +29,7 @@ export interface DoorScheduleRow {
   roomNumber?: string;
   doorLocation?: string;
   interiorExterior?: string;
-  quantity?: number;
+  quantity?: string | number;
   handOfOpenings?: string;
   doorOperation?: string;
   leafCount?: string;
@@ -77,20 +77,21 @@ export interface DoorScheduleRow {
   hardwarePrep?: string;
   hardwareOnDoor?: string;
   // Accessories (boolean flags)
-  hasCardReader?: boolean;
-  hasKeyPad?: boolean;
-  hasAutoOperator?: boolean;
-  hasPrivacySet?: boolean;
-  hasKeyedLock?: boolean;
-  hasPushPlate?: boolean;
-  hasAntiBarricade?: boolean;
-  hasKickPlate?: boolean;
-  hasFrameProtection?: boolean;
-  hasDoorCloser?: boolean;
+  hasCardReader?: string | boolean;
+  hasKeyPad?: string | boolean;
+  hasAutoOperator?: string | boolean;
+  hasPrivacySet?: string | boolean;
+  hasKeyedLock?: string | boolean;
+  hasPushPlate?: string | boolean;
+  hasAntiBarricade?: string | boolean;
+  hasKickPlate?: string | boolean;
+  hasFrameProtection?: string | boolean;
+  hasDoorCloser?: string | boolean;
   comments?: string;
   // Sectioned representation from structured Excel uploads.
   // Keys are the original Excel column names (e.g. "DOOR TAG", "FRAME MATERIAL", "HARDWARE SET").
   sections?: {
+    basic_information: Record<string, string | undefined>;
     door: Record<string, string | undefined>;
     frame: Record<string, string | undefined>;
     hardware: Record<string, string | undefined>;
@@ -129,7 +130,7 @@ export interface MergedDoor {
   buildingArea?: string;
   doorLocation?: string;
   interiorExterior?: string;
-  quantity?: number;
+  quantity?: string | number;
   fireRating?: string;
   leafCount?: string;
   doorType?: string;
@@ -140,20 +141,21 @@ export interface MergedDoor {
   doorMaterial?: string;
   frameMaterial?: string;
   hardwarePrep?: string;
-  hasCardReader?: boolean;
-  hasKeyPad?: boolean;
-  hasAutoOperator?: boolean;
-  hasPrivacySet?: boolean;
-  hasKeyedLock?: boolean;
-  hasPushPlate?: boolean;
-  hasAntiBarricade?: boolean;
-  hasKickPlate?: boolean;
-  hasFrameProtection?: boolean;
-  hasDoorCloser?: boolean;
+  hasCardReader?: string | boolean;
+  hasKeyPad?: string | boolean;
+  hasAutoOperator?: string | boolean;
+  hasPrivacySet?: string | boolean;
+  hasKeyedLock?: string | boolean;
+  hasPushPlate?: string | boolean;
+  hasAntiBarricade?: string | boolean;
+  hasKickPlate?: string | boolean;
+  hasFrameProtection?: string | boolean;
+  hasDoorCloser?: string | boolean;
   comments?: string;
   excludeReason?: string;
   scheduleOrder?: number; // original row index in the uploaded door schedule
   sections?: {
+    basic_information: Record<string, string | undefined>;
     door: Record<string, string | undefined>;
     frame: Record<string, string | undefined>;
     hardware: Record<string, string | undefined>;

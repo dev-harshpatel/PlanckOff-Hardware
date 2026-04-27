@@ -25,7 +25,14 @@
       "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(data[0]['text'][:8000]\\)\")",
       "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(0,10000\\)\\);\")",
       "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(10000,22000\\)\\);\")",
-      "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(22000,35000\\)\\);\")"
+      "Bash(node -e \"const fs=require\\('fs'\\); const data=JSON.parse\\(fs.readFileSync\\('C:/Users/Bacancy/.claude/projects/d--Projects-learning-projects-PlanckOff-Hardware/8a946db4-8d70-4f76-b33d-222a3443da8d/tool-results/toolu_01VdnXL8rbAzUMh8YZjUL2Bg.json'\\)\\); console.log\\(data[0].text.substring\\(22000,35000\\)\\);\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(grep -rn \"key.*hs-pdf\\\\|hs-pdf.*key\\\\|\\\\.map.*key\\\\|key=.*\\\\${\" \"/Users/harsh/harsh-work/Projects/PlanckOff/Planckoff -hardware-estimating\" --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\([k for k in d.get\\('dependencies',{}\\) if 'radix' in k or 'shadcn' in k][:10]\\)\")",
+      "Bash(python3 *)",
+      "Bash(node -e \"const p = require\\('/Users/harsh/harsh-work/Projects/PlanckOff/Planckoff -hardware-estimating/node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.js'\\); console.log\\(typeof p, typeof p.default, Object.keys\\(p\\).slice\\(0,5\\)\\)\")",
+      "Bash(node *)",
+      "Bash(npx next *)"
     ]
   }
 }
