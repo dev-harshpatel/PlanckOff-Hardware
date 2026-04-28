@@ -37,6 +37,10 @@ interface HardwareItemUsage {
     doorTags: string[];
     totalQuantity: number;
     sets: string[];
+    /** Sum of basic_information.quantity across all doors that use this item */
+    doorQuantitySum: number;
+    /** Unique door materials from all doors that use this item */
+    doorMaterials: string[];
 }
 
 interface HardwareGroup {
@@ -50,13 +54,16 @@ interface HardwareGroup {
 
 // ─── Static config ────────────────────────────────────────────────────────────
 
-// 'usage' is shown in the group header, not as a table column.
 const REQUIRED_COLUMN_DEFS = [
-    { id: 'name',         label: 'Item Name',    desc: 'Hardware item name/description'          },
-    { id: 'description',  label: 'Description',  desc: 'Detailed specifications'                 },
-    { id: 'manufacturer', label: 'Manufacturer', desc: 'Brand/supplier name'                     },
-    { id: 'finish',       label: 'Finish',       desc: 'Color/coating specification'             },
-    { id: 'quantity',     label: 'Quantity',     desc: 'Total qty across all assigned doors'     },
+    { id: 'hw_set_name',  label: 'HW Set',        desc: 'Hardware set name(s) this item belongs to' },
+    { id: 'name',         label: 'Item Name',      desc: 'Hardware item name/description'            },
+    { id: 'description',  label: 'Description',    desc: 'Detailed specifications'                   },
+    { id: 'manufacturer', label: 'Manufacturer',   desc: 'Brand/supplier name'                       },
+    { id: 'finish',       label: 'Finish',         desc: 'Color/coating specification'               },
+    { id: 'qty_per_set',  label: 'Qty/Set',        desc: 'Raw item quantity per hardware set'        },
+    { id: 'quantity',     label: 'Total',          desc: 'Multiplied quantity (qty × doors)'         },
+    { id: 'usage',        label: 'Usage',          desc: 'Door tags or quantity for this item'       },
+    { id: 'door_material',label: 'Door Material',  desc: 'Materials of doors using this item'        },
 ];
 
 const GROUPING_OPTIONS: { id: GroupByOption; label: string; desc: string }[] = [
@@ -114,13 +121,36 @@ function formatDoorTags(doorTags: string[], display: string[], totalQuantity?: n
 
 function getItemValue(usage: HardwareItemUsage, colId: string): string {
     switch (colId) {
-        case 'name':         return usage.item.name         || '—';
-        case 'description':  return usage.item.description  || '—';
-        case 'manufacturer': return usage.item.manufacturer || '—';
-        case 'finish':       return usage.item.finish       || '—';
-        case 'quantity':     return usage.totalQuantity > 0 ? String(usage.totalQuantity) : '—';
-        default:             return '—';
+        case 'hw_set_name':   return usage.sets.length > 0 ? usage.sets.join(', ') : '—';
+        case 'name':          return usage.item.name         || '—';
+        case 'description':   return usage.item.description  || '—';
+        case 'manufacturer':  return usage.item.manufacturer || '—';
+        case 'finish':        return usage.item.finish       || '—';
+        case 'qty_per_set':   return usage.item.quantity > 0 ? String(usage.item.quantity) : '—';
+        case 'quantity':      return usage.totalQuantity > 0 ? String(usage.totalQuantity) : '—';
+        case 'door_material': return usage.doorMaterials.length > 0 ? usage.doorMaterials.join(', ') : '—';
+        default:              return '—';
     }
+}
+
+/**
+ * Returns the value for the Usage column cell.
+ *
+ * 'all'   → comma-separated door tags: "101, 102, 201"
+ * 'count' → sum of basic_information.quantity: "Qty: 4"
+ * both    → "101, 102, 201 (Qty: 4)"
+ * neither → '—'
+ */
+function getUsageCellValue(usage: HardwareItemUsage, usageDisplay: string[]): string {
+    if (usage.doorTags.length === 0) return '—';
+    const showAll   = usageDisplay.includes('all');
+    const showCount = usageDisplay.includes('count');
+    if (!showAll && !showCount) return '—';
+
+    const qty = usage.doorQuantitySum > 0 ? usage.doorQuantitySum : usage.doorTags.length;
+    if (showAll && showCount) return `${usage.doorTags.join(', ')} (Qty: ${qty})`;
+    if (showAll)              return usage.doorTags.join(', ');
+    return `Qty: ${qty}`;
 }
 
 /**
@@ -138,12 +168,18 @@ function buildSetGroups(hardwareSets: HardwareSet[], doors: Door[]): HardwareGro
             // door.quantity is already parsed from that field by transformFromFinalJson.
             const groupTotalQuantity = setDoors.reduce((sum, d) => sum + (d.quantity || 1), 0);
 
+            const doorMaterials = [...new Set(
+                setDoors.map(d => d.doorMaterial).filter(Boolean),
+            )];
+
             const items: HardwareItemUsage[] = set.items.map(item => ({
                 item,
                 doorTags,
                 // multipliedQuantity from the final JSON = qty × door count for this set
                 totalQuantity: item.multipliedQuantity ?? item.quantity,
                 sets: [set.name],
+                doorQuantitySum: groupTotalQuantity,
+                doorMaterials,
             }));
             return { label: set.name, items, groupDoorTags: doorTags, groupTotalQuantity };
         })
@@ -198,8 +234,7 @@ const HardwareGroupTable: React.FC<{
         ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
         : '';
 
-    // 'usage' is shown in the header — exclude it from table columns
-    const tableColumns = requiredColumns.filter(c => c !== 'usage');
+    const tableColumns = requiredColumns;
 
     return (
         <div className={`rounded-lg overflow-hidden border ${
@@ -276,9 +311,13 @@ const HardwareGroupTable: React.FC<{
                                             : idx % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/50'
                                     }>
                                         {tableColumns.map(col => {
-                                            const val = getItemValue(usage, col);
+                                            const val = col === 'usage'
+                                                ? getUsageCellValue(usage, usageDisplay)
+                                                : getItemValue(usage, col);
                                             return (
-                                                <td key={col} className={`px-3 py-2 whitespace-nowrap border-b ${
+                                                <td key={col} className={`px-3 py-2 border-b ${
+                                                    ['usage', 'door_material', 'hw_set_name'].includes(col) ? 'max-w-[200px] break-words' : 'whitespace-nowrap'
+                                                } ${
                                                     isPdf
                                                         ? 'text-gray-700 border-gray-100'
                                                         : 'text-[var(--text-secondary)] border-[var(--border-subtle)]'
@@ -332,10 +371,15 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             const doorsWithSet = doors.filter(d => getDoorHwSetName(d)?.toLowerCase() === setName);
             set.items.forEach(item => {
                 const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}`;
-                if (!map.has(key)) map.set(key, { item, doorTags: [], totalQuantity: 0, sets: [] });
+                if (!map.has(key)) map.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
                 const usage = map.get(key)!;
                 doorsWithSet.forEach(door => {
-                    if (!usage.doorTags.includes(door.doorTag)) usage.doorTags.push(door.doorTag);
+                    if (!usage.doorTags.includes(door.doorTag)) {
+                        usage.doorTags.push(door.doorTag);
+                        usage.doorQuantitySum += (door.quantity || 1);
+                        const mat = door.doorMaterial?.trim();
+                        if (mat && !usage.doorMaterials.includes(mat)) usage.doorMaterials.push(mat);
+                    }
                 });
                 // Sum multipliedQuantity (qty × door count for this set), falling back to
                 // qty × matched door count if multipliedQuantity isn't available.
@@ -378,8 +422,9 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
     // Download uses the same `groups` memo as the preview — guaranteed identical output.
     const handleDownload = useCallback(async () => {
         const safeProjectName = (projectName || 'Hardware_Set_Report').replace(/[/\\?%*:|"<>]/g, '_');
-        const tableCols = requiredColumns.filter(c => c !== 'usage');
-        const colDefs = REQUIRED_COLUMN_DEFS.filter(c => tableCols.includes(c.id));
+        const colDefs = REQUIRED_COLUMN_DEFS.filter(c => requiredColumns.includes(c.id));
+        const getCellValue = (u: HardwareItemUsage, colId: string): string =>
+            colId === 'usage' ? getUsageCellValue(u, usageDisplay) : getItemValue(u, colId);
 
         if (format === 'xlsx') {
             const XLSX = await import('xlsx');
@@ -395,13 +440,18 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 wsData.push([doorTagText ? `${group.label}  —  ${doorTagText}` : group.label]);
                 wsData.push(colDefs.map(c => c.label));
                 for (const usage of group.items) {
-                    wsData.push(colDefs.map(c => getItemValue(usage, c.id)));
+                    wsData.push(colDefs.map(c => getCellValue(usage, c.id)));
                 }
                 wsData.push([]);
             }
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             ws['!cols'] = colDefs.map(c => ({
-                wch: c.id === 'description' ? 45 : c.id === 'name' ? 35 : 18,
+                wch: c.id === 'description' ? 45
+                   : c.id === 'name'         ? 35
+                   : c.id === 'usage'        ? 40
+                   : c.id === 'door_material'? 30
+                   : c.id === 'hw_set_name'  ? 20
+                   : 14,
             }));
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
@@ -440,7 +490,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                     startY: 25,
                     head: [headers],
                     body: group.items.map(usage =>
-                        colDefs.map(c => getItemValue(usage, c.id) || '—'),
+                        colDefs.map(c => getCellValue(usage, c.id) || '—'),
                     ),
                     styles:      { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
                     headStyles:  { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 6.5 },

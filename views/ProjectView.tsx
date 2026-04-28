@@ -7,7 +7,7 @@ import HardwareSetsManager from '../components/HardwareSetsManager';
 import DoorScheduleManager from '../components/DoorScheduleManager';
 import { generateReport } from '../utils/reportGenerator';
 // process... imports removed from direct use, but types might be needed
-import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Trash2, Link2 } from 'lucide-react';
+import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft, PanelRight, Upload, X, Minus, CheckCircle2, FileSpreadsheet, FileText, GitMerge, Trash2, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
 import { captureTrainingExample } from '../services/mlOpsService';
@@ -22,6 +22,8 @@ import ValidationReportModal from '../components/ValidationReportModal';
 import ResizablePanels from '../components/ResizablePanels';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
+import { ProjectNotesPanel } from '../components/ProjectNotesPanel';
+import { useProjectRealtime } from '../hooks/useProjectRealtime';
 
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -90,6 +92,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const router = useRouter();
     const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>(project.hardwareSets || []);
     const [doors, setDoors] = useState<Door[]>(project.doors || []);
+    // Ref keeps the latest hardwareSets available inside callbacks without
+    // causing them to be recreated on every render.
+    const hardwareSetsRef = useRef<HardwareSet[]>(hardwareSets);
     const [viewMode, setViewMode] = useState<'split' | 'hardware' | 'doors'>('split');
     const [isDataLoading, setIsDataLoading] = useState(true);
 
@@ -164,6 +169,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     // Trash state — deleted sets/doors held here; persisted to trash_json in DB
     const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
     const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
+    const [isNotesOpen, setIsNotesOpen] = useState(false);
 
     // Undo toast queue — each pending delete gets an entry with a 6s countdown
     const [undoToasts, setUndoToasts] = useState<UndoToastItem[]>([]);
@@ -329,6 +335,32 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             }
         };
     }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Keep hardwareSetsRef in sync so the realtime callback never has a stale closure.
+    useEffect(() => {
+        hardwareSetsRef.current = hardwareSets;
+    }, [hardwareSets]);
+
+    // Reload only the door schedule from the DB and re-transform.
+    // Called by the Supabase Realtime subscription whenever door_schedule_imports changes.
+    const reloadDoorSchedule = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/projects/${project.id}/door-schedule`, { credentials: 'include' });
+            if (!res.ok) return;
+            const json = await res.json() as { data?: { scheduleJson?: unknown[] } };
+            if (!json?.data?.scheduleJson?.length) return;
+            const updated = transformDoors(
+                json.data.scheduleJson as Parameters<typeof transformDoors>[0],
+                hardwareSetsRef.current,
+            );
+            setDoors(updated);
+        } catch {
+            // Non-critical — stale data is better than a crash
+        }
+    }, [project.id]);
+
+    // Subscribe to Supabase Realtime so door edits appear instantly without a reload.
+    useProjectRealtime({ projectId: project.id, onDoorScheduleChange: reloadDoorSchedule });
 
     // Convert current UI state back to MergedHardwareSet[] and PUT to final JSON
     const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[], currentTrash?: TrashItem[]): Promise<void> => {
@@ -930,25 +962,41 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         }
     };
 
-    // Assign unmatched doors to their hardware set by name — skips already-assigned doors
-    const handleAssignAll = useCallback(() => {
-        const setsMap = new Map(hardwareSets.map(s => [s.name.toLowerCase(), s]));
-        setDoors(prev => prev.map(door => {
-            if (door.assignedHardwareSet) return door; // already assigned — leave it
-            const name = door.providedHardwareSet?.trim().toLowerCase();
-            if (!name) return door;
-            const matched = setsMap.get(name);
-            if (!matched) return door;
-            return {
-                ...door,
-                assignedHardwareSet: matched,
-                status: 'complete' as const,
-                assignmentConfidence: 'high' as const,
-                assignmentReason: 'Assign All',
-            };
-        }));
-        addToast({ type: 'success', message: 'Unassigned doors linked to matching hardware sets.' });
-    }, [hardwareSets, addToast]);
+    // ── Assign All — runs the same server-side merge as the pipeline ─────────
+    const handleAssignAll = async (): Promise<void> => {
+        const mergeStats = await runHardwareMerge();
+        if (!mergeStats) {
+            addToast({ type: 'error', message: 'Assignment failed. Make sure both the hardware PDF and door schedule are uploaded.' });
+            return;
+        }
+
+        // Re-fetch raw tables and re-transform so the UI reflects the merge result
+        const [hwRes, dsRes] = await Promise.all([
+            fetch(`/api/projects/${project.id}/hardware-pdf`, { credentials: 'include' }),
+            fetch(`/api/projects/${project.id}/door-schedule`, { credentials: 'include' }),
+        ]);
+        const hwJson = hwRes.ok ? await hwRes.json() : null;
+        const dsJson = dsRes.ok ? await dsRes.json() : null;
+
+        const freshSets: HardwareSet[] = hwJson?.data?.extractedJson
+            ? transformHardwareSets(hwJson.data.extractedJson)
+            : hardwareSets;
+        const freshDoors = dsJson?.data?.scheduleJson
+            ? transformDoors(dsJson.data.scheduleJson, freshSets)
+            : doors;
+
+        setHardwareSets(freshSets);
+        setDoors(freshDoors);
+        isInitialMount.current = true;
+        saveToFinalJson(freshSets, freshDoors).catch(() => {});
+
+        const matched = mergeStats.matchedDoorCount;
+        const unmatched = mergeStats.unmatchedDoorCount;
+        addToast({
+            type: 'success',
+            message: `Assigned ${matched} door${matched !== 1 ? 's' : ''} to hardware sets.${unmatched > 0 ? ` ${unmatched} door${unmatched !== 1 ? 's' : ''} could not be matched.` : ''}`,
+        });
+    };
 
     // ── Undo-toast + trash helpers ────────────────────────────────────────────
 
@@ -1327,6 +1375,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 onCancelTask={doorActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id)) : undefined}
                 canReupload={individualUploadsEnabled}
                 onDeleteDoors={handleDeleteDoors}
+                onAssignAll={handleAssignAll}
+                onDoorSaved={reloadDoorSchedule}
             />
         </div>
     );
@@ -1377,8 +1427,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         </button>
                     </div>
 
-                    {/* Right — trash + assign all + process files + save status */}
+                    {/* Right — notes + trash + process files + save status */}
                     <div className="flex items-center gap-2 justify-end min-w-[90px]">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsNotesOpen(true)}
+                            className={`gap-1.5 ${isNotesOpen ? 'text-[var(--primary-text)]' : 'text-[var(--text-muted)]'}`}
+                            title="Project notes"
+                        >
+                            <NotebookPen className="h-4 w-4" />
+                            <span className="hidden md:inline">Notes</span>
+                        </Button>
                         <Button
                             variant="ghost"
                             size="sm"
@@ -1392,17 +1452,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     {trashItems.length > 9 ? '9+' : trashItems.length}
                                 </span>
                             )}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleAssignAll}
-                            disabled={hardwareSets.length === 0 || doors.length === 0}
-                            className="gap-1.5 text-[var(--text-muted)]"
-                            title="Link unassigned doors to their hardware sets by name"
-                        >
-                            <Link2 className="h-4 w-4" />
-                            <span className="hidden md:inline">Assign All</span>
                         </Button>
                         <Button
                             size="sm"
@@ -1696,6 +1745,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             )}
 
             {/* Local floating pill hidden — global pill in AppShell handles all navigation contexts */}
+
+            {/* Project Notes slide-in panel */}
+            <ProjectNotesPanel
+                projectId={project.id}
+                isOpen={isNotesOpen}
+                onClose={() => setIsNotesOpen(false)}
+            />
         </main>
     );
 };

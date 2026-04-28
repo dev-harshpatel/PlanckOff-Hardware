@@ -428,6 +428,15 @@ export interface Project {
 
 export type ProjectStatus = 'Active' | 'Under Review' | 'Submitted' | 'On Hold' | 'Complete' | 'Archived';
 
+export type NoteTab = 'hardware' | 'door' | 'frame';
+
+export interface ProjectNotes {
+  projectId: string;
+  hardware: Record<string, unknown> | null;
+  door: Record<string, unknown> | null;
+  frame: Record<string, unknown> | null;
+}
+
 // Phase 20: Validation Types
 export interface DoorValidationIssue {
   doorTag: string;

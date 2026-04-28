@@ -19,8 +19,8 @@ const nextConfig: NextConfig = {
 
     return config;
   },
-  // Packages that need to be transpiled for Next.js SSR compatibility
-  // pdfjs-dist is handled via serverExternalPackages — do not add to transpilePackages
+  // jszip ships CJS-only — transpile so webpack resolves it correctly in the browser bundle
+  transpilePackages: ['jszip'],
 };
 
 export default nextConfig;

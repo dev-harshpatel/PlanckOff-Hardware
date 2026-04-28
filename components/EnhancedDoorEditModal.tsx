@@ -292,12 +292,20 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     };
 
     const handleSave = () => {
+        // Mirror hardware tab typed fields back into sections.hardware so the
+        // PATCH endpoint (and any future re-transform) picks them up correctly.
+        const updatedHardwareSec = {
+            ...(rawSections?.hardware ?? {}),
+            'HARDWARE INCLUDE/EXCLUDE': editedDoor.hardwareIncludeExclude ?? rawSections?.hardware?.['HARDWARE INCLUDE/EXCLUDE'] ?? '',
+            'HARDWARE SET': editedDoor.providedHardwareSet ?? rawSections?.hardware?.['HARDWARE SET'] ?? '',
+        };
+
         const updatedSections = {
             ...(rawSections ?? {}),
             basic_information: basicInfoSec,
             door: doorSec,
             frame: frameSec,
-            hardware: rawSections?.hardware ?? {},
+            hardware: updatedHardwareSec,
         };
 
         const doorToSave: Door = {

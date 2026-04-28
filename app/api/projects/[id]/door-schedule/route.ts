@@ -130,14 +130,14 @@ export const PATCH = withAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
-    let body: { doorTag: string; sections: DoorScheduleRow['sections'] };
+    let body: { doorTag: string; sections: DoorScheduleRow['sections']; hwSet?: string };
     try {
       body = await req.json();
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
     }
 
-    const { doorTag, sections } = body;
+    const { doorTag, sections, hwSet } = body;
     if (!doorTag || !sections) {
       return NextResponse.json({ error: 'doorTag and sections are required.' }, { status: 400 });
     }
@@ -155,14 +155,19 @@ export const PATCH = withAuth(
       return NextResponse.json({ error: `Door "${doorTag}" not found in schedule.` }, { status: 404 });
     }
 
-    // Update sections and mirror the include/exclude typed fields so they stay in sync
+    // Build the updated row. Mirror flat fields from sections so transformDoors
+    // produces consistent output whether it reads from sections or flat fields.
     const updatedRows: DoorScheduleRow[] = rows.map((r, i) =>
       i !== idx ? r : {
         ...r,
         sections,
-        doorIncludeExclude:      sections?.door?.['DOOR INCLUDE/EXCLUDE']          ?? r.doorIncludeExclude,
-        frameIncludeExclude:     sections?.frame?.['FRAME INCLUDE/EXCLUDE']         ?? r.frameIncludeExclude,
-        hardwareIncludeExclude:  sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE']   ?? r.hardwareIncludeExclude,
+        // hwSet is the foreign key used by mergeService to link doors to PDF sets.
+        // Only overwrite it when the caller explicitly passes a new value.
+        ...(hwSet !== undefined ? { hwSet } : {}),
+        // Mirror include/exclude flags into their flat columns so SQL queries stay in sync.
+        doorIncludeExclude:     sections?.door?.['DOOR INCLUDE/EXCLUDE']        ?? r.doorIncludeExclude,
+        frameIncludeExclude:    sections?.frame?.['FRAME INCLUDE/EXCLUDE']       ?? r.frameIncludeExclude,
+        hardwareIncludeExclude: sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE'] ?? r.hardwareIncludeExclude,
       },
     );
 

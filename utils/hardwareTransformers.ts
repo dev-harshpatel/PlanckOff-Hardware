@@ -5,6 +5,7 @@
 
 import type { HardwareSet, HardwareItem, Door } from '../types';
 import type { ExtractedHardwareSet, DoorScheduleRow, MergedHardwareSet } from '@/lib/db/hardware';
+import { matchHardwareSet } from './hardwareMatcher';
 
 // ---------------------------------------------------------------------------
 // Dimension parsing
@@ -126,11 +127,10 @@ export function transformHardwareSets(sets: ExtractedHardwareSet[]): HardwareSet
 // ---------------------------------------------------------------------------
 
 export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSet[]): Door[] {
-  const setsByName = new Map(hardwareSets.map((s) => [s.name.toLowerCase(), s]));
-
   return rows.map((row, idx): Door => {
     const providedSet = row.hwSet?.trim() ?? '';
-    const assignedSet = providedSet ? (setsByName.get(providedSet.toLowerCase()) ?? null) : null;
+    const matchResult = providedSet ? matchHardwareSet(providedSet, hardwareSets) : null;
+    const assignedSet = matchResult?.set ?? null;
 
     // basic_information section (new format) → door section (old format) → flat field
     // This three-way fallback ensures backward compatibility with existing DB records.
@@ -208,8 +208,8 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
 
       providedHardwareSet: providedSet || undefined,
       assignedHardwareSet: assignedSet ?? null,
-      assignmentConfidence: assignedSet ? 'high' : undefined,
-      assignmentReason: assignedSet ? 'Matched from door schedule' : undefined,
+      assignmentConfidence: matchResult?.confidence,
+      assignmentReason: matchResult?.reason,
     };
   });
 }

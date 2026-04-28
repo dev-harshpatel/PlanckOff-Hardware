@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
-import { FileText } from 'lucide-react';
+import { FileText, NotebookPen } from 'lucide-react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -13,6 +13,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { ProjectNotesPanel } from '@/components/ProjectNotesPanel';
 
 const ROUTE_TITLES: Record<string, string> = {
   'door-schedule': 'Door Schedule Report',
@@ -24,6 +26,7 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
   const { projects, projectsHydrated } = useProject();
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
 
   const activeProject = projects.find((p) => p.id === id);
 
@@ -72,6 +75,16 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
             <span className="text-[var(--text-muted)]">
               {activeProject.doors?.length ?? 0} doors · {activeProject.hardwareSets?.length ?? 0} sets
             </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsNotesOpen(true)}
+              className={`gap-1.5 ${isNotesOpen ? 'text-[var(--primary-text)]' : 'text-[var(--text-muted)]'}`}
+              title="Project notes"
+            >
+              <NotebookPen className="h-4 w-4" />
+              <span className="hidden md:inline">Notes</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -82,6 +95,12 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
           {children}
         </div>
       </div>
+
+      <ProjectNotesPanel
+        projectId={id}
+        isOpen={isNotesOpen}
+        onClose={() => setIsNotesOpen(false)}
+      />
     </div>
   );
 }

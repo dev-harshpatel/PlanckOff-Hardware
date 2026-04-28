@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Door, HardwareSet, AppSettings, ElevationType, Toast } from '../types';
-import { assignHardwareWithAI } from '../services/geminiService';
+import { matchHardwareSet } from '../utils/hardwareMatcher';
 import { migrateDoorData } from '../utils/doorDataMigration';
 import EnhancedDoorEditModal from './EnhancedDoorEditModal';
 import ContextualProgressBar from './ContextualProgressBar';
@@ -112,6 +112,8 @@ interface DoorScheduleManagerProps {
     onCancelTask?: () => void;
     canReupload?: boolean;
     onDeleteDoors?: (doorIds: string[]) => void;
+    onAssignAll: () => Promise<void>;
+    onDoorSaved?: () => void;
 }
 
 type StatusFilter = 'all' | 'pending' | 'complete' | 'error';
@@ -157,6 +159,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     onCancelTask,
     canReupload = true,
     onDeleteDoors,
+    onAssignAll,
+    onDoorSaved,
 }) => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [doorMaterialFilter, setDoorMaterialFilter] = useState<string>('all');
@@ -396,72 +400,43 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         return result;
     }, [doors, statusFilter, doorMaterialFilter, frameMaterialFilter, searchQuery, sortConfig]);
 
-    const handleAssignHardware = async (doorId: string) => {
+    const handleAssignHardware = (doorId: string): void => {
         const doorToUpdate = doors.find(d => d.id === doorId);
         if (!doorToUpdate) return;
 
-        onDoorsUpdate(currentDoors => currentDoors.map(d => d.id === doorId ? { ...d, status: 'loading' } : d));
+        const provided = doorToUpdate.providedHardwareSet?.trim() ?? '';
+        const matchResult = matchHardwareSet(provided, hardwareSets);
 
-        try {
-            const { assignedSet, confidence, reason } = await assignHardwareWithAI(doorToUpdate, hardwareSets, appSettings.model);
+        if (matchResult) {
             onDoorsUpdate(currentDoors => currentDoors.map(d =>
                 d.id === doorId
                     ? {
                         ...d,
                         status: 'complete',
-                        assignedHardwareSet: assignedSet,
-                        assignmentConfidence: confidence,
-                        assignmentReason: reason,
-                        errorMessage: undefined
+                        assignedHardwareSet: matchResult.set,
+                        assignmentConfidence: matchResult.confidence,
+                        assignmentReason: matchResult.reason,
+                        errorMessage: undefined,
                     }
                     : d
             ));
-        } catch (error) {
-            console.error("AI Assignment Error:", error);
-            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        } else {
             onDoorsUpdate(currentDoors => currentDoors.map(d =>
                 d.id === doorId
-                    ? { ...d, status: 'error', errorMessage }
+                    ? { ...d, status: 'error', errorMessage: `No hardware set matched "${provided}"` }
                     : d
             ));
         }
     };
 
+    // Delegates to ProjectView which calls POST /hardware-merge — same logic as the pipeline
     const handleAssignAll = async () => {
-        const doorsToProcess = filteredAndSortedDoors.filter(door => {
-            const isPendingOrError = door.status === 'pending' || door.status === 'error';
-            if (!isPendingOrError) return false;
-
-            // Exclude doors with validation failures that can't be assigned
-            const providedLower = door.providedHardwareSet?.trim().toLowerCase() || '';
-            const isInvalidRef = providedLower && !validSetNames.has(providedLower);
-            const isMissingSet = !providedLower;
-            return !(isInvalidRef || isMissingSet);
-        });
-
-        if (doorsToProcess.length === 0) return;
-
         setIsAssigningBatch(true);
-
-        // Reduced Concurrency to 1 to prevent quota limits
-        const CONCURRENCY_LIMIT = 1;
-        const queue = [...doorsToProcess];
-
-        const worker = async () => {
-            while (queue.length > 0) {
-                const door = queue.shift();
-                if (door) {
-                    await handleAssignHardware(door.id);
-                    // Throttle requests: Wait 2 seconds between assignments
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-            }
-        };
-
-        const workers = Array(CONCURRENCY_LIMIT).fill(null).map(worker);
-        await Promise.all(workers);
-
-        setIsAssigningBatch(false);
+        try {
+            await onAssignAll();
+        } finally {
+            setIsAssigningBatch(false);
+        }
     };
 
     // Manual Controls
@@ -1465,23 +1440,51 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     door={editModalDoor}
                     onSave={async (updatedDoor) => {
                         const migratedDoor = migrateDoorData(updatedDoor);
+
+                        // Detect hardware set change — hwSet is the foreign key linking
+                        // the Excel schedule to the PDF hardware sets.
+                        const prevHwSet = (editModalDoor.providedHardwareSet ?? '').trim();
+                        const newHwSet  = (migratedDoor.providedHardwareSet  ?? '').trim();
+                        const hwSetChanged = prevHwSet !== newHwSet;
+
                         // Update in-memory state immediately
-                        onDoorsUpdate(prev => prev.map(d => d.id === migratedDoor.id ? migratedDoor : d));
+                        onDoorsUpdate(prev => prev.map(d => d.doorTag === migratedDoor.doorTag ? migratedDoor : d));
                         setEditModalDoor(null);
-                        // Persist sections back to DB — scheduleJson is source of truth
+
+                        // Persist to Excel JSON (scheduleJson is source of truth)
                         if (migratedDoor.sections) {
                             try {
+                                const body: Record<string, unknown> = {
+                                    doorTag:  migratedDoor.doorTag,
+                                    sections: migratedDoor.sections,
+                                };
+                                // Only send hwSet when it actually changed to avoid
+                                // accidentally overwriting a value with an empty string.
+                                if (hwSetChanged) {
+                                    body.hwSet = newHwSet;
+                                }
+
                                 const res = await fetch(`/api/projects/${projectId}/door-schedule`, {
                                     method: 'PATCH',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        doorTag: migratedDoor.doorTag,
-                                        sections: migratedDoor.sections,
-                                    }),
+                                    body: JSON.stringify(body),
                                 });
                                 if (!res.ok) {
                                     const err = await res.json().catch(() => ({}));
                                     console.error('[DoorScheduleManager] Persist failed:', err);
+                                } else {
+                                    // Refresh the door list from the DB to confirm the save.
+                                    onDoorSaved?.();
+                                }
+                                if (res.ok && hwSetChanged) {
+                                    // Hardware set changed — re-run the merge so the final
+                                    // JSON (used for reports) reflects the new assignment.
+                                    fetch(`/api/projects/${projectId}/hardware-merge`, {
+                                        method: 'POST',
+                                        credentials: 'include',
+                                    }).catch(err =>
+                                        console.error('[DoorScheduleManager] Re-merge failed:', err)
+                                    );
                                 }
                             } catch (err) {
                                 console.error('[DoorScheduleManager] Persist fetch error:', err);
