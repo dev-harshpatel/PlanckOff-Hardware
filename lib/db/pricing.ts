@@ -8,6 +8,113 @@ export interface PricingItemRow {
 
 type DbResult<T> = { data: T | null; error: { message: string } | null };
 
+// ─── Pricing variants ─────────────────────────────────────────────────────────
+
+export interface PricingVariant {
+  key: string;           // e.g. "vprice-1714300000000"
+  label: string;         // user-visible name
+  category: 'door' | 'frame';
+  doorIds: string[];
+}
+
+const VARIANT_CAT = 'pricing_variant';
+
+function metaKey(variantKey: string, cat: string, label: string): string {
+  return `meta|${variantKey}|${cat}|${label}`;
+}
+function memberKey(variantKey: string, doorId: string): string {
+  return `member|${variantKey}|${doorId}`;
+}
+function parseMeta(gk: string): { variantKey: string; category: 'door' | 'frame'; label: string } | null {
+  if (!gk.startsWith('meta|')) return null;
+  const parts = gk.split('|');
+  if (parts.length < 4) return null;
+  // format: meta|variantKey|category|...label (label may contain pipes)
+  const [, variantKey, category, ...labelParts] = parts;
+  return { variantKey, category: category as 'door' | 'frame', label: labelParts.join('|') };
+}
+function parseMember(gk: string): { variantKey: string; doorId: string } | null {
+  if (!gk.startsWith('member|')) return null;
+  const parts = gk.split('|');
+  if (parts.length < 3) return null;
+  return { variantKey: parts[1], doorId: parts.slice(2).join('|') };
+}
+
+export async function getPricingVariants(projectId: string): Promise<DbResult<PricingVariant[]>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('project_pricing_items')
+      .select('group_key')
+      .eq('project_id', projectId)
+      .eq('category', VARIANT_CAT);
+    if (error) return { data: null, error: { message: error.message } };
+    const rows = (data ?? []) as { group_key: string }[];
+    const metaMap = new Map<string, { label: string; category: 'door' | 'frame' }>();
+    const memberMap = new Map<string, string[]>();
+    for (const row of rows) {
+      const meta = parseMeta(row.group_key);
+      if (meta) { metaMap.set(meta.variantKey, { label: meta.label, category: meta.category }); continue; }
+      const member = parseMember(row.group_key);
+      if (member) {
+        if (!memberMap.has(member.variantKey)) memberMap.set(member.variantKey, []);
+        memberMap.get(member.variantKey)!.push(member.doorId);
+      }
+    }
+    const variants: PricingVariant[] = Array.from(metaMap.entries()).map(([key, m]) => ({
+      key, label: m.label, category: m.category, doorIds: memberMap.get(key) ?? [],
+    }));
+    return { data: variants, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function upsertPricingVariant(projectId: string, variant: PricingVariant): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    // Remove existing memberships in OTHER variants for these doors (cross-variant move)
+    if (variant.doorIds.length > 0) {
+      const { data: allMembers } = await db
+        .from('project_pricing_items')
+        .select('group_key')
+        .eq('project_id', projectId)
+        .eq('category', VARIANT_CAT)
+        .like('group_key', 'member|%');
+      if (allMembers) {
+        const stale = (allMembers as { group_key: string }[])
+          .filter(r => { const m = parseMember(r.group_key); return m && variant.doorIds.includes(m.doorId) && m.variantKey !== variant.key; })
+          .map(r => r.group_key);
+        if (stale.length > 0) {
+          await db.from('project_pricing_items').delete().eq('project_id', projectId).eq('category', VARIANT_CAT).in('group_key', stale);
+        }
+      }
+    }
+    const rows = [
+      { project_id: projectId, category: VARIANT_CAT, group_key: metaKey(variant.key, variant.category, variant.label), unit_price: 0, updated_at: new Date().toISOString() },
+      ...variant.doorIds.map(id => ({ project_id: projectId, category: VARIANT_CAT, group_key: memberKey(variant.key, id), unit_price: 0, updated_at: new Date().toISOString() })),
+    ];
+    const { error } = await db.from('project_pricing_items').upsert(rows, { onConflict: 'project_id,category,group_key' });
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function deletePricingVariant(projectId: string, variantKey: string): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    await Promise.all([
+      db.from('project_pricing_items').delete().eq('project_id', projectId).eq('category', VARIANT_CAT).like('group_key', `meta|${variantKey}|%`),
+      db.from('project_pricing_items').delete().eq('project_id', projectId).eq('category', VARIANT_CAT).like('group_key', `member|${variantKey}|%`),
+    ]);
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
 export async function getProjectPricing(projectId: string): Promise<DbResult<PricingItemRow[]>> {
   try {
     const db = createSupabaseAdminClient();
@@ -39,6 +146,57 @@ export async function upsertPricingItem(
           updated_at:  new Date().toISOString(),
         },
         { onConflict: 'project_id,category,group_key' },
+      );
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+// ─── Proposal profit percentages ─────────────────────────────────────────────
+
+export interface ProposalProfitRow {
+  profit_door:     number;
+  profit_frame:    number;
+  profit_hardware: number;
+}
+
+export async function getProposalProfit(projectId: string): Promise<DbResult<ProposalProfitRow>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('project_pricing_proposal')
+      .select('profit_door, profit_frame, profit_hardware')
+      .eq('project_id', projectId)
+      .maybeSingle();
+    if (error) return { data: null, error: { message: error.message } };
+    return {
+      data: data ?? { profit_door: 0, profit_frame: 0, profit_hardware: 0 },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function upsertProposalProfit(
+  projectId: string,
+  row: ProposalProfitRow,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db
+      .from('project_pricing_proposal')
+      .upsert(
+        {
+          project_id:      projectId,
+          profit_door:     row.profit_door,
+          profit_frame:    row.profit_frame,
+          profit_hardware: row.profit_hardware,
+          updated_at:      new Date().toISOString(),
+        },
+        { onConflict: 'project_id' },
       );
     if (error) return { data: null, error: { message: error.message } };
     return { data: true, error: null };

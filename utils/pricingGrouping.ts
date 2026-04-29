@@ -43,7 +43,12 @@ export interface DoorPricingGroup {
   materials: string[];
   floors: string[];
   buildings: string[];
+  isVariant?: boolean;
+  variantKey?: string;
 }
+
+export type VariantOverrideMap = Map<string, { variantKey: string; variantLabel: string }>;
+// doorId → { variantKey, variantLabel }
 
 export interface HardwarePricingGroup {
   key: string;
@@ -57,7 +62,7 @@ export interface HardwarePricingGroup {
 
 // ─── Field extraction ─────────────────────────────────────────────────────────
 
-function extractDoorFields(door: Door): Record<string, string> {
+export function extractDoorFields(door: Door): Record<string, string> {
   // transformDoors already resolves all top-level fields correctly.
   // Only read raw sections for dimensions (we want "3'-0\"" not the numeric 36 for grouping/display).
   const raw = door.sections as unknown as Record<string, Record<string, string | undefined>> | undefined;
@@ -80,7 +85,7 @@ function extractDoorFields(door: Door): Record<string, string> {
   };
 }
 
-function extractFrameFields(door: Door): Record<string, string> {
+export function extractFrameFields(door: Door): Record<string, string> {
   // transformDoors already resolves all top-level frame fields correctly.
   return {
     frameMaterial:      String(door.frameMaterial  ?? '').trim(),
@@ -145,6 +150,42 @@ function getDoorQty(door: Door): number {
   return door.quantity != null && door.quantity > 0 ? door.quantity : 1;
 }
 
+// ─── Variant group builder ────────────────────────────────────────────────────
+
+function buildVariantGroups(variantDoors: Door[], overrides: VariantOverrideMap): DoorPricingGroup[] {
+  const map = new Map<string, DoorPricingGroup>();
+  for (const door of variantDoors) {
+    const ov = overrides.get(door.id);
+    if (!ov) continue;
+    if (!map.has(ov.variantKey)) {
+      map.set(ov.variantKey, {
+        key: ov.variantKey,
+        description: ov.variantLabel,
+        fields: {},
+        doors: [],
+        totalQty: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        materials: [],
+        floors: [],
+        buildings: [],
+        isVariant: true,
+        variantKey: ov.variantKey,
+      });
+    }
+    const g = map.get(ov.variantKey)!;
+    g.doors.push(door);
+    g.totalQty += getDoorQty(door);
+    const mat = (door.doorMaterial ?? '').trim();
+    if (mat && !g.materials.includes(mat)) g.materials.push(mat);
+    const floor = (door.buildingLocation ?? door.location ?? '').trim();
+    if (floor && !g.floors.includes(floor)) g.floors.push(floor);
+    const bldg = (door.buildingTag ?? '').trim();
+    if (bldg && !g.buildings.includes(bldg)) g.buildings.push(bldg);
+  }
+  return Array.from(map.values());
+}
+
 // ─── Grouping functions ───────────────────────────────────────────────────────
 
 function groupByFields(
@@ -191,26 +232,32 @@ function groupByFields(
   return Array.from(map.values());
 }
 
-export function groupDoors(doors: Door[]): DoorPricingGroup[] {
-  const included = doors.filter(
-    d => d.doorIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE',
-  );
-  return groupByFields(included, extractDoorFields, DOOR_FIELD_DEFS, d => d.doorMaterial ?? '');
+export function groupDoors(doors: Door[], variantOverrides: VariantOverrideMap = new Map()): DoorPricingGroup[] {
+  const included = doors.filter(d => d.doorIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE');
+  const normal = included.filter(d => !variantOverrides.has(d.id));
+  const variant = included.filter(d => variantOverrides.has(d.id));
+  return [
+    ...groupByFields(normal, extractDoorFields, DOOR_FIELD_DEFS, d => d.doorMaterial ?? ''),
+    ...buildVariantGroups(variant, variantOverrides),
+  ];
 }
 
-export function groupFrames(doors: Door[]): DoorPricingGroup[] {
-  const included = doors.filter(
-    d => d.frameIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE',
-  );
-  return groupByFields(
-    included,
-    d => {
-      const raw = extractFrameFields(d);
-      return Object.fromEntries(Object.entries(raw).filter(([k]) => !k.startsWith('_')));
-    },
-    FRAME_FIELD_DEFS,
-    d => String(d.frameMaterial ?? ''),
-  );
+export function groupFrames(doors: Door[], variantOverrides: VariantOverrideMap = new Map()): DoorPricingGroup[] {
+  const included = doors.filter(d => d.frameIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE');
+  const normal = included.filter(d => !variantOverrides.has(d.id));
+  const variant = included.filter(d => variantOverrides.has(d.id));
+  return [
+    ...groupByFields(
+      normal,
+      d => {
+        const raw = extractFrameFields(d);
+        return Object.fromEntries(Object.entries(raw).filter(([k]) => !k.startsWith('_')));
+      },
+      FRAME_FIELD_DEFS,
+      d => String(d.frameMaterial ?? ''),
+    ),
+    ...buildVariantGroups(variant, variantOverrides),
+  ];
 }
 
 // ─── Hardware grouping ────────────────────────────────────────────────────────
@@ -289,21 +336,21 @@ export function applyPrices<T extends { key: string; unitPrice: number; totalPri
 
 export function filterDoorGroups(
   groups: DoorPricingGroup[],
-  filters: { material: string; floor: string; building: string },
+  filters: { material: string[]; floor: string[]; building: string[] },
 ): DoorPricingGroup[] {
   return groups.filter(g =>
-    (filters.material === '' || g.materials.includes(filters.material)) &&
-    (filters.floor    === '' || g.floors.includes(filters.floor))       &&
-    (filters.building === '' || g.buildings.includes(filters.building)),
+    (filters.material.length === 0 || filters.material.some(m => g.materials.includes(m))) &&
+    (filters.floor.length    === 0 || filters.floor.some(f => g.floors.includes(f)))       &&
+    (filters.building.length === 0 || filters.building.some(b => g.buildings.includes(b))),
   );
 }
 
 export function filterHardwareGroups(
   groups: HardwarePricingGroup[],
-  filters: { material: string },
+  filters: { material: string[] },
 ): HardwarePricingGroup[] {
   return groups.filter(g =>
-    filters.material === '' || g.doorMaterials.includes(filters.material),
+    filters.material.length === 0 || filters.material.some(m => g.doorMaterials.includes(m)),
   );
 }
 

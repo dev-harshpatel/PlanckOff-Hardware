@@ -19,6 +19,15 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+function sumQuantity(doors: Door[]): number {
+    return doors.reduce((sum, d) => {
+        const raw = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)
+            ?.basic_information?.['QUANTITY'];
+        const q = parseInt(raw ?? '', 10);
+        return sum + (isNaN(q) || q < 1 ? 1 : q);
+    }, 0);
+}
+
 interface ActiveUploadTask {
     fileName: string;
     stage: string;
@@ -977,7 +986,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         <div>
                             <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule</h2>
                             <p className="text-[var(--primary-text-muted)] text-xs mt-0.5">
-                                {filteredAndSortedDoors.length} {filteredAndSortedDoors.length === 1 ? 'door' : 'doors'} · {statusCounts.complete || 0} assigned
+                                {sumQuantity(filteredAndSortedDoors)} {sumQuantity(filteredAndSortedDoors) === 1 ? 'door' : 'doors'} · {statusCounts.complete || 0} assigned
                             </p>
                         </div>
                     </div>
@@ -1211,7 +1220,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             {/* Table info bar */}
             <div className="px-4 py-2 flex justify-between items-center bg-[var(--bg)] border-b border-[var(--border-subtle)] flex-shrink-0">
                 <span className="text-xs text-[var(--text-muted)]">
-                    Showing <strong className="text-[var(--text-secondary)]">{filteredAndSortedDoors.length}</strong> doors
+                    Showing <strong className="text-[var(--text-secondary)]">{sumQuantity(filteredAndSortedDoors)}</strong> doors
                 </span>
                 <span className="text-[10px] text-[var(--text-faint)]">Click any row to open the editor</span>
             </div>

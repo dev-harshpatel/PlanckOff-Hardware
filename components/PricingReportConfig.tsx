@@ -1,26 +1,26 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Eye, DollarSign, FileSpreadsheet, FileDown } from 'lucide-react';
+import { Eye, DollarSign, FileSpreadsheet, FileDown, ChevronDown, X, Scissors, Trash2, Tag } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import {
   groupDoors, groupFrames, groupHardwareItems,
   applyPrices, filterDoorGroups, filterHardwareGroups, uniqueValues,
+  buildDescription, extractDoorFields, extractFrameFields,
   type DoorPricingGroup, type HardwarePricingGroup, type PriceMap,
+  type VariantOverrideMap,
   DOOR_FIELD_DEFS, FRAME_FIELD_DEFS,
 } from '@/utils/pricingGrouping';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import type { PricingVariant } from '@/lib/db/pricing';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PricingTab = 'door' | 'frame' | 'hardware';
+type PricingTab = 'door' | 'frame' | 'hardware' | 'proposal';
 
-interface Filters { material: string; floor: string; building: string; }
+interface Filters { material: string[]; floor: string[]; building: string[]; }
 
 interface Props {
   projectId: string;
@@ -39,25 +39,100 @@ function calcTotal(groups: Array<{ totalPrice: number }>): number {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const FilterSelect: React.FC<{
+const MultiFilterSelect: React.FC<{
   label: string;
-  value: string;
+  selected: string[];
   options: string[];
-  onChange: (v: string) => void;
-}> = ({ label, value, options, onChange }) => (
-  <div className="flex items-center gap-1.5">
-    <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wide whitespace-nowrap">{label}</span>
-    <Select value={value || '__all__'} onValueChange={v => onChange(v === '__all__' ? '' : v)}>
-      <SelectTrigger className="h-7 text-xs w-36">
-        <SelectValue placeholder="All" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="__all__">All</SelectItem>
-        {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  </div>
-);
+  onChange: (v: string[]) => void;
+}> = ({ label, selected, options, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (val: string) => {
+    onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
+  };
+
+  const clearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange([]);
+  };
+
+  const triggerLabel = selected.length === 0
+    ? 'All'
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} selected`;
+
+  return (
+    <div className="flex items-center gap-1.5" ref={ref}>
+      <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wide whitespace-nowrap">
+        {label}
+      </span>
+      <div className="relative">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={`h-7 min-w-[140px] max-w-[180px] flex items-center justify-between gap-1.5 pl-2.5 pr-2 rounded-md border text-xs transition-colors ${
+            open
+              ? 'border-[var(--primary-action)] bg-[var(--primary-bg)] text-[var(--primary-text)]'
+              : 'border-[var(--border)] bg-[var(--bg)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+          }`}
+        >
+          <span className={`truncate ${selected.length > 0 ? 'font-medium text-[var(--text)]' : ''}`}>
+            {triggerLabel}
+          </span>
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            {selected.length > 0 && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clearAll}
+                onKeyDown={e => e.key === 'Enter' && clearAll(e as unknown as React.MouseEvent)}
+                className="p-0.5 rounded hover:bg-[var(--bg-subtle)] text-[var(--text-faint)] hover:text-[var(--text)]"
+              >
+                <X className="w-2.5 h-2.5" />
+              </span>
+            )}
+            <ChevronDown className={`w-3 h-3 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+
+        {open && options.length > 0 && (
+          <div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
+            <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-subtle)] cursor-pointer border-b border-[var(--border)] mb-0.5">
+              <input
+                type="checkbox"
+                checked={selected.length === 0}
+                onChange={() => onChange([])}
+                className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0"
+              />
+              <span className="text-xs font-medium text-[var(--text)]">All</span>
+            </label>
+            {options.map(opt => (
+              <label key={opt} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-subtle)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={() => toggle(opt)}
+                  className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0"
+                />
+                <span className="text-xs text-[var(--text-secondary)] truncate">{opt}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const PriceInput: React.FC<{
   value: number;
@@ -80,10 +155,42 @@ const DetailModal: React.FC<{
   group: DoorPricingGroup | HardwarePricingGroup | null;
   tab: PricingTab;
   onClose: () => void;
-}> = ({ group, tab, onClose }) => {
+  onCreateVariant: ((doorIds: string[], label: string) => void) | null;
+}> = ({ group, tab, onClose, onCreateVariant }) => {
   const isDoorFrame = tab === 'door' || tab === 'frame';
   const doorGroup   = isDoorFrame ? (group as DoorPricingGroup)     : null;
   const hwGroup     = !isDoorFrame ? (group as HardwarePricingGroup) : null;
+
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [showForm, setShowForm]     = useState(false);
+  const [variantLabel, setVariantLabel] = useState('');
+  const labelRef = useRef<HTMLInputElement>(null);
+
+  // Reset on group change
+  useEffect(() => { setCheckedIds(new Set()); setShowForm(false); setVariantLabel(''); }, [group]);
+  useEffect(() => { if (showForm) setTimeout(() => labelRef.current?.focus(), 50); }, [showForm]);
+
+  const toggleDoor = (doorId: string) => setCheckedIds(prev => {
+    const next = new Set(prev);
+    next.has(doorId) ? next.delete(doorId) : next.add(doorId);
+    return next;
+  });
+
+  const allDoorIds = doorGroup?.doors.map(d => d.id) ?? [];
+  const allChecked = allDoorIds.length > 0 && allDoorIds.every(id => checkedIds.has(id));
+
+  const toggleAll = () => setCheckedIds(allChecked ? new Set() : new Set(allDoorIds));
+
+  const handleConfirmVariant = () => {
+    if (!variantLabel.trim() || checkedIds.size === 0 || !onCreateVariant) return;
+    onCreateVariant(Array.from(checkedIds), variantLabel.trim());
+    setCheckedIds(new Set());
+    setShowForm(false);
+    setVariantLabel('');
+    onClose();
+  };
+
+  const canVariant = isDoorFrame && onCreateVariant && !doorGroup?.isVariant;
 
   return (
     <Dialog open={!!group} onOpenChange={open => { if (!open) onClose(); }}>
@@ -100,11 +207,16 @@ const DetailModal: React.FC<{
           )}
         </DialogHeader>
 
-        {/* Scrollable table */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <table className="min-w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10">
               <tr className="bg-[var(--bg-subtle)]">
+                {isDoorFrame && canVariant && (
+                  <th className={`${TH_MODAL} w-px`}>
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                      className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] cursor-pointer" />
+                  </th>
+                )}
                 {isDoorFrame ? (
                   <>
                     <th className={TH_MODAL}>Door Tag</th>
@@ -130,12 +242,18 @@ const DetailModal: React.FC<{
             <tbody>
               {isDoorFrame && doorGroup
                 ? doorGroup.doors.map((d, i) => (
-                  <tr key={d.id} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                  <tr key={d.id} className={`${i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'} ${checkedIds.has(d.id) ? 'bg-[var(--primary-bg)]/30' : ''}`}>
+                    {canVariant && (
+                      <td className={`${TD_MODAL} w-px`}>
+                        <input type="checkbox" checked={checkedIds.has(d.id)} onChange={() => toggleDoor(d.id)}
+                          className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] cursor-pointer" />
+                      </td>
+                    )}
                     <td className={`${TD_MODAL} font-mono font-medium text-[var(--text)] w-px whitespace-nowrap`}>{d.doorTag}</td>
                     <td className={`${TD_MODAL} w-px whitespace-nowrap text-[var(--text-muted)]`}>{d.location ?? '—'}</td>
                     <td className={`${TD_MODAL} w-px whitespace-nowrap text-[var(--text-muted)]`}>{d.fireRating ?? '—'}</td>
                     {tab === 'frame' && (() => {
-                      const sec = d.sections as Record<string, Record<string, string>> | undefined;
+                      const sec = d.sections as unknown as Record<string, Record<string, string>> | undefined;
                       const bi  = sec?.basic_information;
                       const ds  = sec?.door;
                       const rawW = bi?.['WIDTH'] ?? bi?.['DOOR WIDTH'] ?? ds?.['WIDTH'] ?? ds?.['DOOR WIDTH'] ?? '—';
@@ -148,11 +266,15 @@ const DetailModal: React.FC<{
                       );
                     })()}
                     <td className={`${TD_MODAL} text-[var(--text-muted)]`}>
-                      {doorGroup.description}
+                      {tab === 'door'
+                        ? buildDescription(extractDoorFields(d), DOOR_FIELD_DEFS)
+                        : buildDescription(
+                            Object.fromEntries(Object.entries(extractFrameFields(d)).filter(([k]) => !k.startsWith('_'))),
+                            FRAME_FIELD_DEFS,
+                          )
+                      }
                     </td>
-                    <td className={`${TD_MODAL} text-right w-px whitespace-nowrap`}>
-                      {d.quantity ?? 1}
-                    </td>
+                    <td className={`${TD_MODAL} text-right w-px whitespace-nowrap`}>{d.quantity ?? 1}</td>
                   </tr>
                 ))
                 : hwGroup?.sets.map((s, i) => (
@@ -166,16 +288,53 @@ const DetailModal: React.FC<{
           </table>
         </div>
 
-        {/* Footer summary */}
-        <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--bg-subtle)] flex-shrink-0">
-          <span className="text-xs text-[var(--text-faint)]">
-            {isDoorFrame && doorGroup
-              ? `${doorGroup.doors.length} door${doorGroup.doors.length !== 1 ? 's' : ''} · Total qty: ${doorGroup.totalQty}`
-              : hwGroup
-                ? `${hwGroup.sets.length} set${hwGroup.sets.length !== 1 ? 's' : ''} · Total qty: ${hwGroup.totalQty}`
-                : ''
-            }
-          </span>
+        <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--bg-subtle)] flex-shrink-0 space-y-2">
+          {/* Variant name form */}
+          {showForm && (
+            <div className="flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5 text-[var(--primary-text-muted)] flex-shrink-0" />
+              <input
+                ref={labelRef}
+                type="text"
+                value={variantLabel}
+                onChange={e => setVariantLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleConfirmVariant()}
+                placeholder="Variant name…"
+                className="flex-1 px-2.5 py-1.5 text-xs border border-[var(--primary-border)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)] placeholder:text-[var(--text-faint)]"
+              />
+              <button
+                onClick={handleConfirmVariant}
+                disabled={!variantLabel.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary-action)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              >
+                Create
+              </button>
+              <button onClick={() => { setShowForm(false); setVariantLabel(''); }}
+                className="p-1.5 rounded-lg text-[var(--text-faint)] hover:bg-[var(--bg-subtle)] transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[var(--text-faint)]">
+              {isDoorFrame && doorGroup
+                ? `${doorGroup.doors.length} door${doorGroup.doors.length !== 1 ? 's' : ''} · Total qty: ${doorGroup.totalQty}`
+                : hwGroup
+                  ? `${hwGroup.sets.length} set${hwGroup.sets.length !== 1 ? 's' : ''} · Total qty: ${hwGroup.totalQty}`
+                  : ''
+              }
+            </span>
+            {canVariant && checkedIds.size > 0 && !showForm && (
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary-bg)] border border-[var(--primary-border)] text-[var(--primary-text)] hover:bg-[var(--primary-action)] hover:text-white hover:border-transparent transition-all"
+              >
+                <Scissors className="w-3 h-3" />
+                Split {checkedIds.size} door{checkedIds.size !== 1 ? 's' : ''} into variant
+              </button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -187,12 +346,13 @@ const TD_MODAL = 'px-4 py-2.5 text-xs text-[var(--text-secondary)] border-b bord
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }) => {
+const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, projectName }) => {
   const [activeTab, setActiveTab]   = useState<PricingTab>('door');
   const [prices, setPrices]         = useState<PriceMap>(new Map());
-  const [filters, setFilters]       = useState<Filters>({ material: '', floor: '', building: '' });
+  const [filters, setFilters]       = useState<Filters>({ material: [], floor: [], building: [] });
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
+  const [variants, setVariants]     = useState<PricingVariant[]>([]);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // ── Load saved prices on mount ─────────────────────────────────────────────
@@ -212,9 +372,29 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
       .finally(() => setLoadingPrices(false));
   }, [projectId]);
 
+  // ── Load saved variants on mount ───────────────────────────────────────────
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/pricing-variants`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data) setVariants(json.data as PricingVariant[]); })
+      .catch(console.error);
+  }, [projectId]);
+
+  // ── Variant override map ───────────────────────────────────────────────────
+  const variantOverrides = useMemo<VariantOverrideMap>(() => {
+    const map: VariantOverrideMap = new Map();
+    for (const v of variants) {
+      for (const doorId of v.doorIds) {
+        map.set(doorId, { variantKey: v.key, variantLabel: v.label });
+      }
+    }
+    return map;
+  }, [variants]);
+
   // ── Raw groups (memo) ──────────────────────────────────────────────────────
-  const rawDoorGroups     = useMemo(() => groupDoors(doors),                   [doors]);
-  const rawFrameGroups    = useMemo(() => groupFrames(doors),                  [doors]);
+  const rawDoorGroups     = useMemo(() => groupDoors(doors, variantOverrides),                   [doors, variantOverrides]);
+  const rawFrameGroups    = useMemo(() => groupFrames(doors, variantOverrides),                  [doors, variantOverrides]);
   const rawHardwareGroups = useMemo(() => groupHardwareItems(hardwareSets, doors), [hardwareSets, doors]);
 
   // ── Apply saved prices ─────────────────────────────────────────────────────
@@ -246,6 +426,61 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
   const hwTotal       = useMemo(() => calcTotal(visibleHardware), [visibleHardware]);
   const grandTotal    = doorTotal + frameTotal + hwTotal;
 
+  // ── Proposal profit percentages ────────────────────────────────────────────
+  const [profitPct, setProfitPct] = useState<{ door: string; frame: string; hardware: string }>({
+    door: '', frame: '', hardware: '',
+  });
+  const profitDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load saved profit percentages on mount
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/pricing-proposal`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data) return;
+        const { profit_door, profit_frame, profit_hardware } = json.data as { profit_door: number; profit_frame: number; profit_hardware: number };
+        setProfitPct({
+          door:     profit_door     > 0 ? String(profit_door)     : '',
+          frame:    profit_frame    > 0 ? String(profit_frame)    : '',
+          hardware: profit_hardware > 0 ? String(profit_hardware) : '',
+        });
+      })
+      .catch(console.error);
+  }, [projectId]);
+
+  // Debounced save whenever profit percentages change
+  const handleProfitChange = useCallback((key: 'door' | 'frame' | 'hardware', raw: string) => {
+    setProfitPct(prev => {
+      const next = { ...prev, [key]: raw };
+      if (profitDebounce.current) clearTimeout(profitDebounce.current);
+      profitDebounce.current = setTimeout(() => {
+        const toNum = (s: string) => Math.max(0, parseFloat(s) || 0);
+        fetch(`/api/projects/${projectId}/pricing-proposal`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profit_door:     toNum(next.door),
+            profit_frame:    toNum(next.frame),
+            profit_hardware: toNum(next.hardware),
+          }),
+        }).catch(console.error);
+      }, 800);
+      return next;
+    });
+  }, [projectId]);
+
+  const withProfit = (base: number, pctStr: string): number => {
+    const p = parseFloat(pctStr);
+    return isNaN(p) || p <= 0 ? base : base * (1 + p / 100);
+  };
+
+  const proposalDoorTotal     = withProfit(doorTotal,  profitPct.door);
+  const proposalFrameTotal    = withProfit(frameTotal, profitPct.frame);
+  const proposalHwTotal       = withProfit(hwTotal,    profitPct.hardware);
+  const proposalGrandTotal    = proposalDoorTotal + proposalFrameTotal + proposalHwTotal;
+
   // ── Price change handler (debounced save) ──────────────────────────────────
   const handlePriceChange = useCallback((category: PricingTab, key: string, raw: string) => {
     const unitPrice = Math.max(0, parseFloat(raw) || 0);
@@ -269,7 +504,43 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
     }, 600));
   }, [projectId]);
 
-  const setFilter = (k: keyof Filters, v: string) => setFilters(prev => ({ ...prev, [k]: v }));
+  // ── Variant handlers ───────────────────────────────────────────────────────
+  const handleCreateVariant = useCallback(async (doorIds: string[], label: string) => {
+    const variantKey = `vprice-${Date.now()}`;
+    const newVariant: PricingVariant = {
+      key: variantKey,
+      label,
+      category: activeTab as 'door' | 'frame',
+      doorIds,
+    };
+    // Optimistic update
+    setVariants(prev => [...prev, newVariant]);
+    // Persist
+    try {
+      await fetch(`/api/projects/${projectId}/pricing-variants`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variant: newVariant }),
+      });
+    } catch (err) {
+      console.error('[Pricing] Variant save failed:', err);
+    }
+  }, [projectId, activeTab]);
+
+  const handleDeleteVariant = useCallback(async (variantKey: string) => {
+    setVariants(prev => prev.filter(v => v.key !== variantKey));
+    try {
+      await fetch(`/api/projects/${projectId}/pricing-variants?variantKey=${variantKey}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('[Pricing] Variant delete failed:', err);
+    }
+  }, [projectId]);
+
+  const setFilter = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
 
   // ── Download Excel ─────────────────────────────────────────────────────────
   const handleDownloadExcel = useCallback(async () => {
@@ -404,6 +675,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
     { id: 'door',     label: 'Doors',    count: totalDoorCount,  sub: `${visibleDoors.length} group${visibleDoors.length !== 1 ? 's' : ''}`     },
     { id: 'frame',    label: 'Frames',   count: totalFrameCount, sub: `${visibleFrames.length} group${visibleFrames.length !== 1 ? 's' : ''}`    },
     { id: 'hardware', label: 'Hardware', count: totalHwCount,    sub: `${visibleHardware.length} item${visibleHardware.length !== 1 ? 's' : ''}` },
+    { id: 'proposal', label: 'Proposal', count: 0,               sub: 'summary'                                                                 },
   ];
 
   const currentMaterials = activeTab === 'door' ? doorMaterials : activeTab === 'frame' ? frameMaterials : hwMaterials;
@@ -457,7 +729,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => { setActiveTab(t.id); setFilters({ material: '', floor: '', building: '' }); }}
+              onClick={() => { setActiveTab(t.id); setFilters({ material: [], floor: [], building: [] }); }}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold transition-all border-r border-[var(--border)] last:border-r-0 ${
                 activeTab === t.id
                   ? 'bg-[var(--primary-action)] text-white'
@@ -465,32 +737,185 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
               }`}
             >
               {t.label}
-              <span className={`flex flex-col items-center leading-none ${
-                activeTab === t.id ? 'text-white' : 'text-[var(--text-faint)]'
-              }`}>
-                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                  activeTab === t.id ? 'bg-white/20' : 'bg-[var(--bg-muted)]'
-                }`}>{t.count}</span>
-                <span className="text-[9px] mt-0.5 opacity-70 whitespace-nowrap">{t.sub}</span>
-              </span>
+              {t.id !== 'proposal' && (
+                <span className={`flex flex-col items-center leading-none ${
+                  activeTab === t.id ? 'text-white' : 'text-[var(--text-faint)]'
+                }`}>
+                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                    activeTab === t.id ? 'bg-white/20' : 'bg-[var(--bg-muted)]'
+                  }`}>{t.count}</span>
+                  <span className="text-[9px] mt-0.5 opacity-70 whitespace-nowrap">{t.sub}</span>
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 ml-auto">
-          <FilterSelect label="Material" value={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
-          {activeTab !== 'hardware' && (
-            <>
-              <FilterSelect label="Floor"    value={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
-              <FilterSelect label="Building" value={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
-            </>
-          )}
-        </div>
+        {/* Filters — hidden on Proposal tab */}
+        {activeTab !== 'proposal' && (
+          <div className="flex flex-wrap items-center gap-3 ml-auto">
+            <MultiFilterSelect label="Material" selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
+            {activeTab !== 'hardware' && (
+              <>
+                <MultiFilterSelect label="Floor"    selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
+                <MultiFilterSelect label="Building" selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Table ── */}
-      {loadingPrices ? (
+      {/* ── Proposal tab ── */}
+      {activeTab === 'proposal' && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-6 space-y-6">
+          {/* Header */}
+          <div className="border-b border-[var(--border)] pb-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-faint)] mb-1">Proposal</p>
+            <h3 className="text-lg font-bold text-[var(--text)]">{projectName || 'Untitled Project'}</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Prepared on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          </div>
+
+          {/* Summary table */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Pricing Summary</p>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-[var(--bg-subtle)]">
+                  <th className="text-left  px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Category</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Items</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-36">Profit %</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">New Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    { label: 'Doors',    key: 'door'     as const, count: doorGroups.length,     base: doorTotal,  newTotal: proposalDoorTotal  },
+                    { label: 'Frames',   key: 'frame'    as const, count: frameGroups.length,    base: frameTotal, newTotal: proposalFrameTotal },
+                    { label: 'Hardware', key: 'hardware' as const, count: hardwareGroups.length, base: hwTotal,    newTotal: proposalHwTotal    },
+                  ]
+                ).map(({ label, key, count, base, newTotal }, i) => (
+                  <tr key={label} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                    <td className="px-4 py-2 font-medium text-[var(--text)] border border-[var(--border)]">{label}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{count}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(base)}</td>
+                    <td className="px-2 py-1.5 border border-[var(--border)]">
+                      <div className="flex items-center justify-end gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="999"
+                          step="0.1"
+                          placeholder="0"
+                          value={profitPct[key]}
+                          onChange={e => handleProfitChange(key, e.target.value)}
+                          className="w-16 text-right text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:border-[var(--primary-action)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-[var(--text-faint)] text-xs font-medium select-none">%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-right font-semibold text-[var(--primary-text)] border border-[var(--border)]">
+                      {fmt.format(newTotal)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-[var(--primary-bg)]">
+                  <td className="px-4 py-3 font-bold text-[var(--primary-text)] border border-[var(--primary-border)]" colSpan={3}>Grand Total</td>
+                  <td className="px-4 py-3 border border-[var(--primary-border)]" />
+                  <td className="px-4 py-3 text-right font-bold text-[var(--primary-text)] border border-[var(--primary-border)]">{fmt.format(proposalGrandTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Door groups breakdown */}
+          {doorGroups.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Door Details</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doorGroups.map((g, i) => (
+                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.description}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
+                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Frame groups breakdown */}
+          {frameGroups.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Frame Details</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {frameGroups.map((g, i) => (
+                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.description}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
+                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Hardware breakdown */}
+          {hardwareGroups.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Hardware Details</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Item</th>
+                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Manufacturer</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
+                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hardwareGroups.map((g, i) => (
+                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.item.name ?? '—'}</td>
+                      <td className="px-4 py-2 text-[var(--text-muted)] border border-[var(--border)]">{g.item.manufacturer ?? '—'}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
+                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Table (Doors / Frames / Hardware tabs) ── */}
+      {activeTab !== 'proposal' && (loadingPrices ? (
         <div className="flex items-center justify-center py-10">
           <div className="w-5 h-5 border-2 border-[var(--primary-action)] border-t-transparent rounded-full animate-spin" />
         </div>
@@ -524,10 +949,10 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
             </thead>
             <tbody>
               {activeTab === 'door' && visibleDoors.map((g, i) => (
-                <DoorRow key={g.key} group={g} idx={i} category="door" onPriceChange={handlePriceChange} onView={() => setModalGroup(g)} />
+                <DoorRow key={g.key} group={g} idx={i} category="door" onPriceChange={handlePriceChange} onView={() => setModalGroup(g)} onDeleteVariant={handleDeleteVariant} />
               ))}
               {activeTab === 'frame' && visibleFrames.map((g, i) => (
-                <DoorRow key={g.key} group={g} idx={i} category="frame" onPriceChange={handlePriceChange} onView={() => setModalGroup(g)} />
+                <DoorRow key={g.key} group={g} idx={i} category="frame" onPriceChange={handlePriceChange} onView={() => setModalGroup(g)} onDeleteVariant={handleDeleteVariant} />
               ))}
               {activeTab === 'hardware' && visibleHardware.map((g, i) => (
                 <HardwareRow key={g.key} group={g} idx={i} onPriceChange={handlePriceChange} onView={() => setModalGroup(g)} />
@@ -546,9 +971,14 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
             </tbody>
           </table>
         </div>
-      )}
+      ))}
 
-      <DetailModal group={modalGroup} tab={activeTab} onClose={() => setModalGroup(null)} />
+      <DetailModal
+        group={modalGroup}
+        tab={activeTab}
+        onClose={() => setModalGroup(null)}
+        onCreateVariant={activeTab !== 'hardware' ? handleCreateVariant : null}
+      />
     </div>
   );
 };
@@ -566,7 +996,8 @@ const DoorRow: React.FC<{
   category: PricingTab;
   onPriceChange: (cat: PricingTab, key: string, val: string) => void;
   onView: () => void;
-}> = ({ group, idx, category, onPriceChange, onView }) => {
+  onDeleteVariant?: (variantKey: string) => void;
+}> = ({ group, idx, category, onPriceChange, onView, onDeleteVariant }) => {
   const even = idx % 2 === 0;
   const fieldDefs = category === 'door' ? DOOR_FIELD_DEFS : FRAME_FIELD_DEFS;
   const visibleFields = fieldDefs.filter(f => group.fields[f.key]);
@@ -574,14 +1005,33 @@ const DoorRow: React.FC<{
     <tr className={even ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
       {/* Description spans 2 cols — takes all available space */}
       <td className={TD} colSpan={2}>
-        <div className="font-medium text-[var(--text)]">{group.description}</div>
-        <div className="flex flex-wrap gap-1 mt-0.5">
-          {visibleFields.slice(0, 4).map(f => (
-            <span key={f.key} className="text-[10px] px-1 py-px rounded bg-[var(--bg-muted)] text-[var(--text-faint)]">
-              {f.label}: {group.fields[f.key]}
-            </span>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="font-medium text-[var(--text)] flex-1">{group.description}</div>
+          {group.isVariant && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Scissors className="w-2.5 h-2.5" />
+                Variant
+              </span>
+              <button
+                onClick={() => onDeleteVariant?.(group.variantKey!)}
+                title="Dissolve variant (doors return to their base group)"
+                className="p-0.5 rounded text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
+        {!group.isVariant && (
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {visibleFields.slice(0, 4).map(f => (
+              <span key={f.key} className="text-[10px] px-1 py-px rounded bg-[var(--bg-muted)] text-[var(--text-faint)]">
+                {f.label}: {group.fields[f.key]}
+              </span>
+            ))}
+          </div>
+        )}
       </td>
       <td className={`${TD} text-right font-mono w-px whitespace-nowrap`}>{group.totalQty}</td>
       <td className={`${TD} text-right w-px whitespace-nowrap`}>

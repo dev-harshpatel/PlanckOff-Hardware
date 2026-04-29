@@ -7,6 +7,15 @@ import { FileSpreadsheet } from 'lucide-react';
 import type { Door, HardwareSet, ElevationType } from '@/types';
 import { transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 
+function totalDoorQuantity(doors: Door[]): number {
+  return doors.reduce((sum, d) => {
+    const raw = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)
+      ?.basic_information?.['QUANTITY'];
+    const q = parseInt(raw ?? '', 10);
+    return sum + (isNaN(q) || q < 1 ? 1 : q);
+  }, 0);
+}
+
 const DoorScheduleConfig = dynamic(() => import('@/components/DoorScheduleConfig'), { ssr: false });
 
 export default function DoorScheduleReportPage() {
@@ -63,7 +72,7 @@ export default function DoorScheduleReportPage() {
         <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule Report</h2>
         {!loading && (
           <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text)]">
-            {doors.length} doors
+            {totalDoorQuantity(doors)} doors
           </span>
         )}
       </div>

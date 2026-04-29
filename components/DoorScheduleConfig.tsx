@@ -194,6 +194,15 @@ function parseColId(colId: string): { sectionKey: SectionKey; colKey: string } {
     return { sectionKey: colId.slice(0, idx) as SectionKey, colKey: colId.slice(idx + 2) };
 }
 
+function sumQuantity(doors: Door[]): number {
+    return doors.reduce((sum, d) => {
+        const raw = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)
+            ?.basic_information?.['QUANTITY'];
+        const q = parseInt(raw ?? '', 10);
+        return sum + (isNaN(q) || q < 1 ? 1 : q);
+    }, 0);
+}
+
 function getSectionValue(door: Door, colId: string): string {
     const { sectionKey, colKey } = parseColId(colId);
     if (sectionKey === 'basic_information' && colKey === 'DOOR TAG') return door.doorTag;
@@ -449,7 +458,7 @@ const GroupedTable: React.FC<{
                             ? 'bg-white border border-gray-200 text-gray-500'
                             : 'bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text-muted)]'
                     }`}>
-                        {group.doors.length} door{group.doors.length !== 1 ? 's' : ''}
+                        {sumQuantity(group.doors)} door{sumQuantity(group.doors) !== 1 ? 's' : ''}
                     </span>
                     <button
                         onClick={e => { e.stopPropagation(); onHide(); }}
@@ -534,7 +543,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
         return val.toUpperCase() !== 'EXCLUDE';
     }), [doors]);
 
-    const excludedCount = doors.length - includedDoors.length;
+    const excludedCount = sumQuantity(doors) - sumQuantity(includedDoors);
 
     // ── Column selection ──────────────────────────────────────────────────────
     const columnGroups  = useMemo(() => deriveColumnGroups(includedDoors), [includedDoors]);
@@ -910,7 +919,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 doc.setFontSize(11); doc.setFont('helvetica', 'bold');
                 doc.text(title, MARGIN, 14);
                 doc.setFontSize(8);  doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-                doc.text(`${subtitle}  —  ${group.doors.length} door${group.doors.length !== 1 ? 's' : ''}`, MARGIN, 20);
+                doc.text(`${subtitle}  —  ${sumQuantity(group.doors)} door${sumQuantity(group.doors) !== 1 ? 's' : ''}`, MARGIN, 20);
                 doc.setTextColor(0);
 
                 autoTable(doc, {
@@ -1244,7 +1253,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                         </span>
                         {previewReady && (
                             <span className="text-[10px] text-[var(--text-faint)] ml-1">
-                                {includedDoors.length} doors · {selectedColumns.length} cols · {groups.length} table{groups.length !== 1 ? 's' : ''}
+                                {sumQuantity(includedDoors)} doors · {selectedColumns.length} cols · {groups.length} table{groups.length !== 1 ? 's' : ''}
                             </span>
                         )}
                     </div>
@@ -1311,7 +1320,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                 <div className="bg-white dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[var(--border)] shadow-sm px-5 py-4 mb-5">
                                     <p className="text-base font-bold text-gray-800 dark:text-[var(--text)]">{projectName || 'Door Schedule Report'}</p>
                                     <p className="text-xs text-gray-400 dark:text-[var(--text-faint)] mt-0.5">
-                                        {includedDoors.length} doors · Generated {new Date().toLocaleDateString()}
+                                        {sumQuantity(includedDoors)} doors · Generated {new Date().toLocaleDateString()}
                                         {excludedCount > 0 && ` · ${excludedCount} excluded`}
                                     </p>
                                 </div>
