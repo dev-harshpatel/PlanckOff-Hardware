@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Eye, DollarSign } from 'lucide-react';
+import { Eye, DollarSign, FileSpreadsheet, FileDown } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import {
   groupDoors, groupFrames, groupHardwareItems,
@@ -108,8 +108,16 @@ const DetailModal: React.FC<{
                 {isDoorFrame ? (
                   <>
                     <th className={TH_MODAL}>Door Tag</th>
+                    <th className={TH_MODAL}>Door Location</th>
+                    <th className={TH_MODAL}>Fire Rating</th>
+                    {tab === 'frame' && (
+                      <>
+                        <th className={`${TH_MODAL} w-px`}>Width</th>
+                        <th className={`${TH_MODAL} w-px`}>Height</th>
+                      </>
+                    )}
                     <th className={TH_MODAL}>Description</th>
-                    <th className={`${TH_MODAL} text-right`}>Qty</th>
+                    <th className={`${TH_MODAL} text-right w-px`}>Qty</th>
                   </>
                 ) : (
                   <>
@@ -123,11 +131,26 @@ const DetailModal: React.FC<{
               {isDoorFrame && doorGroup
                 ? doorGroup.doors.map((d, i) => (
                   <tr key={d.id} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                    <td className={`${TD_MODAL} font-mono font-medium text-[var(--text)]`}>{d.doorTag}</td>
-                    <td className={`${TD_MODAL} text-[var(--text-muted)] max-w-[320px]`}>
-                      <span className="line-clamp-2">{doorGroup.description}</span>
+                    <td className={`${TD_MODAL} font-mono font-medium text-[var(--text)] w-px whitespace-nowrap`}>{d.doorTag}</td>
+                    <td className={`${TD_MODAL} w-px whitespace-nowrap text-[var(--text-muted)]`}>{d.location ?? '—'}</td>
+                    <td className={`${TD_MODAL} w-px whitespace-nowrap text-[var(--text-muted)]`}>{d.fireRating ?? '—'}</td>
+                    {tab === 'frame' && (() => {
+                      const sec = d.sections as Record<string, Record<string, string>> | undefined;
+                      const bi  = sec?.basic_information;
+                      const ds  = sec?.door;
+                      const rawW = bi?.['WIDTH'] ?? bi?.['DOOR WIDTH'] ?? ds?.['WIDTH'] ?? ds?.['DOOR WIDTH'] ?? '—';
+                      const rawH = bi?.['HEIGHT'] ?? bi?.['DOOR HEIGHT'] ?? ds?.['HEIGHT'] ?? ds?.['DOOR HEIGHT'] ?? '—';
+                      return (
+                        <>
+                          <td className={`${TD_MODAL} w-px whitespace-nowrap font-mono text-[var(--text-muted)]`}>{rawW || '—'}</td>
+                          <td className={`${TD_MODAL} w-px whitespace-nowrap font-mono text-[var(--text-muted)]`}>{rawH || '—'}</td>
+                        </>
+                      );
+                    })()}
+                    <td className={`${TD_MODAL} text-[var(--text-muted)]`}>
+                      {doorGroup.description}
                     </td>
-                    <td className={`${TD_MODAL} text-right`}>
+                    <td className={`${TD_MODAL} text-right w-px whitespace-nowrap`}>
                       {d.quantity ?? 1}
                     </td>
                   </tr>
@@ -248,6 +271,129 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
 
   const setFilter = (k: keyof Filters, v: string) => setFilters(prev => ({ ...prev, [k]: v }));
 
+  // ── Download Excel ─────────────────────────────────────────────────────────
+  const handleDownloadExcel = useCallback(async () => {
+    const { utils, writeFile } = await import('xlsx');
+
+    const makeSheet = <T extends { totalPrice: number }>(
+      rows: T[],
+      total: number,
+      toRow: (g: T) => Record<string, string | number>,
+    ) => {
+      const dataRows = rows.map(toRow);
+      const ws = utils.json_to_sheet(dataRows);
+      // Append a blank row then the total below the data
+      const nextRow = dataRows.length + 2; // 1-based header + data rows + 1 blank
+      utils.sheet_add_aoa(ws, [['', 'Total', '', fmt.format(total)]], { origin: nextRow });
+      return ws;
+    };
+
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb,
+      makeSheet(doorGroups, doorTotal, g => ({
+        'Description': g.description,
+        'Total Qty':   g.totalQty,
+        'Unit Price':  g.unitPrice,
+        'Total Price': g.totalPrice,
+      })),
+      'Doors',
+    );
+    utils.book_append_sheet(wb,
+      makeSheet(frameGroups, frameTotal, g => ({
+        'Description': g.description,
+        'Total Qty':   g.totalQty,
+        'Unit Price':  g.unitPrice,
+        'Total Price': g.totalPrice,
+      })),
+      'Frames',
+    );
+    utils.book_append_sheet(wb,
+      makeSheet(hardwareGroups, hwTotal, g => ({
+        'Item Name':      g.item.name          ?? '',
+        'Description':    g.item.description   ?? '',
+        'Manufacturer':   g.item.manufacturer  ?? '',
+        'Finish':         g.item.finish        ?? '',
+        'Total Qty':      g.totalQty,
+        'Door Materials': g.doorMaterials.join(', '),
+        'Unit Price':     g.unitPrice,
+        'Total Price':    g.totalPrice,
+      })),
+      'Hardware',
+    );
+    writeFile(wb, 'pricing-report.xlsx');
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal]);
+
+  // ── Download PDF ───────────────────────────────────────────────────────────
+  const handleDownloadPdf = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
+    const d = doc as DocWithAutoTable;
+
+    const nextY = (offset = 0) => (d.lastAutoTable?.finalY ?? 0) + offset;
+
+    const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
+
+    // Doors
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+      body: [
+        ...doorGroups.map(g => [g.description, g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+        ['', '', 'Total', fmt.format(doorTotal)],
+      ],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [60, 80, 120] },
+      didParseCell: (data) => {
+        if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+      },
+    });
+
+    // Frames
+    doc.setFontSize(11);
+    doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, nextY(12));
+    autoTable(doc, {
+      startY: nextY(18),
+      head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+      body: [
+        ...frameGroups.map(g => [g.description, g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+        ['', '', 'Total', fmt.format(frameTotal)],
+      ],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [60, 80, 120] },
+      didParseCell: (data) => {
+        if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+      },
+    });
+
+    // Hardware
+    doc.setFontSize(11);
+    doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, nextY(12));
+    autoTable(doc, {
+      startY: nextY(18),
+      head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
+      body: [
+        ...hardwareGroups.map(g => [
+          g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
+          g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
+        ]),
+        ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
+      ],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [60, 80, 120] },
+      didParseCell: (data) => {
+        if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+      },
+    });
+
+    doc.save('pricing-report.pdf');
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal]);
+
   // ── Tab data ───────────────────────────────────────────────────────────────
   // Show total individual door/frame count (not group count) so users aren't confused
   const totalDoorCount     = useMemo(() => visibleDoors.reduce((s, g) => s + g.doors.length, 0),    [visibleDoors]);
@@ -284,6 +430,24 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
         <span className="ml-auto text-xs font-bold text-[var(--primary-text)] border-l border-[var(--primary-border)] pl-5">
           Grand Total: {fmt.format(grandTotal)}
         </span>
+        <div className="flex items-center gap-2 border-l border-[var(--primary-border)] pl-4">
+          <button
+            onClick={handleDownloadExcel}
+            title="Download Excel"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Excel
+          </button>
+          <button
+            onClick={handleDownloadPdf}
+            title="Download PDF"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            PDF
+          </button>
+        </div>
       </div>
 
       {/* ── Tabs + filter bar ── */}
@@ -341,19 +505,19 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets }
                     <th className={TH}>Description</th>
                     <th className={TH}>Manufacturer</th>
                     <th className={TH}>Finish</th>
-                    <th className={`${TH} text-right`}>Total</th>
+                    <th className={`${TH} text-right w-px`}>Total</th>
                     <th className={TH}>Door Material</th>
-                    <th className={`${TH} text-right`}>Unit Price</th>
-                    <th className={`${TH} text-right`}>Total Price</th>
-                    <th className={TH} />
+                    <th className={`${TH} text-right w-px`}>Unit Price</th>
+                    <th className={`${TH} text-right w-px`}>Total Price</th>
+                    <th className={`${TH} w-px`} />
                   </>
                 ) : (
                   <>
                     <th className={TH} colSpan={2}>Description</th>
-                    <th className={`${TH} text-right`}>Total Qty</th>
-                    <th className={`${TH} text-right`}>Unit Price</th>
-                    <th className={`${TH} text-right`}>Total Price</th>
-                    <th className={TH} />
+                    <th className={`${TH} text-right w-px`}>Total Qty</th>
+                    <th className={`${TH} text-right w-px`}>Unit Price</th>
+                    <th className={`${TH} text-right w-px`}>Total Price</th>
+                    <th className={`${TH} w-px`} />
                   </>
                 )}
               </tr>
@@ -408,9 +572,9 @@ const DoorRow: React.FC<{
   const visibleFields = fieldDefs.filter(f => group.fields[f.key]);
   return (
     <tr className={even ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-      {/* Description spans 2 cols to align with hardware tab */}
-      <td className={`${TD} max-w-[280px]`} colSpan={2}>
-        <div className="font-medium text-[var(--text)] truncate" title={group.description}>{group.description}</div>
+      {/* Description spans 2 cols — takes all available space */}
+      <td className={TD} colSpan={2}>
+        <div className="font-medium text-[var(--text)]">{group.description}</div>
         <div className="flex flex-wrap gap-1 mt-0.5">
           {visibleFields.slice(0, 4).map(f => (
             <span key={f.key} className="text-[10px] px-1 py-px rounded bg-[var(--bg-muted)] text-[var(--text-faint)]">
@@ -419,12 +583,12 @@ const DoorRow: React.FC<{
           ))}
         </div>
       </td>
-      <td className={`${TD} text-right font-mono`}>{group.totalQty}</td>
-      <td className={`${TD} text-right`}>
+      <td className={`${TD} text-right font-mono w-px whitespace-nowrap`}>{group.totalQty}</td>
+      <td className={`${TD} text-right w-px whitespace-nowrap`}>
         <PriceInput value={group.unitPrice} onChange={v => onPriceChange(category, group.key, v)} />
       </td>
-      <td className={`${TD} text-right font-semibold text-[var(--text)]`}>{fmt.format(group.totalPrice)}</td>
-      <td className={`${TD} text-center`}>
+      <td className={`${TD} text-right font-semibold text-[var(--text)] w-px whitespace-nowrap`}>{fmt.format(group.totalPrice)}</td>
+      <td className={`${TD} text-center w-px whitespace-nowrap`}>
         <button
           onClick={onView}
           title={`View ${group.doors.length} door${group.doors.length !== 1 ? 's' : ''}`}
@@ -454,13 +618,13 @@ const HardwareRow: React.FC<{
       <td className={`${TD} max-w-[200px] truncate`} title={item.description ?? ''}>{item.description || '—'}</td>
       <td className={`${TD} whitespace-nowrap`}>{item.manufacturer || '—'}</td>
       <td className={`${TD} whitespace-nowrap`}>{item.finish || '—'}</td>
-      <td className={`${TD} text-right font-mono`}>{group.totalQty}</td>
-      <td className={`${TD} max-w-[160px] truncate`} title={group.doorMaterials.join(', ')}>{group.doorMaterials.join(', ') || '—'}</td>
-      <td className={`${TD} text-right`}>
+      <td className={`${TD} text-right font-mono w-px whitespace-nowrap`}>{group.totalQty}</td>
+      <td className={TD} title={group.doorMaterials.join(', ')}>{group.doorMaterials.join(', ') || '—'}</td>
+      <td className={`${TD} text-right w-px whitespace-nowrap`}>
         <PriceInput value={group.unitPrice} onChange={v => onPriceChange('hardware', group.key, v)} />
       </td>
-      <td className={`${TD} text-right font-semibold text-[var(--text)]`}>{fmt.format(group.totalPrice)}</td>
-      <td className={`${TD} text-center`}>
+      <td className={`${TD} text-right font-semibold text-[var(--text)] w-px whitespace-nowrap`}>{fmt.format(group.totalPrice)}</td>
+      <td className={`${TD} text-center w-px whitespace-nowrap`}>
         <button
           onClick={onView}
           title={`View ${group.sets.length} set${group.sets.length !== 1 ? 's' : ''}`}
