@@ -1647,7 +1647,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
                         {/* Progress bar + step label (shown while processing) */}
                         {isCombinedProcessing && (
-                            <div className="px-5 pb-3 flex-shrink-0">
+                            <div className="px-5 pt-3 pb-3 flex-shrink-0">
                                 <div className="flex items-center justify-between mb-1.5">
                                     <span className="text-xs text-[var(--text-muted)] truncate pr-2">{combinedCurrentStep}</span>
                                     <span className="text-xs text-[var(--text-faint)] tabular-nums flex-shrink-0">{combinedProgress}%</span>

@@ -20,18 +20,29 @@ const isSectionedHeaderFormat = (worksheet: XLSX.WorkSheet): boolean => {
     return normalized.includes('DOOR') && normalized.includes('FRAME') && normalized.includes('HARDWARE');
 };
 
-// Maps column index → section name for the sectioned format.
-// Built by reading row 0 and tracking which section each column falls under.
-const buildColumnSectionMap = (worksheet: XLSX.WorkSheet): Record<number, 'door' | 'frame' | 'hardware'> => {
+// Returns true if the sheet has a BASIC INFORMATION section header in row 0.
+const hasBasicInformationSection = (worksheet: XLSX.WorkSheet): boolean => {
     const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0, defval: '' }) as any[][];
     const firstRow: any[] = rows[0] ?? [];
-    const map: Record<number, 'door' | 'frame' | 'hardware'> = {};
-    let current: 'door' | 'frame' | 'hardware' = 'door';
+    return firstRow.some((v: any) => String(v || '').trim().toUpperCase() === 'BASIC INFORMATION');
+};
+
+// Maps column index → section name for the sectioned format.
+// Built by reading row 0 and tracking which section each column falls under.
+const buildColumnSectionMap = (worksheet: XLSX.WorkSheet): Record<number, 'basic_information' | 'door' | 'frame' | 'hardware'> => {
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0, defval: '' }) as any[][];
+    const firstRow: any[] = rows[0] ?? [];
+    const map: Record<number, 'basic_information' | 'door' | 'frame' | 'hardware'> = {};
+    // If the sheet has an explicit BASIC INFORMATION header, start there; otherwise default to 'door'
+    // so columns before the first section header still get classified.
+    const startsWithBasicInfo = firstRow.some((v: any) => String(v || '').trim().toUpperCase() === 'BASIC INFORMATION');
+    let current: 'basic_information' | 'door' | 'frame' | 'hardware' = startsWithBasicInfo ? 'basic_information' : 'door';
     firstRow.forEach((cell: any, idx: number) => {
         const val = String(cell || '').trim().toUpperCase();
-        if (val === 'DOOR')     current = 'door';
-        if (val === 'FRAME')    current = 'frame';
-        if (val === 'HARDWARE') current = 'hardware';
+        if (val === 'BASIC INFORMATION') current = 'basic_information';
+        if (val === 'DOOR')              current = 'door';
+        if (val === 'FRAME')             current = 'frame';
+        if (val === 'HARDWARE')          current = 'hardware';
         map[idx] = current;
     });
     return map;
@@ -245,7 +256,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
             // Sectioned representation — only populated for the new 2-row header format
             ...(sectioned ? {
                 sections: {
-                    door: {
+                    basic_information: {
                         doorTag:          opt('doorTag'),
                         buildingTag:      opt('buildingTag'),
                         buildingLocation: opt('buildingLocation'),
@@ -256,6 +267,8 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
                         leafCount:        opt('leafCount'),
                         interiorExterior: opt('interiorExterior'),
                         excludeReason:    opt('excludeReason'),
+                    },
+                    door: {
                         width:            getVal('width', ''),
                         height:           getVal('height', ''),
                         thickness:        getVal('thickness', ''),

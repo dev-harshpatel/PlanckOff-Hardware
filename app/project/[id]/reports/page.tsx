@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { validateProject } from '@/utils/doorValidation';
-import { FileSpreadsheet, Settings2, Package, ArrowLeft } from 'lucide-react';
+import { FileSpreadsheet, Settings2, Package, DollarSign, ArrowLeft } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
-import type { Door, HardwareSet } from '@/types';
+import type { Door } from '@/types';
 
 const REPORT_CARDS: {
   id: string;
@@ -15,7 +15,6 @@ const REPORT_CARDS: {
   description: string;
   features: string[];
   icon: React.ReactNode;
-  badge: (d: Door[], h: HardwareSet[]) => string;
   actionLabel: string;
 }[] = [
   {
@@ -25,7 +24,6 @@ const REPORT_CARDS: {
     description: 'Export comprehensive door data with full customization. Choose from 30+ fields including dimensions, materials, fire ratings, and hardware assignments.',
     features: ['30+ customizable columns', 'Excel, PDF, or CSV export', 'Professional formatting & summaries'],
     icon: <FileSpreadsheet className="h-6 w-6" />,
-    badge: (d) => `${d.length} doors`,
     actionLabel: 'Configure & Export',
   },
   {
@@ -35,7 +33,6 @@ const REPORT_CARDS: {
     description: 'Export hardware items with usage tracking. See which door tags use each item, perfect for procurement and cost analysis.',
     features: ['Usage / location tracking', 'Cross-referencing & grouping', 'Procurement planning'],
     icon: <Settings2 className="h-6 w-6" />,
-    badge: (_, h) => `${h.length} sets`,
     actionLabel: 'Configure & Export',
   },
   {
@@ -45,8 +42,16 @@ const REPORT_CARDS: {
     description: 'Generate a professional submittal package including Cover Page, Door Schedule, Hardware Sets, Frame Details, and Elevation Drawings.',
     features: ['Door Schedule', 'Hardware Sets', 'Frame Details & Elevations'],
     icon: <Package className="h-6 w-6" />,
-    badge: (d, h) => `${d.length} doors · ${h.length} sets`,
     actionLabel: 'Start Submittal',
+  },
+  {
+    id: 'pricing',
+    route: 'pricing',
+    label: 'Pricing Report',
+    description: 'Generate a detailed pricing breakdown for hardware sets and door schedules including unit costs, extended pricing, and budget summaries.',
+    features: ['Unit & extended pricing', 'Budget summaries', 'Cost by hardware set'],
+    icon: <DollarSign className="h-6 w-6" />,
+    actionLabel: 'Configure & Export',
   },
 ];
 
@@ -60,7 +65,6 @@ export default function ReportsPage() {
   if (!activeProject) return null;
 
   const doors = activeProject.doors ?? [];
-  const hardwareSets = activeProject.hardwareSets ?? [];
 
   const handleCardClick = (route: string) => {
     if (loadingCard) return;
@@ -95,9 +99,7 @@ export default function ReportsPage() {
               <div className="h-10 w-10 rounded-md bg-[var(--primary-bg)] flex items-center justify-center text-[var(--primary-text-muted)] group-hover:bg-[var(--primary-bg-hover)] transition-colors flex-shrink-0">
                 {isLoading ? <Spinner size="md" className="text-[var(--primary-text-muted)]" /> : card.icon}
               </div>
-              <span className="text-xs font-semibold px-2 py-1 rounded bg-[var(--primary-bg)] text-[var(--primary-text)]">
-                {card.badge(doors, hardwareSets)}
-              </span>
+              {/* badge temporarily hidden */}
             </div>
 
             {/* Body */}

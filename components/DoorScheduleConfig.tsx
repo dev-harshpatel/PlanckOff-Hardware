@@ -5,6 +5,7 @@ import {
     Download, Settings2, Eye, Table2, Image,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
+import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, ElevationType } from '../types';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -1249,15 +1250,11 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                         {previewReady && visibleGroupKeys.length > 0 && (
-                            <button
-                                onClick={allCollapsed ? handleExpandAll : handleCollapseAll}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-muted)] text-[var(--text-secondary)] text-xs font-medium transition-all"
-                            >
-                                {allCollapsed
-                                    ? <><ChevronDown className="w-3 h-3" />Expand All</>
-                                    : <><ChevronRight className="w-3 h-3" />Collapse All</>
-                                }
-                            </button>
+                            <CollapseAllButton
+                                allCollapsed={allCollapsed}
+                                onCollapseAll={handleCollapseAll}
+                                onExpandAll={handleExpandAll}
+                            />
                         )}
                         {previewReady && (
                             <button

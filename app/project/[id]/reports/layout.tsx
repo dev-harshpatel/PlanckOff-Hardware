@@ -71,10 +71,12 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="font-medium text-[var(--text)]">{activeProject.name}</span>
+            {/* doors · sets badge hidden
             <span className="text-[var(--text-faint)]">·</span>
             <span className="text-[var(--text-muted)]">
               {activeProject.doors?.length ?? 0} doors · {activeProject.hardwareSets?.length ?? 0} sets
             </span>
+            */}
             <Button
               variant="ghost"
               size="sm"

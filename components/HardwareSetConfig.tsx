@@ -3,6 +3,7 @@ import {
     Settings2, FileSpreadsheet, FileText, Eye, Download,
     ChevronDown, ChevronRight,
 } from 'lucide-react';
+import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../types';
 
 
@@ -224,8 +225,9 @@ const HardwareGroupTable: React.FC<{
     index: number;
     total: number;
     format: ExportFormat;
-}> = ({ group, requiredColumns, usageDisplay, index, total, format }) => {
-    const [collapsed, setCollapsed] = useState(false);
+    collapsed: boolean;
+    onToggleCollapse: () => void;
+}> = ({ group, requiredColumns, usageDisplay, index, total, format, collapsed, onToggleCollapse }) => {
     const isPdf = format === 'pdf';
 
     // Door tags for this group (only populated for "By Hardware Set" grouping).
@@ -242,7 +244,7 @@ const HardwareGroupTable: React.FC<{
         }`}>
             {/* Group header */}
             <button
-                onClick={() => setCollapsed(c => !c)}
+                onClick={onToggleCollapse}
                 className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
                     isPdf
                         ? 'bg-gray-50 hover:bg-gray-100 border-b border-gray-200'
@@ -358,7 +360,8 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
     const [includeSetSummary, setIncludeSetSummary]   = useState(true);
     const [includeCostSummary, setIncludeCostSummary] = useState(true);
     const [includeProcurement, setIncludeProcurement] = useState(false);
-    const [previewReady, setPreviewReady]       = useState(false);
+    const [previewReady, setPreviewReady]         = useState(false);
+    const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
 
     // ── Usage stats (for flat / manufacturer / type groupings) ───────────────
     // Deduplicates items across all sets using all 4 identifying fields.
@@ -417,7 +420,15 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
         setPreviewReady(false);
     }, []);
 
-    const handleGeneratePreview = () => setPreviewReady(true);
+    const handleGeneratePreview = () => { setPreviewReady(true); setCollapsedGroupKeys(new Set()); };
+    const handleCollapseAll = () => setCollapsedGroupKeys(new Set(groups.map(g => g.label)));
+    const handleExpandAll   = () => setCollapsedGroupKeys(new Set());
+    const handleToggleGroup = (label: string) => setCollapsedGroupKeys(prev => {
+        const next = new Set(prev);
+        if (next.has(label)) next.delete(label); else next.add(label);
+        return next;
+    });
+    const allCollapsed = groups.length > 0 && groups.every(g => collapsedGroupKeys.has(g.label));
 
     // Download uses the same `groups` memo as the preview — guaranteed identical output.
     const handleDownload = useCallback(async () => {
@@ -698,6 +709,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                             </span>
                         )}
                     </div>
+                    {previewReady && groups.length > 0 && (
+                        <CollapseAllButton
+                            allCollapsed={allCollapsed}
+                            onCollapseAll={handleCollapseAll}
+                            onExpandAll={handleExpandAll}
+                        />
+                    )}
                     {previewReady && (
                         <button
                             onClick={handleDownload}
@@ -762,6 +780,8 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                                     index={idx}
                                     total={groups.length}
                                     format={format}
+                                    collapsed={collapsedGroupKeys.has(group.label)}
+                                    onToggleCollapse={() => handleToggleGroup(group.label)}
                                 />
                             ))}
                         </div>
