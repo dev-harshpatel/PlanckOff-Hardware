@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { LogOut, Moon, Shield, Sun, UserCircle2, Users } from 'lucide-react';
+import { LogOut, Moon, Settings, Shield, Sun, UserCircle2, Users } from 'lucide-react';
 import { Page } from '../types';
 import type { AuthUser, RoleName } from '@/types/auth';
 import {
@@ -102,6 +102,15 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
               Team Management
             </NavLink>
           )}
+          <NavLink
+            isActive={currentPage === 'settings'}
+            onClick={() => onNavigate('settings')}
+          >
+            <span className="inline-flex items-center gap-1">
+              <Settings className="h-3.5 w-3.5" />
+              Settings
+            </span>
+          </NavLink>
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"

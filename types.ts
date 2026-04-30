@@ -26,7 +26,7 @@ export enum Role {
   Viewer = 'Viewer'
 }
 
-export type Page = 'dashboard' | 'project' | 'database' | 'team';
+export type Page = 'dashboard' | 'project' | 'database' | 'team' | 'settings';
 
 export type TeamMemberStatus = 'Active' | 'Pending' | 'Inactive';
 

@@ -70,6 +70,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname.startsWith('/project')) return 'project';
     if (pathname.startsWith('/database')) return 'database';
     if (pathname.startsWith('/team')) return 'team';
+    if (pathname.startsWith('/settings')) return 'settings';
     return 'dashboard';
   };
 

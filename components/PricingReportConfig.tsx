@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Eye, DollarSign, FileSpreadsheet, FileDown, ChevronDown, X, Scissors, Trash2, Tag } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
+import type { CompanySettings } from '@/lib/db/companySettings';
 import {
   groupDoors, groupFrames, groupHardwareItems,
   applyPrices, filterDoorGroups, filterHardwareGroups, uniqueValues,
@@ -35,6 +36,95 @@ const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD',
 
 function calcTotal(groups: Array<{ totalPrice: number }>): number {
   return groups.reduce((s, g) => s + g.totalPrice, 0);
+}
+
+// ── Hierarchy breakdown helpers ────────────────────────────────────────────────
+//
+// Groups aggregate doors that share the same specs, so one group can span
+// multiple floors / buildings / materials.  Filtering at the group level causes
+// double-counting (the full group price appears under every dimension value it
+// touches).  Instead we compute individual door contributions and split
+// correctly at the door level.
+
+interface HierarchyNode { label: string; dimType: 'Building' | 'Floor' | 'Material'; count: number; base: number; depth: number; children: HierarchyNode[] }
+
+interface DoorContrib { price: number; material: string; floor: string; building: string }
+
+type ContribDim = { type: 'Building' | 'Floor' | 'Material'; key: keyof DoorContrib; values: string[] };
+
+function doorGroupsToContribs(groups: DoorPricingGroup[], getMat: (d: Door) => string): DoorContrib[] {
+  return groups.flatMap(g =>
+    g.doors.map(d => ({
+      price:    g.unitPrice * (d.quantity != null && d.quantity > 0 ? d.quantity : 1),
+      material: getMat(d).trim(),
+      floor:    (d.buildingLocation ?? d.location ?? '').trim(),
+      building: (d.buildingTag ?? '').trim(),
+    }))
+  );
+}
+
+function buildContribNodes(contribs: DoorContrib[], dims: ContribDim[], depth: number): HierarchyNode[] {
+  if (dims.length === 0) return [];
+  const [dim, ...rest] = dims;
+  return dim.values.flatMap(val => {
+    const matched = contribs.filter(c => (c[dim.key] as string) === val);
+    if (matched.length === 0) return [];
+    return [{ label: val, dimType: dim.type, count: matched.length, base: matched.reduce((s, c) => s + c.price, 0), depth, children: buildContribNodes(matched, rest, depth + 1) }];
+  });
+}
+
+function buildDoorHierarchy(groups: DoorPricingGroup[], filters: { material: string[]; floor: string[]; building: string[] }, getMat: (d: Door) => string): HierarchyNode[] {
+  const dims: ContribDim[] = [];
+  if (filters.building.length > 0) dims.push({ type: 'Building', key: 'building', values: filters.building });
+  if (filters.floor.length > 0)    dims.push({ type: 'Floor',    key: 'floor',    values: filters.floor    });
+  if (filters.material.length > 0) dims.push({ type: 'Material', key: 'material', values: filters.material });
+  if (dims.length === 0) return [];
+  return buildContribNodes(doorGroupsToContribs(groups, getMat), dims, 0);
+}
+
+function buildHwHierarchy(groups: HardwarePricingGroup[], filters: { material: string[] }, doors: Door[]): HierarchyNode[] {
+  if (filters.material.length === 0) return [];
+
+  // Map each hardware unit to its door's material using proportional splits per set.
+  // A set's multipliedQty = item.qty × sum(door.qty), so each door's share is
+  //   unitPrice × multipliedQty × (door.qty / totalDoorQty for that set).
+  const contribs: Array<{ price: number; material: string }> = [];
+  const includedDoors = doors.filter(d => d.hardwareIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE');
+
+  for (const group of groups) {
+    for (const setInfo of group.sets) {
+      const setNameLower = setInfo.setName.toLowerCase();
+      const setDoors = includedDoors.filter(d => {
+        const name = (
+          d.assignedHardwareSet?.name?.trim() ||
+          (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)?.hardware?.['HARDWARE SET']?.trim() ||
+          d.providedHardwareSet?.trim() ||
+          ''
+        ).toLowerCase();
+        return name === setNameLower;
+      });
+      if (setDoors.length === 0) continue;
+
+      const totalDoorQty = setDoors.reduce((s, d) => s + (d.quantity != null && d.quantity > 0 ? d.quantity : 1), 0);
+      for (const door of setDoors) {
+        const dq = door.quantity != null && door.quantity > 0 ? door.quantity : 1;
+        contribs.push({
+          price:    group.unitPrice * setInfo.multipliedQty * (dq / totalDoorQty),
+          material: door.doorMaterial?.trim() ?? '',
+        });
+      }
+    }
+  }
+
+  return filters.material.flatMap(mat => {
+    const matched = contribs.filter(c => c.material === mat);
+    if (matched.length === 0) return [];
+    return [{ label: mat, dimType: 'Material' as const, count: matched.length, base: matched.reduce((s, c) => s + c.price, 0), depth: 0, children: [] }];
+  });
+}
+
+function flattenNodes(nodes: HierarchyNode[]): Array<{ label: string; dimType: string; count: number; base: number; depth: number }> {
+  return nodes.flatMap(n => [{ label: n.label, dimType: n.dimType, count: n.count, base: n.base, depth: n.depth }, ...flattenNodes(n.children)]);
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -349,12 +439,21 @@ const TD_MODAL = 'px-4 py-2.5 text-xs text-[var(--text-secondary)] border-b bord
 const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, projectName }) => {
   const [activeTab, setActiveTab]   = useState<PricingTab>('door');
   const [prices, setPrices]         = useState<PriceMap>(new Map());
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [filters, setFilters]           = useState<Filters>({ material: [], floor: [], building: [] });
   const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [] });
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [variants, setVariants]     = useState<PricingVariant[]>([]);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Load company settings on mount ────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/settings/company', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((json: { data: CompanySettings } | null) => { if (json?.data) setCompanySettings(json.data); })
+      .catch(() => {});
+  }, []);
 
   // ── Load saved prices on mount ─────────────────────────────────────────────
   useEffect(() => {
@@ -437,20 +536,12 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const proposalFrameBase = useMemo(() => calcTotal(frameGroups),    [frameGroups]);
   const proposalHwBase    = useMemo(() => calcTotal(hardwareGroups), [hardwareGroups]);
 
-  // ── Proposal breakdown sub-rows per active filter selection ───────────────
-  const proposalBreakdown = useMemo(() => {
-    const fromDoor  = (vals: string[], type: string, key: 'materials' | 'floors' | 'buildings') =>
-      vals.map(v => { const g = doorGroups.filter(x => x[key].includes(v));  return { type, label: v, count: g.length, base: calcTotal(g) }; });
-    const fromFrame = (vals: string[], type: string, key: 'materials' | 'floors' | 'buildings') =>
-      vals.map(v => { const g = frameGroups.filter(x => x[key].includes(v)); return { type, label: v, count: g.length, base: calcTotal(g) }; });
-    const fromHw    = (vals: string[]) =>
-      vals.map(v => { const g = hardwareGroups.filter(x => x.doorMaterials.includes(v)); return { type: 'Material', label: v, count: g.length, base: calcTotal(g) }; });
-    return {
-      doors:    [...fromDoor(proposalFilters.material,  'Material',  'materials'), ...fromDoor(proposalFilters.floor,     'Floor',    'floors'),    ...fromDoor(proposalFilters.building, 'Building', 'buildings')],
-      frames:   [...fromFrame(proposalFilters.material, 'Material',  'materials'), ...fromFrame(proposalFilters.floor,    'Floor',    'floors'),    ...fromFrame(proposalFilters.building,'Building', 'buildings')],
-      hardware: fromHw(proposalFilters.material),
-    };
-  }, [doorGroups, frameGroups, hardwareGroups, proposalFilters]);
+  // ── Proposal breakdown sub-rows (hierarchical: Building > Floor > Material) ──
+  const proposalBreakdown = useMemo(() => ({
+    doors:    flattenNodes(buildDoorHierarchy(doorGroups,     proposalFilters, d => d.doorMaterial          ?? '')),
+    frames:   flattenNodes(buildDoorHierarchy(frameGroups,    proposalFilters, d => String(d.frameMaterial ?? ''))),
+    hardware: flattenNodes(buildHwHierarchy(hardwareGroups,  proposalFilters, doors)),
+  }), [doorGroups, frameGroups, hardwareGroups, proposalFilters, doors]);
 
   // ── Proposal profit percentages ────────────────────────────────────────────
   const [profitPct, setProfitPct] = useState<{ door: string; frame: string; hardware: string }>({
@@ -460,16 +551,17 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
 
   // ── Proposal settings state ────────────────────────────────────────────────
   const [allocateExpenses, setAllocateExpenses] = useState(false);
-  const [taxPct, setTaxPct]                     = useState('');
+  const [taxRows, setTaxRows]                   = useState<Array<{ id: string; description: string; taxPct: string }>>([]);
   const [remarks, setRemarks]                   = useState('');
   const [extraExpenses, setExtraExpenses]        = useState<Array<{ id: string; delivery: string; totalPrice: string }>>([]);
 
   // Refs holding the latest values so debounced saves always read fresh state
-  const latestProfitPct = useRef(profitPct);
-  const latestAllocate  = useRef(false);
-  const latestTaxPct    = useRef('');
-  const latestRemarks   = useRef('');
-  const expenseDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestProfitPct  = useRef(profitPct);
+  const latestAllocate   = useRef(false);
+  const latestTaxRows    = useRef<Array<{ id: string; description: string; taxPct: string }>>([]);
+  const latestRemarks    = useRef('');
+  const expenseDebounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const taxDebounce      = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load saved proposal settings on mount ─────────────────────────────────
   useEffect(() => {
@@ -478,8 +570,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (!json?.data) return;
-        const { profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct } =
-          json.data as { profit_door: number; profit_frame: number; profit_hardware: number; allocate_expenses: boolean; tax_pct: number };
+        const { profit_door, profit_frame, profit_hardware, allocate_expenses } =
+          json.data as { profit_door: number; profit_frame: number; profit_hardware: number; allocate_expenses: boolean };
         const next = {
           door:     profit_door     > 0 ? String(profit_door)     : '',
           frame:    profit_frame    > 0 ? String(profit_frame)    : '',
@@ -489,9 +581,6 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
         latestProfitPct.current = next;
         setAllocateExpenses(allocate_expenses);
         latestAllocate.current = allocate_expenses;
-        const taxStr = tax_pct > 0 ? String(tax_pct) : '';
-        setTaxPct(taxStr);
-        latestTaxPct.current = taxStr;
         const r = (json.data as { remarks: string }).remarks ?? '';
         setRemarks(r);
         latestRemarks.current = r;
@@ -517,6 +606,24 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       .catch(console.error);
   }, [projectId]);
 
+  // ── Load saved tax rows on mount ───────────────────────────────────────────
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/proposal-tax-rows`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data) return;
+        const loaded = (json.data as Array<{ id: string; description: string; tax_pct: number }>).map(row => ({
+          id:          row.id,
+          description: row.description,
+          taxPct:      row.tax_pct > 0 ? String(row.tax_pct) : '',
+        }));
+        setTaxRows(loaded);
+        latestTaxRows.current = loaded;
+      })
+      .catch(console.error);
+  }, [projectId]);
+
   // ── Unified debounced save for all proposal settings ──────────────────────
   const saveProposalSettings = useCallback(() => {
     if (profitDebounce.current) clearTimeout(profitDebounce.current);
@@ -531,7 +638,6 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           profit_frame:      toNum(latestProfitPct.current.frame),
           profit_hardware:   toNum(latestProfitPct.current.hardware),
           allocate_expenses: latestAllocate.current,
-          tax_pct:           toNum(latestTaxPct.current),
           remarks:           latestRemarks.current,
         }),
       }).catch(console.error);
@@ -557,6 +663,25 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     }, 800);
   }, [projectId]);
 
+  // ── Debounced save for tax rows (full replace) ────────────────────────────
+  const saveTaxRows = useCallback((rows: typeof taxRows) => {
+    if (taxDebounce.current) clearTimeout(taxDebounce.current);
+    taxDebounce.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/proposal-tax-rows`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: rows.map((r, i) => ({
+            sort_order:  i,
+            description: r.description,
+            tax_pct:     parseFloat(r.taxPct) || 0,
+          })),
+        }),
+      }).catch(console.error);
+    }, 800);
+  }, [projectId]);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleProfitChange = useCallback((key: 'door' | 'frame' | 'hardware', raw: string) => {
     setProfitPct(prev => {
@@ -573,11 +698,32 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     saveProposalSettings();
   }, [saveProposalSettings]);
 
-  const handleTaxChange = useCallback((val: string) => {
-    setTaxPct(val);
-    latestTaxPct.current = val;
-    saveProposalSettings();
-  }, [saveProposalSettings]);
+  const handleAddTaxRow = useCallback(() => {
+    setTaxRows(prev => {
+      const next = [...prev, { id: crypto.randomUUID(), description: '', taxPct: '' }];
+      latestTaxRows.current = next;
+      saveTaxRows(next);
+      return next;
+    });
+  }, [saveTaxRows]);
+
+  const handleTaxRowChange = useCallback((id: string, field: 'description' | 'taxPct', value: string) => {
+    setTaxRows(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, [field]: value } : r);
+      latestTaxRows.current = next;
+      saveTaxRows(next);
+      return next;
+    });
+  }, [saveTaxRows]);
+
+  const handleRemoveTaxRow = useCallback((id: string) => {
+    setTaxRows(prev => {
+      const next = prev.filter(r => r.id !== id);
+      latestTaxRows.current = next;
+      saveTaxRows(next);
+      return next;
+    });
+  }, [saveTaxRows]);
 
   const handleRemarksChange = useCallback((val: string) => {
     setRemarks(val);
@@ -621,8 +767,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const extraExpensesTotal = extraExpenses.reduce((sum, e) => sum + (parseFloat(e.totalPrice) || 0), 0);
   const proposalGrandTotal = proposalDoorTotal + proposalFrameTotal + proposalHwTotal;
   const taxSubtotal        = proposalGrandTotal + extraExpensesTotal;
-  const taxAmount          = taxSubtotal * (Math.max(0, parseFloat(taxPct) || 0) / 100);
-  const totalAfterTax      = taxSubtotal + taxAmount;
+  const totalTaxAmount     = taxRows.reduce((sum, r) => sum + taxSubtotal * (Math.max(0, parseFloat(r.taxPct) || 0) / 100), 0);
+  const totalAfterTax      = taxSubtotal + totalTaxAmount;
   // Split extra expenses proportional to each category's share of the Pricing Summary Grand Total
   const doorAlloc  = allocateExpenses && proposalGrandTotal > 0 ? extraExpensesTotal * (proposalDoorTotal  / proposalGrandTotal) : 0;
   const frameAlloc = allocateExpenses && proposalGrandTotal > 0 ? extraExpensesTotal * (proposalFrameTotal / proposalGrandTotal) : 0;
@@ -708,6 +854,24 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     };
 
     const wb = utils.book_new();
+
+    // Company header sheet (only when settings are filled)
+    if (companySettings?.companyName) {
+      const co = companySettings;
+      const coverRows: [string, string][] = [
+        ['Project',      projectName],
+        ['',             ''],
+        ['Company',      co.companyName],
+      ];
+      if (co.websiteUrl) coverRows.push(['Website', co.websiteUrl]);
+      if (co.email)      coverRows.push(['Email',   co.email]);
+      if (co.phone)      coverRows.push(['Phone',   co.phone]);
+      if (co.address)    coverRows.push(['Address', co.address]);
+      const coverParts = [co.province, co.country].filter(Boolean).join(', ');
+      if (coverParts)    coverRows.push(['',        coverParts]);
+      utils.book_append_sheet(wb, utils.aoa_to_sheet(coverRows), 'Company');
+    }
+
     utils.book_append_sheet(wb,
       makeSheet(doorGroups, doorTotal, g => ({
         'Description': g.description,
@@ -740,7 +904,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       'Hardware',
     );
     writeFile(wb, 'pricing-report.xlsx');
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal]);
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
   // ── Download PDF ───────────────────────────────────────────────────────────
   const handleDownloadPdf = useCallback(async () => {
@@ -755,12 +919,33 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
 
     const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
 
+    // Company header block
+    let headerBottomY = 10;
+    if (companySettings?.companyName) {
+      const co = companySettings;
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text(co.companyName, 14, 12);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      const lines: string[] = [];
+      if (co.websiteUrl || co.email) lines.push([co.websiteUrl, co.email].filter(Boolean).join('  |  '));
+      if (co.phone) lines.push(co.phone);
+      const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
+      if (addrParts) lines.push(addrParts);
+      lines.forEach((line, i) => doc.text(line, 14, 18 + i * 5));
+      headerBottomY = 18 + lines.length * 5 + 4;
+      doc.setDrawColor(180, 180, 180);
+      doc.line(14, headerBottomY, doc.internal.pageSize.width - 14, headerBottomY);
+      headerBottomY += 6;
+    }
+
     // Doors
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, 14);
+    doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, headerBottomY);
     autoTable(doc, {
-      startY: 20,
+      startY: headerBottomY + 6,
       head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
       body: [
         ...doorGroups.map(g => [g.description, g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
@@ -811,7 +996,240 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     });
 
     doc.save('pricing-report.pdf');
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal]);
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings]);
+
+  // ── Download Proposal PDF ──────────────────────────────────────────────────
+  const handleDownloadProposalPdf = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
+    const d = doc as DocWithAutoTable;
+
+    const pageW  = doc.internal.pageSize.width;
+    const pageH  = doc.internal.pageSize.height;
+    const margin = 40;
+    let y = margin;
+
+    // ── Company header ───────────────────────────────────────────────────────
+    if (companySettings?.companyName) {
+      const co = companySettings;
+      let textX = margin;
+
+      // Logo
+      if (co.logoUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve) => {
+            img.onload  = () => resolve();
+            img.onerror = () => resolve();
+            img.src = co.logoUrl;
+          });
+          if (img.width > 0) {
+            const maxLogoH = 40;
+            const scale    = maxLogoH / img.height;
+            const logoW    = img.width * scale;
+            const canvas   = document.createElement('canvas');
+            canvas.width   = logoW;
+            canvas.height  = maxLogoH;
+            canvas.getContext('2d')?.drawImage(img, 0, 0, logoW, maxLogoH);
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, logoW, maxLogoH);
+            textX = margin + logoW + 12;
+          }
+        } catch { /* skip logo on error */ }
+      }
+
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 20, 20);
+      doc.text(co.companyName, textX, y + 14);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      const contactLines: string[] = [];
+      if (co.websiteUrl || co.email) contactLines.push([co.websiteUrl, co.email].filter(Boolean).join('  ·  '));
+      if (co.phone) contactLines.push(co.phone);
+      const addr = [co.address, co.province, co.country].filter(Boolean).join(', ');
+      if (addr) contactLines.push(addr);
+      contactLines.forEach((line, i) => doc.text(line, textX, y + 26 + i * 10));
+
+      y += 54;
+      doc.setDrawColor(210, 215, 225);
+      doc.line(margin, y, pageW - margin, y);
+      y += 16;
+    }
+
+    // ── Proposal title ────────────────────────────────────────────────────────
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(130, 140, 160);
+    doc.text('PROPOSAL', margin, y);
+    y += 14;
+
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 20, 30);
+    doc.text(projectName || 'Untitled Project', margin, y);
+    y += 14;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(110, 110, 120);
+    doc.text(
+      `Prepared on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+      margin, y,
+    );
+    y += 22;
+
+    doc.setDrawColor(225, 228, 235);
+    doc.line(margin, y, pageW - margin, y);
+    y += 16;
+
+    // ── Pricing summary table ─────────────────────────────────────────────────
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 35, 45);
+    doc.text('Pricing Summary', margin, y);
+    y += 8;
+
+    const summaryRows = [
+      { label: 'Doors',    base: proposalDoorBase,  pct: profitPct.door,     total: proposalDoorTotal,  alloc: doorAlloc   },
+      { label: 'Frames',   base: proposalFrameBase, pct: profitPct.frame,    total: proposalFrameTotal, alloc: frameAlloc  },
+      { label: 'Hardware', base: proposalHwBase,    pct: profitPct.hardware, total: proposalHwTotal,    alloc: hwAlloc     },
+    ];
+    const grandLabel = allocateExpenses && extraExpensesTotal > 0
+      ? `${fmt.format(proposalGrandTotal)} + ${fmt.format(extraExpensesTotal)} exp.`
+      : '';
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [['Category', 'Base Cost', 'Profit %', 'Total']],
+      body: [
+        ...summaryRows.map(r => [
+          r.label,
+          fmt.format(r.base),
+          r.pct ? `${r.pct}%` : '—',
+          fmt.format(r.total + r.alloc),
+        ]),
+        ['Grand Total', grandLabel, '', fmt.format(proposalGrandTotal + (allocateExpenses ? extraExpensesTotal : 0))],
+      ],
+      styles:     { fontSize: 8, cellPadding: 5 },
+      headStyles: { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+      didParseCell: (data) => {
+        if (data.row.index === summaryRows.length) {
+          Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
+        }
+      },
+    });
+    y = (d.lastAutoTable?.finalY ?? y) + 20;
+
+    // ── Extra expenses ────────────────────────────────────────────────────────
+    if (extraExpenses.length > 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 35, 45);
+      doc.text('Extra Expenses', margin, y);
+      y += 8;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [['Description', 'Total Price']],
+        body: [
+          ...extraExpenses.map(e => [e.delivery || '—', fmt.format(parseFloat(e.totalPrice) || 0)]),
+          ['Total', fmt.format(extraExpensesTotal)],
+        ],
+        styles:       { fontSize: 8, cellPadding: 5 },
+        headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
+        columnStyles: { 1: { halign: 'right' } },
+        didParseCell: (data) => {
+          if (data.row.index === extraExpenses.length) {
+            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
+          }
+        },
+      });
+      y = (d.lastAutoTable?.finalY ?? y) + 20;
+    }
+
+    // ── Tax ───────────────────────────────────────────────────────────────────
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 35, 45);
+    doc.text('Tax', margin, y);
+    y += 8;
+
+    const taxBody: string[][] = [
+      ['Pricing Summary Total', fmt.format(proposalGrandTotal)],
+      ['Extra Expense Total',   fmt.format(extraExpensesTotal)],
+      ['Subtotal',              fmt.format(taxSubtotal)],
+      ...taxRows.map(r => [
+        r.description || '(Tax)',
+        `${fmt.format(taxSubtotal * (Math.max(0, parseFloat(r.taxPct) || 0) / 100))} (${r.taxPct || 0}%)`,
+      ]),
+      ['Total After Tax', fmt.format(totalAfterTax)],
+    ];
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [['Description', 'Amount']],
+      body: taxBody,
+      styles:       { fontSize: 8, cellPadding: 5 },
+      headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
+      columnStyles: {
+        0: { halign: 'left' },
+        1: { halign: 'right' },
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index === taxBody.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [235, 240, 252];
+        }
+      },
+    });
+    y = (d.lastAutoTable?.finalY ?? y) + 20;
+
+    // ── Remarks ───────────────────────────────────────────────────────────────
+    if (remarks.trim()) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 35, 45);
+      doc.text('Remarks', margin, y);
+      y += 12;
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 65, 75);
+      const splitText = doc.splitTextToSize(remarks, pageW - margin * 2);
+      doc.text(splitText, margin, y);
+    }
+
+    // ── Page numbers ──────────────────────────────────────────────────────────
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(160, 165, 175);
+      doc.text(`Page ${i} of ${pageCount}`, pageW - margin, pageH - 20, { align: 'right' });
+    }
+
+    const safeName = (projectName || 'Proposal').replace(/[^a-z0-9]/gi, '_');
+    doc.save(`${safeName}_Proposal.pdf`);
+  }, [
+    companySettings, projectName,
+    proposalDoorBase, proposalFrameBase, proposalHwBase,
+    profitPct, proposalDoorTotal, proposalFrameTotal, proposalHwTotal,
+    doorAlloc, frameAlloc, hwAlloc,
+    proposalGrandTotal, allocateExpenses,
+    extraExpenses, extraExpensesTotal,
+    taxRows, totalTaxAmount, taxSubtotal, totalAfterTax,
+    remarks,
+  ]);
 
   // ── Tab data ───────────────────────────────────────────────────────────────
   // Show total individual door/frame count (not group count) so users aren't confused
@@ -928,6 +1346,14 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                 <MultiFilterSelect label="Material" selected={proposalFilters.material} options={proposalMaterials} onChange={v => setProposalFilter('material', v)} />
                 <MultiFilterSelect label="Floor"    selected={proposalFilters.floor}    options={proposalFloors}    onChange={v => setProposalFilter('floor',    v)} />
                 <MultiFilterSelect label="Building" selected={proposalFilters.building} options={proposalBuildings} onChange={v => setProposalFilter('building', v)} />
+                <button
+                  onClick={() => void handleDownloadProposalPdf()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover,var(--primary-action))] text-white transition-colors shadow-sm"
+                  title="Export Proposal as PDF"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Export PDF
+                </button>
               </div>
             </div>
 
@@ -980,13 +1406,13 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                         )}
                       </td>
                     </tr>,
-                    ...breakdown.map(sub => (
-                      <tr key={`${key}-${sub.type}-${sub.label}`} className="bg-[var(--bg-subtle)]/60">
-                        <td className="pl-8 pr-4 py-1.5 border border-[var(--border)]">
+                    ...breakdown.map((sub, si) => (
+                      <tr key={`${key}-${si}-${sub.depth}-${sub.dimType}-${sub.label}`} className="bg-[var(--bg-subtle)]/60">
+                        <td className="pr-4 py-1.5 border border-[var(--border)]" style={{ paddingLeft: `${(sub.depth + 2) * 16}px` }}>
                           <span className="flex items-center gap-1.5">
                             <span className="text-[var(--text-faint)] select-none">↳</span>
                             <span className="font-medium text-[var(--text-secondary)]">{sub.label}</span>
-                            <span className="text-[9px] uppercase tracking-wide text-[var(--text-faint)] px-1 py-px rounded bg-[var(--bg-muted)]">{sub.type}</span>
+                            <span className="text-[9px] uppercase tracking-wide text-[var(--text-faint)] px-1 py-px rounded bg-[var(--bg-muted)]">{sub.dimType}</span>
                           </span>
                         </td>
                         <td className="px-4 py-1.5 text-right text-[var(--text-faint)] border border-[var(--border)]">{sub.count}</td>
@@ -1095,39 +1521,91 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Pricing Summary Total</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Extra Expense Total</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Subtotal</th>
+                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
                     <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-36">Tax %</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total After Tax</th>
+                    <th className="w-8 border border-[var(--border)]" />
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-[var(--bg)]">
-                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(proposalGrandTotal)}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(extraExpensesTotal)}</td>
-                    <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(taxSubtotal)}</td>
-                    <td className="px-2 py-1.5 border border-[var(--border)]">
-                      <div className="flex items-center justify-end gap-1">
+                  {taxRows.map(row => (
+                    <tr key={row.id} className="bg-[var(--bg)]">
+                      <td className="px-2 py-1.5 border border-[var(--border)]">
                         <input
-                          type="number"
-                          min="0"
-                          max="999"
-                          step="0.1"
-                          placeholder="0"
-                          value={taxPct}
-                          onChange={e => handleTaxChange(e.target.value)}
-                          className="w-16 text-right text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:border-[var(--primary-action)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          type="text"
+                          placeholder="e.g. GST, HST…"
+                          value={row.description}
+                          onChange={e => handleTaxRowChange(row.id, 'description', e.target.value)}
+                          className="w-full text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-action)]"
                         />
-                        <span className="text-[var(--text-faint)] text-xs font-medium select-none">%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-right border border-[var(--border)]">
-                      <div className="font-semibold text-[var(--primary-text)]">{fmt.format(totalAfterTax)}</div>
-                      {taxAmount > 0 && (
-                        <div className="text-[10px] text-[var(--text-faint)] mt-0.5">{fmt.format(taxSubtotal)} + {fmt.format(taxAmount)} tax</div>
-                      )}
-                    </td>
+                      </td>
+                      <td className="px-2 py-1.5 border border-[var(--border)]">
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="999"
+                            step="0.1"
+                            placeholder="0"
+                            value={row.taxPct}
+                            onWheel={e => e.currentTarget.blur()}
+                            onChange={e => handleTaxRowChange(row.id, 'taxPct', e.target.value)}
+                            className="w-16 text-right text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:border-[var(--primary-action)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-[var(--text-faint)] text-xs font-medium select-none">%</span>
+                        </div>
+                      </td>
+                      <td className="px-2 border border-[var(--border)] text-center">
+                        <button
+                          onClick={() => handleRemoveTaxRow(row.id)}
+                          className="text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                          aria-label="Remove tax row"
+                        >✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {taxRows.length === 0 && (
+                    <tr className="bg-[var(--bg)]">
+                      <td colSpan={3} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No tax rows yet — add one below</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <button
+                onClick={handleAddTaxRow}
+                className="mt-2 w-full text-xs text-[var(--text-secondary)] hover:text-[var(--text)] border border-dashed border-[var(--border)] hover:border-[var(--text-muted)] rounded px-3 py-1.5 transition-colors"
+              >
+                + Add Tax Row
+              </button>
+
+              {/* Summary */}
+              <table className="w-full text-xs border-collapse mt-4">
+                <tbody>
+                  <tr className="bg-[var(--bg)]">
+                    <td className="px-4 py-2 text-[var(--text-muted)] border border-[var(--border)]">Pricing Summary Total</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(proposalGrandTotal)}</td>
+                  </tr>
+                  <tr className="bg-[var(--bg)]">
+                    <td className="px-4 py-2 text-[var(--text-muted)] border border-[var(--border)]">Extra Expense Total</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(extraExpensesTotal)}</td>
+                  </tr>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <td className="px-4 py-2 font-semibold text-[var(--text)] border border-[var(--border)]">Subtotal</td>
+                    <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(taxSubtotal)}</td>
+                  </tr>
+                  {taxRows.map(row => {
+                    const amt = taxSubtotal * (Math.max(0, parseFloat(row.taxPct) || 0) / 100);
+                    return (
+                      <tr key={row.id} className="bg-[var(--bg)]">
+                        <td className="px-4 py-2 text-[var(--text-muted)] border border-[var(--border)]">
+                          {row.description || '(Tax)'}{row.taxPct ? ` (${row.taxPct}%)` : ''}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(amt)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <td className="px-4 py-2 font-bold text-[var(--text)] border border-[var(--border)]">Total After Tax</td>
+                    <td className="px-4 py-2 text-right font-bold text-[var(--primary-text)] border border-[var(--border)]">{fmt.format(totalAfterTax)}</td>
                   </tr>
                 </tbody>
               </table>

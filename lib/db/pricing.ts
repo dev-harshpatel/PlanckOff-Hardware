@@ -161,7 +161,6 @@ export interface ProposalProfitRow {
   profit_frame:      number;
   profit_hardware:   number;
   allocate_expenses: boolean;
-  tax_pct:           number;
   remarks:           string;
 }
 
@@ -170,15 +169,19 @@ export async function getProposalProfit(projectId: string): Promise<DbResult<Pro
     const db = createSupabaseAdminClient();
     const { data, error } = await db
       .from('project_pricing_proposal')
-      .select('profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct, remarks')
+      .select('profit_door, profit_frame, profit_hardware, allocate_expenses, remarks')
       .eq('project_id', projectId)
       .maybeSingle();
-    if (error) return { data: null, error: { message: error.message } };
+    if (error) {
+      console.error('[getProposalProfit] Supabase error:', error);
+      return { data: null, error: { message: error.message } };
+    }
     return {
-      data: data ?? { profit_door: 0, profit_frame: 0, profit_hardware: 0, allocate_expenses: false, tax_pct: 0, remarks: '' },
+      data: data ?? { profit_door: 0, profit_frame: 0, profit_hardware: 0, allocate_expenses: false, remarks: '' },
       error: null,
     };
   } catch (err) {
+    console.error('[getProposalProfit] Caught exception:', err);
     return { data: null, error: { message: String(err) } };
   }
 }
@@ -198,7 +201,6 @@ export async function upsertProposalProfit(
           profit_frame:      row.profit_frame,
           profit_hardware:   row.profit_hardware,
           allocate_expenses: row.allocate_expenses,
-          tax_pct:           row.tax_pct,
           remarks:           row.remarks,
           updated_at:        new Date().toISOString(),
         },
@@ -249,6 +251,55 @@ export async function replaceProposalExpenses(
           sort_order:  e.sort_order,
           delivery:    e.delivery,
           total_price: e.total_price,
+          updated_at:  new Date().toISOString(),
+        })),
+      );
+      if (error) return { data: null, error: { message: error.message } };
+    }
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+// ─── Proposal tax rows ────────────────────────────────────────────────────────
+
+export interface TaxRowRow {
+  id:          string;
+  sort_order:  number;
+  description: string;
+  tax_pct:     number;
+}
+
+export async function getTaxRows(projectId: string): Promise<DbResult<TaxRowRow[]>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('project_proposal_tax_rows')
+      .select('id, sort_order, description, tax_pct')
+      .eq('project_id', projectId)
+      .order('sort_order', { ascending: true });
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data ?? []) as TaxRowRow[], error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function replaceTaxRows(
+  projectId: string,
+  rows: Array<{ sort_order: number; description: string; tax_pct: number }>,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    await db.from('project_proposal_tax_rows').delete().eq('project_id', projectId);
+    if (rows.length > 0) {
+      const { error } = await db.from('project_proposal_tax_rows').insert(
+        rows.map(r => ({
+          project_id:  projectId,
+          sort_order:  r.sort_order,
+          description: r.description,
+          tax_pct:     r.tax_pct,
           updated_at:  new Date().toISOString(),
         })),
       );

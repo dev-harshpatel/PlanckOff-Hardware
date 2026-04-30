@@ -36,7 +36,8 @@
       "Bash(sort -k6,7)",
       "Bash(npm install *)",
       "Bash(cat tailwind.config.ts)",
-      "Bash(cat tailwind.config.js)"
+      "Bash(cat tailwind.config.js)",
+      "Bash(grep -E \"\\\\.tsx$\")"
     ]
   }
 }
