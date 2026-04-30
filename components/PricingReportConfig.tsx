@@ -349,7 +349,8 @@ const TD_MODAL = 'px-4 py-2.5 text-xs text-[var(--text-secondary)] border-b bord
 const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, projectName }) => {
   const [activeTab, setActiveTab]   = useState<PricingTab>('door');
   const [prices, setPrices]         = useState<PriceMap>(new Map());
-  const [filters, setFilters]       = useState<Filters>({ material: [], floor: [], building: [] });
+  const [filters, setFilters]           = useState<Filters>({ material: [], floor: [], building: [] });
+  const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [] });
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [variants, setVariants]     = useState<PricingVariant[]>([]);
@@ -415,16 +416,41 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     return Array.from(seen).sort();
   }, [hardwareGroups]);
 
-  // ── Filtered groups ────────────────────────────────────────────────────────
+  // ── Proposal filter options (union across all categories) ──────────────────
+  const proposalMaterials = useMemo(() => Array.from(new Set([...doorMaterials, ...frameMaterials, ...hwMaterials])).sort(), [doorMaterials, frameMaterials, hwMaterials]);
+  const proposalFloors    = useMemo(() => Array.from(new Set([...doorFloors, ...frameFloors])).sort(),       [doorFloors, frameFloors]);
+  const proposalBuildings = useMemo(() => Array.from(new Set([...doorBuildings, ...frameBuildings])).sort(), [doorBuildings, frameBuildings]);
+
+  // ── Tab-filtered groups ────────────────────────────────────────────────────
   const visibleDoors     = useMemo(() => filterDoorGroups(doorGroups,     filters), [doorGroups,     filters]);
   const visibleFrames    = useMemo(() => filterDoorGroups(frameGroups,    filters), [frameGroups,    filters]);
   const visibleHardware  = useMemo(() => filterHardwareGroups(hardwareGroups, { material: filters.material }), [hardwareGroups, filters.material]);
 
-  // ── Totals ─────────────────────────────────────────────────────────────────
+  // ── Tab totals ─────────────────────────────────────────────────────────────
   const doorTotal     = useMemo(() => calcTotal(visibleDoors),    [visibleDoors]);
   const frameTotal    = useMemo(() => calcTotal(visibleFrames),   [visibleFrames]);
   const hwTotal       = useMemo(() => calcTotal(visibleHardware), [visibleHardware]);
   const grandTotal    = doorTotal + frameTotal + hwTotal;
+
+  // ── Proposal totals (full, unaffected by tab filters) ─────────────────────
+  const proposalDoorBase  = useMemo(() => calcTotal(doorGroups),     [doorGroups]);
+  const proposalFrameBase = useMemo(() => calcTotal(frameGroups),    [frameGroups]);
+  const proposalHwBase    = useMemo(() => calcTotal(hardwareGroups), [hardwareGroups]);
+
+  // ── Proposal breakdown sub-rows per active filter selection ───────────────
+  const proposalBreakdown = useMemo(() => {
+    const fromDoor  = (vals: string[], type: string, key: 'materials' | 'floors' | 'buildings') =>
+      vals.map(v => { const g = doorGroups.filter(x => x[key].includes(v));  return { type, label: v, count: g.length, base: calcTotal(g) }; });
+    const fromFrame = (vals: string[], type: string, key: 'materials' | 'floors' | 'buildings') =>
+      vals.map(v => { const g = frameGroups.filter(x => x[key].includes(v)); return { type, label: v, count: g.length, base: calcTotal(g) }; });
+    const fromHw    = (vals: string[]) =>
+      vals.map(v => { const g = hardwareGroups.filter(x => x.doorMaterials.includes(v)); return { type: 'Material', label: v, count: g.length, base: calcTotal(g) }; });
+    return {
+      doors:    [...fromDoor(proposalFilters.material,  'Material',  'materials'), ...fromDoor(proposalFilters.floor,     'Floor',    'floors'),    ...fromDoor(proposalFilters.building, 'Building', 'buildings')],
+      frames:   [...fromFrame(proposalFilters.material, 'Material',  'materials'), ...fromFrame(proposalFilters.floor,    'Floor',    'floors'),    ...fromFrame(proposalFilters.building,'Building', 'buildings')],
+      hardware: fromHw(proposalFilters.material),
+    };
+  }, [doorGroups, frameGroups, hardwareGroups, proposalFilters]);
 
   // ── Proposal profit percentages ────────────────────────────────────────────
   const [profitPct, setProfitPct] = useState<{ door: string; frame: string; hardware: string }>({
@@ -432,54 +458,175 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   });
   const profitDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load saved profit percentages on mount
+  // ── Proposal settings state ────────────────────────────────────────────────
+  const [allocateExpenses, setAllocateExpenses] = useState(false);
+  const [taxPct, setTaxPct]                     = useState('');
+  const [remarks, setRemarks]                   = useState('');
+  const [extraExpenses, setExtraExpenses]        = useState<Array<{ id: string; delivery: string; totalPrice: string }>>([]);
+
+  // Refs holding the latest values so debounced saves always read fresh state
+  const latestProfitPct = useRef(profitPct);
+  const latestAllocate  = useRef(false);
+  const latestTaxPct    = useRef('');
+  const latestRemarks   = useRef('');
+  const expenseDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load saved proposal settings on mount ─────────────────────────────────
   useEffect(() => {
     if (!projectId) return;
     fetch(`/api/projects/${projectId}/pricing-proposal`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (!json?.data) return;
-        const { profit_door, profit_frame, profit_hardware } = json.data as { profit_door: number; profit_frame: number; profit_hardware: number };
-        setProfitPct({
+        const { profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct } =
+          json.data as { profit_door: number; profit_frame: number; profit_hardware: number; allocate_expenses: boolean; tax_pct: number };
+        const next = {
           door:     profit_door     > 0 ? String(profit_door)     : '',
           frame:    profit_frame    > 0 ? String(profit_frame)    : '',
           hardware: profit_hardware > 0 ? String(profit_hardware) : '',
-        });
+        };
+        setProfitPct(next);
+        latestProfitPct.current = next;
+        setAllocateExpenses(allocate_expenses);
+        latestAllocate.current = allocate_expenses;
+        const taxStr = tax_pct > 0 ? String(tax_pct) : '';
+        setTaxPct(taxStr);
+        latestTaxPct.current = taxStr;
+        const r = (json.data as { remarks: string }).remarks ?? '';
+        setRemarks(r);
+        latestRemarks.current = r;
       })
       .catch(console.error);
   }, [projectId]);
 
-  // Debounced save whenever profit percentages change
+  // ── Load saved expenses on mount ───────────────────────────────────────────
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/proposal-expenses`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data) return;
+        setExtraExpenses(
+          (json.data as Array<{ id: string; delivery: string; total_price: number }>).map(row => ({
+            id:         row.id,
+            delivery:   row.delivery,
+            totalPrice: row.total_price > 0 ? String(row.total_price) : '',
+          })),
+        );
+      })
+      .catch(console.error);
+  }, [projectId]);
+
+  // ── Unified debounced save for all proposal settings ──────────────────────
+  const saveProposalSettings = useCallback(() => {
+    if (profitDebounce.current) clearTimeout(profitDebounce.current);
+    profitDebounce.current = setTimeout(() => {
+      const toNum = (s: string) => Math.max(0, parseFloat(s) || 0);
+      fetch(`/api/projects/${projectId}/pricing-proposal`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profit_door:       toNum(latestProfitPct.current.door),
+          profit_frame:      toNum(latestProfitPct.current.frame),
+          profit_hardware:   toNum(latestProfitPct.current.hardware),
+          allocate_expenses: latestAllocate.current,
+          tax_pct:           toNum(latestTaxPct.current),
+          remarks:           latestRemarks.current,
+        }),
+      }).catch(console.error);
+    }, 800);
+  }, [projectId]);
+
+  // ── Debounced save for expense rows (full replace) ─────────────────────────
+  const saveExpenses = useCallback((expenses: typeof extraExpenses) => {
+    if (expenseDebounce.current) clearTimeout(expenseDebounce.current);
+    expenseDebounce.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/proposal-expenses`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expenses: expenses.map((e, i) => ({
+            sort_order:  i,
+            delivery:    e.delivery,
+            total_price: parseFloat(e.totalPrice) || 0,
+          })),
+        }),
+      }).catch(console.error);
+    }, 800);
+  }, [projectId]);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleProfitChange = useCallback((key: 'door' | 'frame' | 'hardware', raw: string) => {
     setProfitPct(prev => {
       const next = { ...prev, [key]: raw };
-      if (profitDebounce.current) clearTimeout(profitDebounce.current);
-      profitDebounce.current = setTimeout(() => {
-        const toNum = (s: string) => Math.max(0, parseFloat(s) || 0);
-        fetch(`/api/projects/${projectId}/pricing-proposal`, {
-          method: 'PUT',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            profit_door:     toNum(next.door),
-            profit_frame:    toNum(next.frame),
-            profit_hardware: toNum(next.hardware),
-          }),
-        }).catch(console.error);
-      }, 800);
+      latestProfitPct.current = next;
+      saveProposalSettings();
       return next;
     });
-  }, [projectId]);
+  }, [saveProposalSettings]);
+
+  const handleAllocateChange = useCallback((val: boolean) => {
+    setAllocateExpenses(val);
+    latestAllocate.current = val;
+    saveProposalSettings();
+  }, [saveProposalSettings]);
+
+  const handleTaxChange = useCallback((val: string) => {
+    setTaxPct(val);
+    latestTaxPct.current = val;
+    saveProposalSettings();
+  }, [saveProposalSettings]);
+
+  const handleRemarksChange = useCallback((val: string) => {
+    setRemarks(val);
+    latestRemarks.current = val;
+    saveProposalSettings();
+  }, [saveProposalSettings]);
+
+  const handleAddExpense = useCallback(() => {
+    setExtraExpenses(prev => {
+      const next = [...prev, { id: crypto.randomUUID(), delivery: '', totalPrice: '' }];
+      saveExpenses(next);
+      return next;
+    });
+  }, [saveExpenses]);
+
+  const handleExpenseChange = useCallback((id: string, field: 'delivery' | 'totalPrice', value: string) => {
+    setExtraExpenses(prev => {
+      const next = prev.map(e => e.id === id ? { ...e, [field]: value } : e);
+      saveExpenses(next);
+      return next;
+    });
+  }, [saveExpenses]);
+
+  const handleRemoveExpense = useCallback((id: string) => {
+    setExtraExpenses(prev => {
+      const next = prev.filter(e => e.id !== id);
+      saveExpenses(next);
+      return next;
+    });
+  }, [saveExpenses]);
 
   const withProfit = (base: number, pctStr: string): number => {
     const p = parseFloat(pctStr);
     return isNaN(p) || p <= 0 ? base : base * (1 + p / 100);
   };
 
-  const proposalDoorTotal     = withProfit(doorTotal,  profitPct.door);
-  const proposalFrameTotal    = withProfit(frameTotal, profitPct.frame);
-  const proposalHwTotal       = withProfit(hwTotal,    profitPct.hardware);
-  const proposalGrandTotal    = proposalDoorTotal + proposalFrameTotal + proposalHwTotal;
+  const proposalDoorTotal  = withProfit(proposalDoorBase,  profitPct.door);
+  const proposalFrameTotal = withProfit(proposalFrameBase, profitPct.frame);
+  const proposalHwTotal    = withProfit(proposalHwBase,    profitPct.hardware);
+
+  const extraExpensesTotal = extraExpenses.reduce((sum, e) => sum + (parseFloat(e.totalPrice) || 0), 0);
+  const proposalGrandTotal = proposalDoorTotal + proposalFrameTotal + proposalHwTotal;
+  const taxSubtotal        = proposalGrandTotal + extraExpensesTotal;
+  const taxAmount          = taxSubtotal * (Math.max(0, parseFloat(taxPct) || 0) / 100);
+  const totalAfterTax      = taxSubtotal + taxAmount;
+  // Split extra expenses proportional to each category's share of the Pricing Summary Grand Total
+  const doorAlloc  = allocateExpenses && proposalGrandTotal > 0 ? extraExpensesTotal * (proposalDoorTotal  / proposalGrandTotal) : 0;
+  const frameAlloc = allocateExpenses && proposalGrandTotal > 0 ? extraExpensesTotal * (proposalFrameTotal / proposalGrandTotal) : 0;
+  const hwAlloc    = allocateExpenses && proposalGrandTotal > 0 ? extraExpensesTotal * (proposalHwTotal    / proposalGrandTotal) : 0;
 
   // ── Price change handler (debounced save) ──────────────────────────────────
   const handlePriceChange = useCallback((category: PricingTab, key: string, raw: string) => {
@@ -540,7 +687,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     }
   }, [projectId]);
 
-  const setFilter = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
+  const setFilter         = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
+  const setProposalFilter = (k: keyof Filters, v: string[]) => setProposalFilters(prev => ({ ...prev, [k]: v }));
 
   // ── Download Excel ─────────────────────────────────────────────────────────
   const handleDownloadExcel = useCallback(async () => {
@@ -766,40 +914,199 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       </div>
 
       {/* ── Proposal tab ── */}
-      {activeTab === 'proposal' && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-6 space-y-6">
-          {/* Header */}
-          <div className="border-b border-[var(--border)] pb-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-faint)] mb-1">Proposal</p>
-            <h3 className="text-lg font-bold text-[var(--text)]">{projectName || 'Untitled Project'}</h3>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">Prepared on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          </div>
+      {activeTab === 'proposal' && (() => {
+        return (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-6 space-y-6">
+            {/* Header + filters row */}
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-faint)] mb-1">Proposal</p>
+                <h3 className="text-lg font-bold text-[var(--text)]">{projectName || 'Untitled Project'}</h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Prepared on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <MultiFilterSelect label="Material" selected={proposalFilters.material} options={proposalMaterials} onChange={v => setProposalFilter('material', v)} />
+                <MultiFilterSelect label="Floor"    selected={proposalFilters.floor}    options={proposalFloors}    onChange={v => setProposalFilter('floor',    v)} />
+                <MultiFilterSelect label="Building" selected={proposalFilters.building} options={proposalBuildings} onChange={v => setProposalFilter('building', v)} />
+              </div>
+            </div>
 
-          {/* Summary table */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Pricing Summary</p>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-[var(--bg-subtle)]">
-                  <th className="text-left  px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Category</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Items</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-36">Profit %</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">New Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(
-                  [
-                    { label: 'Doors',    key: 'door'     as const, count: doorGroups.length,     base: doorTotal,  newTotal: proposalDoorTotal  },
-                    { label: 'Frames',   key: 'frame'    as const, count: frameGroups.length,    base: frameTotal, newTotal: proposalFrameTotal },
-                    { label: 'Hardware', key: 'hardware' as const, count: hardwareGroups.length, base: hwTotal,    newTotal: proposalHwTotal    },
-                  ]
-                ).map(({ label, key, count, base, newTotal }, i) => (
-                  <tr key={label} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                    <td className="px-4 py-2 font-medium text-[var(--text)] border border-[var(--border)]">{label}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{count}</td>
-                    <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(base)}</td>
+            {/* Summary table */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Pricing Summary</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left  px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Category</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Items</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-36">Profit %</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">New Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(
+                    [
+                      { label: 'Doors',    key: 'door'     as const, count: doorGroups.length,     base: proposalDoorBase,  newTotal: proposalDoorTotal,  alloc: doorAlloc,  breakdown: proposalBreakdown.doors    },
+                      { label: 'Frames',   key: 'frame'    as const, count: frameGroups.length,    base: proposalFrameBase, newTotal: proposalFrameTotal, alloc: frameAlloc, breakdown: proposalBreakdown.frames   },
+                      { label: 'Hardware', key: 'hardware' as const, count: hardwareGroups.length, base: proposalHwBase,    newTotal: proposalHwTotal,    alloc: hwAlloc,    breakdown: proposalBreakdown.hardware },
+                    ]
+                  ).flatMap(({ label, key, count, base, newTotal, alloc, breakdown }, i) => [
+                    <tr key={label} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 font-medium text-[var(--text)] border border-[var(--border)]">{label}</td>
+                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{count}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(base)}</td>
+                      <td className="px-2 py-1.5 border border-[var(--border)]">
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="999"
+                            step="0.1"
+                            placeholder="0"
+                            value={profitPct[key]}
+                            onChange={e => handleProfitChange(key, e.target.value)}
+                            className="w-16 text-right text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:border-[var(--primary-action)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-[var(--text-faint)] text-xs font-medium select-none">%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right border border-[var(--border)]">
+                        <div className="font-semibold text-[var(--primary-text)]">{fmt.format(newTotal + alloc)}</div>
+                        {alloc > 0 && (
+                          <div className="text-[10px] text-[var(--text-faint)] mt-0.5">
+                            {fmt.format(newTotal)} + {fmt.format(alloc)}
+                          </div>
+                        )}
+                      </td>
+                    </tr>,
+                    ...breakdown.map(sub => (
+                      <tr key={`${key}-${sub.type}-${sub.label}`} className="bg-[var(--bg-subtle)]/60">
+                        <td className="pl-8 pr-4 py-1.5 border border-[var(--border)]">
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-[var(--text-faint)] select-none">↳</span>
+                            <span className="font-medium text-[var(--text-secondary)]">{sub.label}</span>
+                            <span className="text-[9px] uppercase tracking-wide text-[var(--text-faint)] px-1 py-px rounded bg-[var(--bg-muted)]">{sub.type}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 text-right text-[var(--text-faint)] border border-[var(--border)]">{sub.count}</td>
+                        <td className="px-4 py-1.5 text-right text-[var(--text-secondary)] border border-[var(--border)]">{fmt.format(sub.base)}</td>
+                        <td className="px-2 py-1.5 border border-[var(--border)]" />
+                        <td className="px-4 py-1.5 text-right text-[var(--text-secondary)] border border-[var(--border)]">{fmt.format(withProfit(sub.base, profitPct[key]))}</td>
+                      </tr>
+                    )),
+                  ])}
+                  <tr className="bg-[var(--primary-bg)]">
+                    <td className="px-4 py-3 font-bold text-[var(--primary-text)] border border-[var(--primary-border)]" colSpan={3}>Grand Total</td>
+                    <td className="px-4 py-3 border border-[var(--primary-border)]" />
+                    <td className="px-4 py-3 text-right border border-[var(--primary-border)]">
+                      <div className="font-bold text-[var(--primary-text)]">{fmt.format(proposalGrandTotal + (allocateExpenses ? extraExpensesTotal : 0))}</div>
+                      {allocateExpenses && extraExpensesTotal > 0 && (
+                        <div className="text-[10px] text-[var(--primary-text)] opacity-70 mt-0.5">
+                          {fmt.format(proposalGrandTotal)} + {fmt.format(extraExpensesTotal)} expenses
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Extra Expenses */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)]">Extra Expenses</p>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allocateExpenses}
+                    onChange={e => handleAllocateChange(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer"
+                  />
+                  <span className="text-[10px] text-[var(--text-secondary)]">Split across categories</span>
+                </label>
+              </div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Delivery</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total Price</th>
+                    <th className="w-8 border border-[var(--border)]" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No extra expenses added</td>
+                    </tr>
+                  ) : extraExpenses.map((expense, i) => (
+                    <tr key={expense.id} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-3 py-1.5 border border-[var(--border)]">
+                        <input
+                          type="text"
+                          placeholder="Description"
+                          value={expense.delivery}
+                          onChange={e => handleExpenseChange(expense.id, 'delivery', e.target.value)}
+                          className="w-full bg-transparent text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 border border-[var(--border)]">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={expense.totalPrice}
+                          onChange={e => handleExpenseChange(expense.id, 'totalPrice', e.target.value)}
+                          onWheel={e => e.currentTarget.blur()}
+                          className="w-full text-right bg-transparent text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5 text-center border border-[var(--border)]">
+                        <button
+                          onClick={() => handleRemoveExpense(expense.id)}
+                          className="text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[var(--primary-bg)]">
+                    <td className="px-4 py-3 font-bold text-[var(--primary-text)] border border-[var(--primary-border)]">Grand Total</td>
+                    <td className="px-4 py-3 text-right font-bold text-[var(--primary-text)] border border-[var(--primary-border)]">
+                      {fmt.format(extraExpenses.reduce((sum, e) => sum + (parseFloat(e.totalPrice) || 0), 0))}
+                    </td>
+                    <td className="px-4 py-3 border border-[var(--primary-border)]" />
+                  </tr>
+                </tbody>
+              </table>
+              <button
+                onClick={handleAddExpense}
+                className="mt-2 w-full text-xs text-[var(--text-secondary)] hover:text-[var(--text)] border border-dashed border-[var(--border)] hover:border-[var(--text-muted)] rounded px-3 py-1.5 transition-colors"
+              >
+                + Add Row
+              </button>
+            </div>
+
+            {/* Tax */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Tax</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Pricing Summary Total</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Extra Expense Total</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Subtotal</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-36">Tax %</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total After Tax</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-[var(--bg)]">
+                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(proposalGrandTotal)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(extraExpensesTotal)}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{fmt.format(taxSubtotal)}</td>
                     <td className="px-2 py-1.5 border border-[var(--border)]">
                       <div className="flex items-center justify-end gap-1">
                         <input
@@ -808,111 +1115,38 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                           max="999"
                           step="0.1"
                           placeholder="0"
-                          value={profitPct[key]}
-                          onChange={e => handleProfitChange(key, e.target.value)}
+                          value={taxPct}
+                          onChange={e => handleTaxChange(e.target.value)}
                           className="w-16 text-right text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:border-[var(--primary-action)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <span className="text-[var(--text-faint)] text-xs font-medium select-none">%</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-right font-semibold text-[var(--primary-text)] border border-[var(--border)]">
-                      {fmt.format(newTotal)}
+                    <td className="px-4 py-2 text-right border border-[var(--border)]">
+                      <div className="font-semibold text-[var(--primary-text)]">{fmt.format(totalAfterTax)}</div>
+                      {taxAmount > 0 && (
+                        <div className="text-[10px] text-[var(--text-faint)] mt-0.5">{fmt.format(taxSubtotal)} + {fmt.format(taxAmount)} tax</div>
+                      )}
                     </td>
                   </tr>
-                ))}
-                <tr className="bg-[var(--primary-bg)]">
-                  <td className="px-4 py-3 font-bold text-[var(--primary-text)] border border-[var(--primary-border)]" colSpan={3}>Grand Total</td>
-                  <td className="px-4 py-3 border border-[var(--primary-border)]" />
-                  <td className="px-4 py-3 text-right font-bold text-[var(--primary-text)] border border-[var(--primary-border)]">{fmt.format(proposalGrandTotal)}</td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Remarks */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Remarks</p>
+              <textarea
+                rows={4}
+                placeholder="Add any notes or remarks…"
+                value={remarks}
+                onChange={e => handleRemarksChange(e.target.value)}
+                className="w-full text-xs bg-[var(--bg-muted)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-action)] resize-y"
+              />
+            </div>
           </div>
-
-          {/* Door groups breakdown */}
-          {doorGroups.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Door Details</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doorGroups.map((g, i) => (
-                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.description}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
-                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Frame groups breakdown */}
-          {frameGroups.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Frame Details</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {frameGroups.map((g, i) => (
-                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.description}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
-                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Hardware breakdown */}
-          {hardwareGroups.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Hardware Details</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Item</th>
-                    <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Manufacturer</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Qty</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Unit Price</th>
-                    <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {hardwareGroups.map((g, i) => (
-                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text-secondary)] border border-[var(--border)]">{g.item.name ?? '—'}</td>
-                      <td className="px-4 py-2 text-[var(--text-muted)] border border-[var(--border)]">{g.item.manufacturer ?? '—'}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{g.totalQty}</td>
-                      <td className="px-4 py-2 text-right text-[var(--text-muted)] border border-[var(--border)]">{fmt.format(g.unitPrice)}</td>
-                      <td className="px-4 py-2 text-right font-medium text-[var(--text)] border border-[var(--border)]">{fmt.format(g.totalPrice)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Table (Doors / Frames / Hardware tabs) ── */}
       {activeTab !== 'proposal' && (loadingPrices ? (

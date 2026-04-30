@@ -16,21 +16,28 @@ export const PUT = withAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
-    let body: { profit_door: number; profit_frame: number; profit_hardware: number };
+    let body: { profit_door: number; profit_frame: number; profit_hardware: number; allocate_expenses: boolean; tax_pct: number; remarks: string };
     try {
       body = await req.json();
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
     }
 
-    const { profit_door, profit_frame, profit_hardware } = body;
-    for (const [field, val] of Object.entries({ profit_door, profit_frame, profit_hardware })) {
+    const { profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct, remarks } = body;
+
+    for (const [field, val] of Object.entries({ profit_door, profit_frame, profit_hardware, tax_pct })) {
       if (typeof val !== 'number' || val < 0 || val > 999) {
         return NextResponse.json({ error: `${field} must be a number between 0 and 999.` }, { status: 400 });
       }
     }
+    if (typeof allocate_expenses !== 'boolean') {
+      return NextResponse.json({ error: 'allocate_expenses must be a boolean.' }, { status: 400 });
+    }
+    if (typeof remarks !== 'string') {
+      return NextResponse.json({ error: 'remarks must be a string.' }, { status: 400 });
+    }
 
-    const { error } = await upsertProposalProfit(projectId, { profit_door, profit_frame, profit_hardware });
+    const { error } = await upsertProposalProfit(projectId, { profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct, remarks });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ data: { ok: true } });
   },

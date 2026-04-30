@@ -154,12 +154,15 @@ export async function upsertPricingItem(
   }
 }
 
-// ─── Proposal profit percentages ─────────────────────────────────────────────
+// ─── Proposal profit percentages + settings ──────────────────────────────────
 
 export interface ProposalProfitRow {
-  profit_door:     number;
-  profit_frame:    number;
-  profit_hardware: number;
+  profit_door:       number;
+  profit_frame:      number;
+  profit_hardware:   number;
+  allocate_expenses: boolean;
+  tax_pct:           number;
+  remarks:           string;
 }
 
 export async function getProposalProfit(projectId: string): Promise<DbResult<ProposalProfitRow>> {
@@ -167,12 +170,12 @@ export async function getProposalProfit(projectId: string): Promise<DbResult<Pro
     const db = createSupabaseAdminClient();
     const { data, error } = await db
       .from('project_pricing_proposal')
-      .select('profit_door, profit_frame, profit_hardware')
+      .select('profit_door, profit_frame, profit_hardware, allocate_expenses, tax_pct, remarks')
       .eq('project_id', projectId)
       .maybeSingle();
     if (error) return { data: null, error: { message: error.message } };
     return {
-      data: data ?? { profit_door: 0, profit_frame: 0, profit_hardware: 0 },
+      data: data ?? { profit_door: 0, profit_frame: 0, profit_hardware: 0, allocate_expenses: false, tax_pct: 0, remarks: '' },
       error: null,
     };
   } catch (err) {
@@ -190,15 +193,67 @@ export async function upsertProposalProfit(
       .from('project_pricing_proposal')
       .upsert(
         {
-          project_id:      projectId,
-          profit_door:     row.profit_door,
-          profit_frame:    row.profit_frame,
-          profit_hardware: row.profit_hardware,
-          updated_at:      new Date().toISOString(),
+          project_id:        projectId,
+          profit_door:       row.profit_door,
+          profit_frame:      row.profit_frame,
+          profit_hardware:   row.profit_hardware,
+          allocate_expenses: row.allocate_expenses,
+          tax_pct:           row.tax_pct,
+          remarks:           row.remarks,
+          updated_at:        new Date().toISOString(),
         },
         { onConflict: 'project_id' },
       );
     if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+// ─── Proposal extra expenses ──────────────────────────────────────────────────
+
+export interface ProposalExpenseRow {
+  id:          string;
+  sort_order:  number;
+  delivery:    string;
+  total_price: number;
+}
+
+export async function getProposalExpenses(projectId: string): Promise<DbResult<ProposalExpenseRow[]>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('project_proposal_expenses')
+      .select('id, sort_order, delivery, total_price')
+      .eq('project_id', projectId)
+      .order('sort_order', { ascending: true });
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data ?? []) as ProposalExpenseRow[], error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function replaceProposalExpenses(
+  projectId: string,
+  expenses: Array<{ sort_order: number; delivery: string; total_price: number }>,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    await db.from('project_proposal_expenses').delete().eq('project_id', projectId);
+    if (expenses.length > 0) {
+      const { error } = await db.from('project_proposal_expenses').insert(
+        expenses.map(e => ({
+          project_id:  projectId,
+          sort_order:  e.sort_order,
+          delivery:    e.delivery,
+          total_price: e.total_price,
+          updated_at:  new Date().toISOString(),
+        })),
+      );
+      if (error) return { data: null, error: { message: error.message } };
+    }
     return { data: true, error: null };
   } catch (err) {
     return { data: null, error: { message: String(err) } };
