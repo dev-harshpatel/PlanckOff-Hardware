@@ -1017,27 +1017,29 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       const co = companySettings;
       let textX = margin;
 
-      // Logo
+      // Logo — fetch as blob to avoid canvas CORS taint from Supabase Storage
       if (co.logoUrl) {
         try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          await new Promise<void>((resolve) => {
-            img.onload  = () => resolve();
-            img.onerror = () => resolve();
-            img.src = co.logoUrl;
+          const resp    = await fetch(co.logoUrl);
+          const blob    = await resp.blob();
+          const dataUrl = await new Promise<string>((res, rej) => {
+            const reader    = new FileReader();
+            reader.onloadend = () => res(reader.result as string);
+            reader.onerror   = rej;
+            reader.readAsDataURL(blob);
           });
-          if (img.width > 0) {
-            const maxLogoH = 40;
-            const scale    = maxLogoH / img.height;
-            const logoW    = img.width * scale;
-            const canvas   = document.createElement('canvas');
-            canvas.width   = logoW;
-            canvas.height  = maxLogoH;
-            canvas.getContext('2d')?.drawImage(img, 0, 0, logoW, maxLogoH);
-            doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, logoW, maxLogoH);
-            textX = margin + logoW + 12;
-          }
+          // Load dataUrl into img so we can get natural dimensions (no CORS taint on local dataUrl)
+          const img = new Image();
+          await new Promise<void>(res => { img.onload = () => res(); img.src = dataUrl; });
+          const maxLogoH = 40;
+          const scale    = maxLogoH / img.height;
+          const logoW    = Math.min(img.width * scale, 120);
+          const canvas   = document.createElement('canvas');
+          canvas.width   = logoW;
+          canvas.height  = maxLogoH;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, logoW, maxLogoH);
+          doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, logoW, maxLogoH);
+          textX = margin + logoW + 12;
         } catch { /* skip logo on error */ }
       }
 
@@ -1269,21 +1271,23 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           Grand Total: {fmt.format(grandTotal)}
         </span>
         <div className="flex items-center gap-2 border-l border-[var(--primary-border)] pl-4">
+          {activeTab !== 'proposal' && (
+            <button
+              onClick={handleDownloadExcel}
+              title="Download Excel"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Excel
+            </button>
+          )}
           <button
-            onClick={handleDownloadExcel}
-            title="Download Excel"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            Excel
-          </button>
-          <button
-            onClick={handleDownloadPdf}
-            title="Download PDF"
+            onClick={activeTab === 'proposal' ? () => void handleDownloadProposalPdf() : handleDownloadPdf}
+            title={activeTab === 'proposal' ? 'Export Proposal PDF' : 'Download PDF'}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
           >
             <FileDown className="w-3.5 h-3.5" />
-            PDF
+            {activeTab === 'proposal' ? 'Export Proposal' : 'PDF'}
           </button>
         </div>
       </div>
@@ -1346,14 +1350,6 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                 <MultiFilterSelect label="Material" selected={proposalFilters.material} options={proposalMaterials} onChange={v => setProposalFilter('material', v)} />
                 <MultiFilterSelect label="Floor"    selected={proposalFilters.floor}    options={proposalFloors}    onChange={v => setProposalFilter('floor',    v)} />
                 <MultiFilterSelect label="Building" selected={proposalFilters.building} options={proposalBuildings} onChange={v => setProposalFilter('building', v)} />
-                <button
-                  onClick={() => void handleDownloadProposalPdf()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover,var(--primary-action))] text-white transition-colors shadow-sm"
-                  title="Export Proposal as PDF"
-                >
-                  <FileDown className="w-3.5 h-3.5" />
-                  Export PDF
-                </button>
               </div>
             </div>
 
