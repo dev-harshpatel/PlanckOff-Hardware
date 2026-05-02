@@ -132,7 +132,7 @@ export const exportDoorScheduleToExcel = (
   // Add header rows if requested
   if (config.includeHeader) {
     wsData.push([projectName]);
-    wsData.push(['Door Schedule Report']);
+    wsData.push(['Door-Frame Reports']);
     wsData.push([`Generated: ${new Date().toLocaleDateString()}`]);
     wsData.push([]); // Empty row
   }
@@ -832,7 +832,7 @@ export const exportDoorScheduleToPDF = async (
     // Add header
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text(projectName || 'Door Schedule Report', 14, 15);
+    doc.text(projectName || 'Door-Frame Reports', 14, 15);
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');

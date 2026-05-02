@@ -172,7 +172,7 @@ const ReportTypeSelector: React.FC<ReportTypeSelectorProps> = ({
                         </span>
                     </div>
 
-                    <h4 className="text-xl font-bold text-[var(--text)] mb-3">Door Schedule Report</h4>
+                    <h4 className="text-xl font-bold text-[var(--text)] mb-3">Door-Frame Reports</h4>
                     <p className="text-[var(--text-muted)] mb-6">
                         Export comprehensive door data with full customization. Choose from 30+ fields including dimensions, materials, fire ratings, and hardware assignments.
                     </p>

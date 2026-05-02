@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, CheckCircle2, XCircle, ClipboardCheck, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
 import type { MasterHardwarePending } from '@/lib/db/masterHardware';
+import { Button } from '@/components/ui/button';
 
 interface PendingReviewModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
 }) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionAction, setSubmissionAction] = useState<'approve' | 'reject' | null>(null);
 
   if (!isOpen) return null;
 
@@ -40,11 +42,13 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     setIsSubmitting(true);
+    setSubmissionAction(action);
     try {
       await onReview(ids, action);
       setSelected(new Set());
     } finally {
       setIsSubmitting(false);
+      setSubmissionAction(null);
     }
   };
 
@@ -57,7 +61,6 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
         className="bg-[var(--bg)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-[var(--border-subtle)]"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)] bg-[var(--primary-bg)] rounded-t-xl flex-shrink-0">
           <div className="p-1.5 rounded-lg bg-[var(--primary-bg-hover)]">
             <ClipboardCheck className="w-4 h-4 text-[var(--primary-text-muted)]" />
@@ -76,7 +79,6 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
           </button>
         </div>
 
-        {/* Table */}
         <div className="flex-1 overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-[var(--bg-subtle)] sticky top-0 z-10">
@@ -143,7 +145,6 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
           </table>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-subtle)] rounded-b-xl flex-shrink-0 gap-3">
           <span className="text-xs text-[var(--text-muted)]">
             {selected.size > 0
@@ -159,22 +160,29 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
                 Select all
               </button>
             )}
-            <button
+            <Button
               onClick={() => handleAction('reject')}
               disabled={selected.size === 0 || isSubmitting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-400/40 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              variant="outline"
+              size="sm"
+              loading={isSubmitting && submissionAction === 'reject'}
+              loadingText="Rejecting..."
+              className="text-xs text-red-600 border-red-400/40 hover:bg-red-500/10 hover:text-red-700"
             >
-              {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+              <XCircle className="w-3.5 h-3.5" />
               Reject
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => handleAction('approve')}
               disabled={selected.size === 0 || isSubmitting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              size="sm"
+              loading={isSubmitting && submissionAction === 'approve'}
+              loadingText="Approving..."
+              className="text-xs"
             >
-              {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <CheckCircle2 className="w-3.5 h-3.5" />
               Approve & Add to Database
-            </button>
+            </Button>
           </div>
         </div>
       </div>

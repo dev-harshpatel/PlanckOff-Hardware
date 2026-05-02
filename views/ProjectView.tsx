@@ -11,7 +11,7 @@ import { ArrowLeft, BarChart2, Check, Loader2, AlertCircle, Columns2, PanelLeft,
 import { Button } from '@/components/ui/button';
 import ElevationManager from '../components/ElevationManager';
 import { captureTrainingExample } from '../services/mlOpsService';
-import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
+import { transformHardwareSets, transformDoors, transformFromFinalJson } from '../utils/hardwareTransformers';
 import type { MergedHardwareSet, MergedDoor, TrashItem } from '@/lib/db/hardware';
 import UndoToast, { type UndoToastItem } from '../components/UndoToast';
 import HardwareTrashModal from '../components/HardwareTrashModal';
@@ -22,6 +22,7 @@ import ValidationReportModal from '../components/ValidationReportModal';
 import ResizablePanels from '../components/ResizablePanels';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { ProjectNotesPanel } from '../components/ProjectNotesPanel';
 import { useProjectRealtime } from '../hooks/useProjectRealtime';
 
@@ -90,11 +91,14 @@ interface ProjectViewProps {
 
 const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, appSettings, onBackToDashboard, addToast }) => {
     const router = useRouter();
+    const { startNavigation } = useNavigationLoading();
     const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>(project.hardwareSets || []);
     const [doors, setDoors] = useState<Door[]>(project.doors || []);
-    // Ref keeps the latest hardwareSets available inside callbacks without
+    // Refs keep the latest sets/trash available inside callbacks without
     // causing them to be recreated on every render.
     const hardwareSetsRef = useRef<HardwareSet[]>(hardwareSets);
+    const trashItemsRef = useRef<TrashItem[]>([]);
+    const doorsRef = useRef<Door[]>(doors);
     const [viewMode, setViewMode] = useState<'split' | 'hardware' | 'doors'>('split');
     const [isDataLoading, setIsDataLoading] = useState(true);
 
@@ -293,14 +297,102 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     setTrashItems(mergeJson.data.trashJson);
                 }
 
-                const sets = hwJson?.data?.extractedJson
+                // PDF extraction sets — source of truth for items/hardware data.
+                const pdfSets = hwJson?.data?.extractedJson
                     ? transformHardwareSets(hwJson.data.extractedJson)
                     : [];
 
-                // transformDoors matches doors to sets by hwSet name — unmatched doors still appear
-                const loadedDoors = dsJson?.data?.scheduleJson
-                    ? transformDoors(dsJson.data.scheduleJson, sets)
+                // Final JSON sets — authoritative for variants and manually-created sets.
+                // transformFromFinalJson also restores the correct door→set assignments.
+                const finalRaw = Array.isArray(mergeJson?.data?.finalJson) && mergeJson.data.finalJson.length > 0
+                    ? mergeJson.data.finalJson as Parameters<typeof transformFromFinalJson>[0]
+                    : null;
+                const finalData = finalRaw ? transformFromFinalJson(finalRaw) : null;
+
+                // Merge: use finalJson's set order as authoritative (it captures variant
+                // positions). For each set, prefer the PDF version so item data stays
+                // fresh; fall back to the finalJson version for variants/manual sets that
+                // don't exist in the PDF extraction. Any brand-new PDF sets not yet in
+                // finalJson are appended at the end.
+                let sets: typeof pdfSets;
+                if (finalData && finalData.hardwareSets.length > 0) {
+                    const pdfSetsByName = new Map(pdfSets.map(s => [s.name.toLowerCase(), s]));
+                    const setsFromFinal = finalData.hardwareSets.map(s => {
+                        const pdfVersion = pdfSetsByName.get(s.name.toLowerCase());
+                        if (pdfVersion) {
+                            // Use fresh PDF item data but preserve Final JSON metadata
+                            return { ...pdfVersion, isManualEntry: s.isManualEntry };
+                        }
+                        return s;
+                    });
+                    const finalSetNames = new Set(finalData.hardwareSets.map(s => s.name.toLowerCase()));
+                    const newPdfOnlySets = pdfSets.filter(s => !finalSetNames.has(s.name.toLowerCase()));
+                    sets = [...setsFromFinal, ...newPdfOnlySets];
+                } else {
+                    sets = pdfSets;
+                }
+
+                // Build a set of door tags that have been moved to trash so they are
+                // excluded after a refresh (door_schedule_imports is never mutated on delete).
+                const trashedDoorTags = new Set<string>(
+                    (mergeJson?.data?.trashJson ?? [])
+                        .filter((t: TrashItem) => t.type === 'door')
+                        .map((t: TrashItem) => t.doorData?.doorTag)
+                        .filter(Boolean) as string[],
+                );
+
+                // Raw doors from the Excel schedule (full section data, original assignments).
+                const rawDoors = dsJson?.data?.scheduleJson
+                    ? transformDoors(dsJson.data.scheduleJson, sets).filter(
+                          d => !trashedDoorTags.has(d.doorTag),
+                      )
                     : [];
+
+                // Restore door→set assignments saved in finalJson (variants, AI merges).
+                // The raw schedule always has the original Excel hwSet name — finalJson has
+                // the authoritative assigned set (e.g. the variant set).
+                // Also append manually-created doors that exist only in finalJson (never in Sheet JSON).
+                let loadedDoors: typeof rawDoors;
+                if (finalData && finalData.doors.length > 0) {
+                    const setsById = new Map(sets.map(s => [s.id, s]));
+                    const finalDoorMap = new Map(finalData.doors.map(d => [d.doorTag, d]));
+
+                    // Overlay Final JSON data onto Sheet JSON doors.
+                    // Final JSON wins for ALL fields — it is the user's last saved state and
+                    // captures modal edits, AI assignments, and variant links.
+                    // Sheet JSON is only the base; its sections are kept as a fallback in case
+                    // Final JSON sections are absent (old entries before sections were persisted).
+                    loadedDoors = rawDoors.map(raw => {
+                        const fromFinal = finalDoorMap.get(raw.doorTag);
+                        if (!fromFinal) return raw;
+                        return {
+                            ...raw,
+                            ...fromFinal,
+                            // Re-resolve set reference so PDF item data stays fresh.
+                            assignedHardwareSet: fromFinal.assignedHardwareSet
+                                ? (setsById.get(fromFinal.assignedHardwareSet.id) ?? fromFinal.assignedHardwareSet)
+                                : raw.assignedHardwareSet,
+                            // Prefer Sheet JSON sections as they carry the full raw Excel column
+                            // data; Final JSON sections are only a fallback for manual-entry doors.
+                            sections: raw.sections ?? fromFinal.sections,
+                        };
+                    });
+
+                    // Append manually-added doors: they live only in Final JSON, not in Sheet JSON.
+                    const rawDoorTags = new Set(rawDoors.map(d => d.doorTag));
+                    const manualDoors = finalData.doors
+                        .filter(d => !rawDoorTags.has(d.doorTag) && !trashedDoorTags.has(d.doorTag))
+                        .map(d => ({
+                            ...d,
+                            assignedHardwareSet: d.assignedHardwareSet
+                                ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
+                                : undefined,
+                        }));
+
+                    loadedDoors = [...loadedDoors, ...manualDoors];
+                } else {
+                    loadedDoors = rawDoors;
+                }
 
                 if (cancelled) return;
 
@@ -313,8 +405,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     isInitialMount.current = true;
                 }
 
-                // Sync matched data to final JSON for the reports page (fire-and-forget)
-                if ((sets.length > 0 || loadedDoors.length > 0) && !cancelled) {
+                // Only initialise finalJson when it doesn't exist yet (first upload).
+                // If finalJson already has data, do NOT overwrite it — that would erase
+                // variants and manually-created sets that live only in finalJson.
+                const hasFinalJson = Boolean(finalRaw);
+                if (!hasFinalJson && (sets.length > 0 || loadedDoors.length > 0) && !cancelled) {
                     saveToFinalJson(sets, loadedDoors).catch(() => {});
                 }
             } catch {
@@ -336,10 +431,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         };
     }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Keep hardwareSetsRef in sync so the realtime callback never has a stale closure.
-    useEffect(() => {
-        hardwareSetsRef.current = hardwareSets;
-    }, [hardwareSets]);
+    // Keep refs in sync so realtime callbacks never have a stale closure.
+    useEffect(() => { hardwareSetsRef.current = hardwareSets; }, [hardwareSets]);
+    useEffect(() => { trashItemsRef.current = trashItems; }, [trashItems]);
+    useEffect(() => { doorsRef.current = doors; }, [doors]);
 
     // Reload only the door schedule from the DB and re-transform.
     // Called by the Supabase Realtime subscription whenever door_schedule_imports changes.
@@ -349,11 +444,41 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             if (!res.ok) return;
             const json = await res.json() as { data?: { scheduleJson?: unknown[] } };
             if (!json?.data?.scheduleJson?.length) return;
-            const updated = transformDoors(
+
+            const trashedDoorTags = new Set<string>(
+                trashItemsRef.current
+                    .filter(t => t.type === 'door')
+                    .map(t => t.doorData?.doorTag)
+                    .filter(Boolean) as string[],
+            );
+
+            const fromSheet = transformDoors(
                 json.data.scheduleJson as Parameters<typeof transformDoors>[0],
                 hardwareSetsRef.current,
+            ).filter(d => !trashedDoorTags.has(d.doorTag));
+
+            // Re-apply in-memory state so all modal edits, variant links, and assignments
+            // survive the Realtime reload triggered by a door schedule PATCH.
+            // In-memory (doorsRef) is the user's last saved state; sheet data is the base.
+            const currentDoorMap = new Map(doorsRef.current.map(d => [d.doorTag, d]));
+            const overlaid = fromSheet.map(d => {
+                const current = currentDoorMap.get(d.doorTag);
+                if (!current) return d;
+                return {
+                    ...d,
+                    ...current,
+                    // Keep fresh sheet sections as the authoritative raw column data.
+                    sections: d.sections ?? current.sections,
+                };
+            });
+
+            // Re-append manually-added doors (not from sheet, not in trash).
+            const sheetTags = new Set(fromSheet.map(d => d.doorTag));
+            const manualDoors = doorsRef.current.filter(
+                d => !sheetTags.has(d.doorTag) && !trashedDoorTags.has(d.doorTag),
             );
-            setDoors(updated);
+
+            setDoors([...overlaid, ...manualDoors]);
         } catch {
             // Non-critical — stale data is better than a crash
         }
@@ -381,6 +506,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     doorTag: d.doorTag,
                     hwSet: d.providedHardwareSet ?? '',
                     matchedSetName: set.name,
+                    isManualEntry: d.isManualEntry === true,
                     buildingArea: undefined,
                     doorLocation: d.location,
                     interiorExterior: d.interiorExterior,
@@ -406,6 +532,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 }, 0);
                 return {
                     setName: set.name,
+                    isManualEntry: set.isManualEntry === true,
                     hardwareItems: set.items.map((item) => ({
                         qty: item.quantity,
                         item: item.name,
@@ -416,6 +543,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     })),
                     notes: set.description ?? '',
                     doors: mergedDoors,
+                    prep: set.prep,
                 };
             });
 
@@ -427,6 +555,37 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             });
         } catch (err) {
             console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
+        }
+    }, [project.id]);
+
+    // Sync the hardware-pdf extraction table with the current set list.
+    // Called whenever a variant or manual set is added so that the PDF extraction
+    // is always the superset — on reload pdfSets will include all sets and the
+    // finalJson-order logic can sort them correctly.
+    const saveToHardwarePdf = useCallback(async (currentSets: HardwareSet[]): Promise<void> => {
+        try {
+            const extractedJson = currentSets.map(set => ({
+                setName: set.name,
+                isManualEntry: set.isManualEntry === true,
+                hardwareItems: set.items.map(item => ({
+                    qty: item.quantity,
+                    item: item.name,
+                    manufacturer: item.manufacturer ?? '',
+                    description: item.description ?? '',
+                    finish: item.finish ?? '',
+                    multipliedQuantity: item.multipliedQuantity,
+                })),
+                notes: set.description ?? '',
+                prep: set.prep,
+            }));
+            await fetch(`/api/projects/${project.id}/hardware-pdf`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extractedJson }),
+            });
+        } catch (err) {
+            console.warn('[saveToHardwarePdf] Failed to persist hardware PDF extraction:', err);
         }
     }, [project.id]);
 
@@ -619,10 +778,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     isInitialMount.current = true;
                     saveToFinalJson(loadedSets, freshDoors).catch(() => {});
                 } else {
-                    saveToFinalJson(loadedSets, doors).catch(() => {});
+                    // No door schedule yet — save with empty door list (no stale state)
+                    saveToFinalJson(loadedSets, []).catch(() => {});
                 }
             } else if (loadedSets.length > 0) {
-                saveToFinalJson(loadedSets, doors).catch(() => {});
+                // No merge ran — fetch fresh doors from sheet to avoid stale state
+                const dsFallback = await fetch(`/api/projects/${project.id}/door-schedule`, { credentials: 'include' });
+                const dsFallbackJson = dsFallback.ok ? await dsFallback.json() : null;
+                const fallbackDoors = dsFallbackJson?.data?.scheduleJson
+                    ? transformDoors(dsFallbackJson.data.scheduleJson, loadedSets)
+                    : [];
+                if (fallbackDoors.length > 0) { setDoors(fallbackDoors); isInitialMount.current = true; }
+                saveToFinalJson(loadedSets, fallbackDoors).catch(() => {});
             }
 
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
@@ -723,7 +890,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 isInitialMount.current = true;
                 saveToFinalJson(freshSets, freshDoors).catch(() => {});
             } else if (loadedDoors.length > 0) {
-                saveToFinalJson(hardwareSets, loadedDoors).catch(() => {});
+                // Fetch fresh PDF sets to avoid using stale state (which may contain old variants)
+                const hwFallback = await fetch(`/api/projects/${project.id}/hardware-pdf`, { credentials: 'include' });
+                const hwFallbackJson = hwFallback.ok ? await hwFallback.json() : null;
+                const fallbackSets = hwFallbackJson?.data?.extractedJson
+                    ? transformHardwareSets(hwFallbackJson.data.extractedJson)
+                    : hardwareSets;
+                saveToFinalJson(fallbackSets, loadedDoors).catch(() => {});
             }
 
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
@@ -1207,7 +1380,14 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 doorMaterial: '',
                 sections: md.sections as unknown as Door['sections'],
             };
-            setDoors(prev => [...prev, restoredDoor]);
+            setDoors(prev => {
+                const insertAt = item.originalIndex !== undefined
+                    ? Math.min(item.originalIndex, prev.length)
+                    : prev.length;
+                const updated = [...prev];
+                updated.splice(insertAt, 0, restoredDoor);
+                return updated;
+            });
         }
 
         setTrashItems(prev => prev.filter(t => t.id !== trashId));
@@ -1227,12 +1407,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             ...newSetData,
             id: `hs-variant-${Date.now()}`,
         };
+        let updatedSets: HardwareSet[] = [];
         setHardwareSets(prevSets => {
             const idx = prevSets.findIndex(s => s.id === sourceSetId);
-            if (idx === -1) return [...prevSets, newSet];
-            const updated = [...prevSets];
-            updated.splice(idx + 1, 0, newSet);
-            return updated;
+            if (idx === -1) {
+                updatedSets = [...prevSets, newSet];
+            } else {
+                updatedSets = [...prevSets];
+                updatedSets.splice(idx + 1, 0, newSet);
+            }
+            return updatedSets;
         });
         setDoors(prevDoors => {
             return prevDoors.map(door => {
@@ -1242,6 +1426,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 return door;
             });
         });
+        // Persist the new set to the hardware-pdf extraction table so it survives
+        // a full reload without relying solely on finalJson.
+        // updatedSets is captured synchronously from the setState callback above.
+        saveToHardwarePdf(updatedSets).catch(() => {});
     };
 
     const handleDoorsUpdate = useCallback((updater: React.SetStateAction<Door[]>) => {
@@ -1259,6 +1447,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             type: 'door' as const,
             setName: d.doorTag,
             deletedAt: new Date().toISOString(),
+            originalIndex: doors.findIndex(door => door.id === d.id),
             doorData: {
                 doorTag: d.doorTag,
                 hwSet: d.providedHardwareSet ?? '',
@@ -1341,6 +1530,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const hardwareSetsPanel = (
         <div className="h-full min-h-0 p-5 flex flex-col">
             <HardwareSetsManager
+                projectId={project.id}
                 hardwareSets={hardwareSets}
                 doors={doors}
                 isLoading={isDataLoading || isPollingForResult}
@@ -1376,7 +1566,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 canReupload={individualUploadsEnabled}
                 onDeleteDoors={handleDeleteDoors}
                 onAssignAll={handleAssignAll}
-                onDoorSaved={reloadDoorSchedule}
+                onDoorSaved={performSave}
             />
         </div>
     );
@@ -1396,7 +1586,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
 
                         <div className="w-px h-4 bg-[var(--border)] mx-1" />
 
-                        <Button variant="ghost" size="sm" onClick={() => router.push(`/project/${project.id}/reports`)} className="gap-1.5 text-[var(--text-muted)]">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                const href = `/project/${project.id}/reports`;
+                                startNavigation(href);
+                                router.push(href);
+                            }}
+                            className="gap-1.5 text-[var(--text-muted)]"
+                        >
                             <BarChart2 className="h-4 w-4" />
                             <span className="hidden md:inline">Reports</span>
                         </Button>
@@ -1704,6 +1903,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                         size="sm"
                                         onClick={handleCombinedProcessClick}
                                         disabled={!combinedExcelFile || !combinedPdfFile || isCombinedProcessing || isCombinedOverwriteChecking}
+                                        loading={isCombinedProcessing || isCombinedOverwriteChecking}
+                                        loadingText={isCombinedProcessing ? 'Processing...' : 'Checking...'}
                                         className="gap-1.5"
                                     >
                                         {isCombinedProcessing ? (

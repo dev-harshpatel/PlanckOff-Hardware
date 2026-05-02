@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PriceBookEntry } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PriceBookManagerProps {
     priceBook: PriceBookEntry[];
@@ -156,16 +157,15 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                             className="w-full pl-10 pr-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
                         />
                     </div>
-                    <select
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value as any)}
-                        className="px-4 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
-                    >
-                        <option value="all">All Categories</option>
-                        <option value="door">Doors</option>
-                        <option value="frame">Frames</option>
-                        <option value="hardware">Hardware</option>
-                    </select>
+                    <Select value={categoryFilter} onValueChange={v => setCategoryFilter(v as any)}>
+                        <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            <SelectItem value="door">Doors</SelectItem>
+                            <SelectItem value="frame">Frames</SelectItem>
+                            <SelectItem value="hardware">Hardware</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -324,16 +324,14 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                     {/* Category */}
                     <div>
                         <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Category *</label>
-                        <select
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
-                            required
-                        >
-                            <option value="door">Door</option>
-                            <option value="frame">Frame</option>
-                            <option value="hardware">Hardware</option>
-                        </select>
+                        <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v as any })}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="door">Door</SelectItem>
+                                <SelectItem value="frame">Frame</SelectItem>
+                                <SelectItem value="hardware">Hardware</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Item Type */}
@@ -398,16 +396,14 @@ const PriceEntryModal: React.FC<PriceEntryModalProps> = ({ entry, onSave, onClos
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Unit of Measure *</label>
-                            <select
-                                value={formData.unitOfMeasure}
-                                onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value as any })}
-                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-transparent"
-                                required
-                            >
-                                <option value="each">Each</option>
-                                <option value="set">Set</option>
-                                <option value="pair">Pair</option>
-                            </select>
+                            <Select value={formData.unitOfMeasure} onValueChange={v => setFormData({ ...formData, unitOfMeasure: v as any })}>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="each">Each</SelectItem>
+                                    <SelectItem value="set">Set</SelectItem>
+                                    <SelectItem value="pair">Pair</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

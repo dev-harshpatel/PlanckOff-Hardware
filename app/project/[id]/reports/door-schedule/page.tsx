@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { FileSpreadsheet } from 'lucide-react';
 import type { Door, HardwareSet, ElevationType } from '@/types';
 import { transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
+import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 function totalDoorQuantity(doors: Door[]): number {
   return doors.reduce((sum, d) => {
@@ -65,35 +66,28 @@ export default function DoorScheduleReportPage() {
     load();
   }, [id]);
 
+  if (loading) {
+    return <ReportPageSkeleton badgeWidth="w-24" rows={8} />;
+  }
+
   return (
     <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] overflow-hidden">
       <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-5 py-3 flex items-center gap-3">
         <FileSpreadsheet className="h-4 w-4 text-[var(--primary-text-muted)]" />
-        <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule Report</h2>
-        {!loading && (
-          <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text)]">
-            {totalDoorQuantity(doors)} doors
-          </span>
-        )}
+        <h2 className="text-sm font-semibold text-[var(--text)]">Door-Frame Reports</h2>
+        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text)]">
+          {totalDoorQuantity(doors)} doors
+        </span>
       </div>
 
-      {loading ? (
-        <div className="p-10 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-5 h-5 border-2 border-[var(--primary-action)] border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-[var(--text-faint)]">Loading door schedule…</p>
-          </div>
-        </div>
-      ) : (
-        <div className="p-5">
-          <DoorScheduleConfig
-            doors={doors}
-            hardwareSets={hardwareSets}
-            elevationTypes={elevationTypes}
-            projectName={projectName}
-          />
-        </div>
-      )}
+      <div className="p-5">
+        <DoorScheduleConfig
+          doors={doors}
+          hardwareSets={hardwareSets}
+          elevationTypes={elevationTypes}
+          projectName={projectName}
+        />
+      </div>
     </div>
   );
 }

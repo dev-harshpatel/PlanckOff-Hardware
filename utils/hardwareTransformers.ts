@@ -19,8 +19,8 @@ import { matchHardwareSet } from './hardwareMatcher';
 // ---------------------------------------------------------------------------
 
 function parseFeetInches(val: string): number | null {
-  // Strip paired prefix like "2*"
-  const clean = val.replace(/^\d+\s*\*\s*/, '').trim();
+  // Strip paired-leaf prefixes: "2*3'-0\"" or "(2)3'-0\""
+  const clean = val.replace(/^\(\d+\)\s*/, '').replace(/^\d+\s*\*\s*/, '').trim();
   const match = clean.match(/^(\d+)['′]-(\d+(?:\.\d+)?)["″]?/);
   if (match) return parseInt(match[1], 10) * 12 + parseFloat(match[2]);
   return null;
@@ -118,6 +118,8 @@ export function transformHardwareSets(sets: ExtractedHardwareSet[]): HardwareSet
       description: set.notes ?? '',
       division: 'Division 08',
       items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
+      isManualEntry: set.isManualEntry === true,
+      prep: set.prep,
     };
   });
 }
@@ -169,6 +171,9 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
       operation:        bi?.['DOOR OPERATION']      ?? d?.['DOOR OPERATION']     ?? row.doorOperation,
       leafCount: parseLeafCountValue(rawLeafCount),
       leafCountDisplay: getLeafCountDisplayValue(rawLeafCount),
+      widthDisplay:     rawWidth?.trim()     || undefined,
+      heightDisplay:    rawHeight?.trim()    || undefined,
+      thicknessDisplay: rawThickness?.trim() || undefined,
       excludeReason:    bi?.['EXCLUDE REASON']      ?? d?.['EXCLUDE REASON']     ?? row.excludeReason,
 
       // Door-section fields (material / finish / spec — remain in door section)
@@ -234,6 +239,8 @@ export function transformFromFinalJson(
       description: set.notes ?? '',
       division: 'Division 08',
       items: set.hardwareItems.map((item, idx) => toHardwareItem(item, set.setName, idx)),
+      isManualEntry: set.isManualEntry === true,
+      prep: set.prep,
     };
   });
 
@@ -278,6 +285,7 @@ export function transformFromFinalJson(
         id: `door-final-${doorCounter++}-${door.doorTag}`,
         doorTag: String(door.doorTag),
         status: assignedSet ? 'complete' : 'pending',
+        isManualEntry: door.isManualEntry === true,
 
         width: parseDimension(rawWidth),
         height: parseDimension(rawHeight),
@@ -292,6 +300,9 @@ export function transformFromFinalJson(
         type: leafCountNum !== undefined ? (leafCountNum > 1 ? 'Pair' : 'Single') : undefined,
         leafCount: leafCountNum,
         leafCountDisplay: getLeafCountDisplayValue(leafCountRaw),
+        widthDisplay:     rawWidth?.trim()     || undefined,
+        heightDisplay:    rawHeight?.trim()    || undefined,
+        thicknessDisplay: rawThickness?.trim() || undefined,
 
         buildingTag: bi?.['BUILDING TAG'] ?? ds?.['BUILDING TAG'],
         buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'],

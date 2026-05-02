@@ -1,10 +1,11 @@
 import React from 'react';
 import { HingeSpec } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface HingeSpecEditorProps {
     value?: HingeSpec;
     onChange: (value: HingeSpec | undefined) => void;
-    doorHeight?: number; // For auto-suggestion
+    doorHeight?: number;
 }
 
 const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, doorHeight }) => {
@@ -21,9 +22,9 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
 
     const getSuggestedHingeCount = (): number => {
         if (!doorHeight) return 3;
-        if (doorHeight >= 120) return 5; // 10 feet or taller
-        if (doorHeight >= 90) return 4;  // 7.5 feet or taller
-        return 3; // Standard
+        if (doorHeight >= 120) return 5;
+        if (doorHeight >= 90) return 4;
+        return 3;
     };
 
     const handleClearSpec = () => {
@@ -73,12 +74,12 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
 
             {/* Auto-suggestion notice */}
             {doorHeight && !value && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                     <div className="flex items-start gap-2">
                         <span className="text-blue-600 text-lg">💡</span>
                         <div>
-                            <div className="text-sm font-semibold text-blue-800">Auto-Suggestion</div>
-                            <div className="text-xs text-blue-700">
+                            <div className="text-sm font-semibold text-blue-800 dark:text-blue-300">Auto-Suggestion</div>
+                            <div className="text-xs text-blue-700 dark:text-blue-400">
                                 Based on door height ({doorHeight}"), we recommend {getSuggestedHingeCount()} hinges
                             </div>
                         </div>
@@ -110,16 +111,15 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Hinge Size <span className="text-red-500">*</span>
                     </label>
-                    <select
-                        value={value?.size || '4.5" x 4.5"'}
-                        onChange={(e) => updateField('size', e.target.value as HingeSpec['size'])}
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
-                    >
-                        <option value='4.5" x 4.5"'>4.5" x 4.5" (Standard)</option>
-                        <option value='5" x 5"'>5" x 5" (Heavy Duty)</option>
-                        <option value='4" x 4"'>4" x 4" (Light Duty)</option>
-                        <option value="Custom">Custom Size</option>
-                    </select>
+                    <Select value={value?.size || '4.5" x 4.5"'} onValueChange={v => updateField('size', v as HingeSpec['size'])}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value='4.5" x 4.5"'>4.5" x 4.5" (Standard)</SelectItem>
+                            <SelectItem value='5" x 5"'>5" x 5" (Heavy Duty)</SelectItem>
+                            <SelectItem value='4" x 4"'>4" x 4" (Light Duty)</SelectItem>
+                            <SelectItem value="Custom">Custom Size</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -129,33 +129,31 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Hinge Type <span className="text-red-500">*</span>
                     </label>
-                    <select
-                        value={value?.type || 'Full Mortise'}
-                        onChange={(e) => updateField('type', e.target.value as HingeSpec['type'])}
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
-                    >
-                        <option value="Full Mortise">Full Mortise (Most Common)</option>
-                        <option value="Half Mortise">Half Mortise</option>
-                        <option value="Half Surface">Half Surface</option>
-                        <option value="Full Surface">Full Surface</option>
-                        <option value="Continuous">Continuous / Piano Hinge</option>
-                    </select>
+                    <Select value={value?.type || 'Full Mortise'} onValueChange={v => updateField('type', v as HingeSpec['type'])}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Full Mortise">Full Mortise (Most Common)</SelectItem>
+                            <SelectItem value="Half Mortise">Half Mortise</SelectItem>
+                            <SelectItem value="Half Surface">Half Surface</SelectItem>
+                            <SelectItem value="Full Surface">Full Surface</SelectItem>
+                            <SelectItem value="Continuous">Continuous / Piano Hinge</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Material <span className="text-red-500">*</span>
                     </label>
-                    <select
-                        value={value?.material || 'Steel'}
-                        onChange={(e) => updateField('material', e.target.value as HingeSpec['material'])}
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
-                    >
-                        <option value="Steel">Steel (Standard)</option>
-                        <option value="Stainless Steel">Stainless Steel (Exterior/Moisture)</option>
-                        <option value="Brass">Brass</option>
-                        <option value="Bronze">Bronze</option>
-                    </select>
+                    <Select value={value?.material || 'Steel'} onValueChange={v => updateField('material', v as HingeSpec['material'])}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Steel">Steel (Standard)</SelectItem>
+                            <SelectItem value="Stainless Steel">Stainless Steel (Exterior/Moisture)</SelectItem>
+                            <SelectItem value="Brass">Brass</SelectItem>
+                            <SelectItem value="Bronze">Bronze</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -169,7 +167,7 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
                     placeholder="e.g., US26D (Satin Chrome), US32D (Satin Stainless)"
                     className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1">
                     Use ANSI/BHMA finish codes (e.g., US26D, US32D) or color names
                 </p>
             </div>
@@ -224,11 +222,11 @@ const HingeSpecEditor: React.FC<HingeSpecEditorProps> = ({ value, onChange, door
             </div>
 
             {/* Live Summary Preview */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <div className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
                     Hinge Summary
                 </div>
-                <div className="text-sm text-green-900 font-medium">
+                <div className="text-sm text-green-900 dark:text-green-300 font-medium">
                     {getSummary()}
                 </div>
             </div>

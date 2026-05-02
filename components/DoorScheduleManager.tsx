@@ -11,7 +11,7 @@ import Tooltip from './Tooltip';
 import {
     Table2, Search, Upload, AlertTriangle, Plus, Trash2,
     SlidersHorizontal, X, Loader2, Zap, Layers, ClipboardList,
-    ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, GripVertical, Filter,
+    ChevronUp, ChevronDown, ChevronsUpDown, CheckCircle2, GripVertical, Filter, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -90,6 +90,20 @@ const ALL_AVAILABLE_COLUMNS: ColumnDef[] = [
     { key: 'providedHardwareSet',   label: 'Hardware Set',            width: 'min-w-[110px]', type: 'text',   isCore: true },
     { key: 'hardwareIncludeExclude',label: 'Hardware Include/Exclude',width: 'min-w-[160px]', type: 'text' },
 ];
+
+// Column keys grouped by section — used to apply per-cell disabled styling when a section is excluded.
+const DOOR_SECTION_KEYS = new Set([
+    'doorMaterial', 'elevationTypeId', 'doorCore', 'doorFace', 'doorEdge',
+    'doorGauge', 'doorFinish', 'stcRating', 'undercut', 'doorIncludeExclude',
+]);
+const FRAME_SECTION_KEYS = new Set([
+    'frameMaterial', 'wallType', 'throatThickness', 'frameAnchor', 'baseAnchor',
+    'numberOfAnchors', 'frameProfile', 'frameElevationType', 'frameAssembly',
+    'frameGauge', 'frameFinish', 'prehung', 'frameHead', 'casing', 'frameIncludeExclude',
+]);
+const HARDWARE_SECTION_KEYS = new Set([
+    'providedHardwareSet', 'hardwareIncludeExclude',
+]);
 
 interface CustomColumn {
     id: string;
@@ -466,7 +480,8 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             frameMaterial: '',
             hardwarePrep: '',
             type: '',
-            status: 'pending'
+            status: 'pending',
+            isManualEntry: true,
         };
         onDoorsUpdate(prev => [...prev, newDoor]);
         // Open enhanced edit modal for new door
@@ -662,20 +677,34 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         if (isEditing) {
             if (type === 'select' && options) {
                 return (
-                    <select
-                        ref={inputRef as any}
-                        value={tempValue}
-                        onChange={(e) => setTempValue(e.target.value)}
-                        onBlur={saveEdit}
-                        onKeyDown={handleKeyDown}
-                        className="w-full p-1 text-sm border-2 border-[var(--primary-ring)] rounded focus:outline-none shadow-sm bg-[var(--bg)]"
-                        autoFocus
+                    <Select
+                        value={String(tempValue) || '__none__'}
+                        onValueChange={(v) => {
+                            const newVal = v === '__none__' ? '' : v;
+                            setTempValue(newVal);
+                            if (!editingCell) return;
+                            onDoorsUpdate(prev => prev.map(d => {
+                                if (d.id !== editingCell.id) return d;
+                                const isCustom = editingCell.field.toString().startsWith('custom_');
+                                if (isCustom || !Object.keys(d).includes(editingCell.field as string)) {
+                                    return { ...d, customFields: { ...(d.customFields || {}), [editingCell.field]: newVal } };
+                                }
+                                return { ...d, [editingCell.field]: newVal };
+                            }));
+                            setEditingCell(null);
+                            setTempValue('');
+                        }}
                     >
-                        <option value="">Select...</option>
-                        {options.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                    </select>
+                        <SelectTrigger className="h-8 w-full text-sm border-2 border-[var(--primary-ring)]">
+                            <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none__">Select...</SelectItem>
+                            {options.map(opt => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 );
             }
             return (
@@ -694,13 +723,10 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
         const isEditable = typeof value !== 'object';
 
-        // For thickness: prefer the raw string from sections (preserves Excel value like "1 3/4\"")
-        // over the parsed numeric door.thickness (which would show "1.75").
-        if (colKey === 'thickness') {
-            const rawSec = (door.sections as unknown as { door?: Record<string, string | undefined> } | undefined)?.door;
-            const rawThick = rawSec?.['THICKNESS'] ?? rawSec?.['DOOR THICKNESS'];
-            if (rawThick) value = rawThick;
-        }
+        // Prefer raw Excel display strings over parsed numeric values for all dimension columns.
+        if (colKey === 'thickness' && door.thicknessDisplay) value = door.thicknessDisplay;
+        if (colKey === 'width'     && door.widthDisplay)     value = door.widthDisplay;
+        if (colKey === 'height'    && door.heightDisplay)    value = door.heightDisplay;
 
         if (colKey === 'leafCount') {
             const rawSec = (door.sections as unknown as { door?: Record<string, string | undefined> } | undefined)?.door;
@@ -711,17 +737,14 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         if (value !== undefined && value !== null && value !== '') {
             if (typeof value === 'object') {
                 displayContent = (value as HardwareSet).name || '[Object]';
-            } else if (colKey === 'width' || colKey === 'height') {
-                displayContent = formatDimension(value as number);
+            } else if ((colKey === 'width' || colKey === 'height') && typeof value === 'number') {
+                // Only format as feet-inches when we have the parsed number (no raw display string)
+                displayContent = formatDimension(value);
             } else {
                 displayContent = value;
             }
         } else {
-            if (colKey === 'width' || colKey === 'height') {
-                displayContent = <span className="text-[var(--text-faint)] text-xs">0'-0"</span>;
-            } else {
-                displayContent = <span className="text-[var(--text-faint)] text-xs">—</span>;
-            }
+            displayContent = <span className="text-[var(--text-faint)] text-xs">—</span>;
         }
 
         return (
@@ -1002,38 +1025,41 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             </Tooltip>
                         )}
                         <Tooltip content={!canReupload ? 'Use "Process Files" to upload your first Excel and PDF together' : 'Upload a new door schedule file (Excel/PDF)'}>
-                            <button
+                            <Button
                                 onClick={canReupload ? onUploadClick : undefined}
                                 disabled={isLoading || isAssigningBatch || !canReupload}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                loading={isLoading}
+                                loadingText="Processing..."
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-xs font-medium"
                             >
-                                {isLoading
-                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    : <Upload className="w-3.5 h-3.5" />
-                                }
+                                <Upload className="w-3.5 h-3.5" />
                                 {isLoading ? 'Processing…' : 'Upload'}
-                            </button>
+                            </Button>
                         </Tooltip>
-                        <button
+                        <Button
                             onClick={handleAddDoor}
                             disabled={isLoading}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors disabled:opacity-50"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-xs font-medium"
                         >
                             <Plus className="w-3.5 h-3.5" />
                             Add Door
-                        </button>
+                        </Button>
                         <Tooltip content="Automatically assign hardware sets to all pending doors">
-                            <button
+                            <Button
                                 onClick={handleAssignAll}
                                 disabled={isLoading || isAssigningBatch || filteredAndSortedDoors.length === 0}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                loading={isAssigningBatch}
+                                loadingText="Processing..."
+                                size="sm"
+                                className="gap-1.5 text-xs font-semibold"
                             >
-                                {isAssigningBatch
-                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    : <Zap className="w-3.5 h-3.5" />
-                                }
+                                <Zap className="w-3.5 h-3.5" />
                                 {isAssigningBatch ? 'Processing…' : 'Assign All'}
-                            </button>
+                            </Button>
                         </Tooltip>
                     </div>
                 </div>
@@ -1268,16 +1294,26 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             const providedLower = door.providedHardwareSet?.trim().toLowerCase() || '';
                             const isMissingSet = !providedLower;
                             const isInvalidRef = providedLower && !validSetNames.has(providedLower);
-                            const isValidationFailure = isMissingSet || isInvalidRef;
+                            const isManualEntry = door.isManualEntry === true;
+                            const isValidationFailure = !isManualEntry && (isMissingSet || isInvalidRef);
+
+                            // Per-section exclude flags — each only dims that section's cells.
+                            const isDoorSecExcluded  = door.doorIncludeExclude?.toUpperCase()     === 'EXCLUDE';
+                            const isFrameSecExcluded = door.frameIncludeExclude?.toUpperCase()    === 'EXCLUDE';
+                            const isHwSecExcluded    = door.hardwareIncludeExclude?.toUpperCase() === 'EXCLUDE';
+
+                            const cellExcludedCls = 'opacity-40 bg-[var(--bg-subtle)]';
 
                             return (
                                 <tr
                                     key={door.id}
                                     className={`transition-colors group cursor-pointer ${isValidationFailure
                                         ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-l-2 border-red-400 dark:border-red-800'
-                                        : selectedRows.has(door.id)
-                                            ? 'bg-[var(--primary-bg)] border-l-2 border-[var(--primary-ring)]'
-                                            : 'hover:bg-[var(--bg-subtle)] border-l-2 border-transparent'
+                                        : isManualEntry
+                                            ? 'bg-amber-50/80 dark:bg-amber-900/10 hover:bg-amber-100 dark:hover:bg-amber-900/20 border-l-2 border-amber-300 dark:border-amber-700'
+                                            : selectedRows.has(door.id)
+                                                ? 'bg-[var(--primary-bg)] border-l-2 border-[var(--primary-ring)]'
+                                                : 'hover:bg-[var(--bg-subtle)] border-l-2 border-transparent'
                                         }`}
                                     onClick={() => setEditModalDoor(door)}
                                     title="Click to edit door"
@@ -1305,7 +1341,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                             const displayValue = matchedType?.code ?? matchedType?.name ?? rawValue;
 
                                             return (
-                                                <td key={col.key} className="px-2 py-2">
+                                                <td key={col.key} className={`px-2 py-2 ${isDoorSecExcluded ? cellExcludedCls : ''}`}>
                                                     <div className="p-1 rounded min-h-[24px] flex items-center truncate text-[var(--text-secondary)]">
                                                         {displayValue || <span className="text-[var(--text-faint)] text-xs">—</span>}
                                                     </div>
@@ -1314,18 +1350,25 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                         }
 
                                         if (col.key === 'providedHardwareSet') {
+                                            const isExcludedCell = isHwSecExcluded;
                                             return (
-                                                <td key={col.key} className={`px-2 py-2 font-medium border-l border-[var(--border-subtle)] ${isInvalidRef ? 'text-red-700 font-bold' : 'text-[var(--text-secondary)]'}`}>
+                                                <td key={col.key} className={`px-2 py-2 font-medium border-l border-[var(--border-subtle)] ${isExcludedCell ? cellExcludedCls : isInvalidRef ? 'text-red-700 font-bold' : 'text-[var(--text-secondary)]'}`}>
                                                     {renderCell(door, 'providedHardwareSet')}
                                                 </td>
                                             );
                                         }
 
+                                        // Determine if this column belongs to an excluded section.
+                                        const isCellExcluded =
+                                            (isDoorSecExcluded  && DOOR_SECTION_KEYS.has(col.key))  ||
+                                            (isFrameSecExcluded && FRAME_SECTION_KEYS.has(col.key)) ||
+                                            (isHwSecExcluded    && HARDWARE_SECTION_KEYS.has(col.key));
+
                                         const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
                                         const weightClass = col.key === 'doorTag' ? 'font-semibold text-[var(--text)]' : '';
 
                                         return (
-                                            <td key={col.key} className={`px-2 py-2 ${alignClass} ${weightClass}`}>
+                                            <td key={col.key} className={`px-2 py-2 ${alignClass} ${weightClass} ${isCellExcluded ? cellExcludedCls : ''}`}>
                                                 {renderCell(door, col.key, col.type, col.options)}
                                             </td>
                                         );
@@ -1340,9 +1383,19 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                         );
                                     })}
 
-                                    {/* Assigned Set column */}
-                                    <td className={`px-2 py-2 border-l border-[var(--border-subtle)] ${door.status === 'error' ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-[var(--primary-bg)]/20'}`}>
-                                        {isInvalidRef ? (
+                                    {/* Assigned Set column — dimmed when hardware section is excluded */}
+                                    <td className={`px-2 py-2 border-l border-[var(--border-subtle)] ${isHwSecExcluded ? cellExcludedCls : door.status === 'error' ? 'bg-red-50/50 dark:bg-red-900/10' : isManualEntry ? 'bg-amber-50/70 dark:bg-amber-900/10' : 'bg-[var(--primary-bg)]/20'}`}>
+                                        {isHwSecExcluded ? (
+                                            <Badge variant="secondary" className="text-[10px] gap-1">
+                                                <Ban className="w-2.5 h-2.5" />
+                                                HW Excluded
+                                            </Badge>
+                                        ) : isManualEntry ? (
+                                            <Badge variant="secondary" className="text-[10px] gap-1 border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700">
+                                                <Plus className="w-2.5 h-2.5" />
+                                                Manual
+                                            </Badge>
+                                        ) : isInvalidRef ? (
                                             <Badge variant="destructive" className="text-[10px] gap-1">
                                                 <AlertTriangle className="w-2.5 h-2.5" />
                                                 Unknown Set
@@ -1378,22 +1431,21 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
-                                            <button
+                                            <Button
                                                 onClick={(e) => { e.stopPropagation(); handleAssignHardware(door.id); }}
                                                 disabled={door.status === 'loading' || isLoading || isAssigningBatch || isValidationFailure}
+                                                loading={door.status === 'loading'}
                                                 title={isValidationFailure ? "Fix Provided Set first" : "Run AI to assign hardware set"}
-                                                className={`flex items-center px-2 py-1 text-[10px] font-semibold text-white rounded transition-all ${door.status === 'loading' ? 'bg-[var(--primary-action)]/60 cursor-not-allowed' :
+                                                size="sm"
+                                                className={`h-auto px-2 py-1 text-[10px] font-semibold text-white rounded transition-all ${door.status === 'loading' ? 'bg-[var(--primary-action)]/60 cursor-not-allowed' :
                                                     isValidationFailure ? 'bg-[var(--bg-emphasis)] cursor-not-allowed text-[var(--text-muted)]' :
                                                         door.status === 'complete' ? 'bg-green-500 hover:bg-green-600' :
                                                             door.status === 'error' ? 'bg-red-500 hover:bg-red-600' :
                                                                 'bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)]'
                                                     } disabled:opacity-50`}
                                             >
-                                                {door.status === 'loading'
-                                                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                                                    : door.status === 'complete' ? 'Retry' : 'Assign'
-                                                }
-                                            </button>
+                                                {door.status === 'complete' ? 'Retry' : 'Assign'}
+                                            </Button>
                                         </div>
                                     </td>
                                 </tr>

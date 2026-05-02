@@ -150,7 +150,7 @@ export const exportDoorScheduleToCSV = (
   // Add header if requested
   if (config.includeHeader) {
     csv += `${projectName}\n`;
-    csv += `Door Schedule Report\n`;
+    csv += `Door-Frame Reports\n`;
     csv += `Generated: ${new Date().toLocaleDateString()}\n`;
     csv += `\n`;
   }

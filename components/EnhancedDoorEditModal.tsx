@@ -7,7 +7,8 @@ import HingeSpecEditor from './HingeSpecEditor';
 import { ElevationTab } from './ElevationTab';
 import { validateDoor, ValidationResult } from '../utils/doorValidation';
 import { generateHardwarePrepString } from '../utils/hardwareDataMigration';
-import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, PackageOpen, ClipboardList } from 'lucide-react';
+import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, PackageOpen, ClipboardList, Ban } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface EnhancedDoorEditModalProps {
     door: Door;
@@ -68,40 +69,80 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     </div>
 );
 
-const INCLUDE_EXCLUDE_OPTS = ['', 'INCLUDE', 'EXCLUDE'];
+const INCLUDE_EXCLUDE_OPTS = ['', 'INCLUDE', 'EXCLUDE'] as const;
+
+/** Shadcn-based Include / Exclude picker. */
+const IncludeExcludeSelect: React.FC<{
+    value: string;
+    onChange: (val: string) => void;
+    disabled?: boolean;
+}> = ({ value, onChange, disabled }) => (
+    <Select value={value || '__none__'} onValueChange={v => onChange(v === '__none__' ? '' : v)} disabled={disabled}>
+        <SelectTrigger className="h-9 text-sm border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:ring-[var(--primary-ring)]">
+            <SelectValue placeholder="—" />
+        </SelectTrigger>
+        <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            <SelectItem value="INCLUDE">INCLUDE</SelectItem>
+            <SelectItem value="EXCLUDE">EXCLUDE</SelectItem>
+        </SelectContent>
+    </Select>
+);
+
+/** Banner shown at the top of a tab when its section is marked EXCLUDE. */
+const ExcludedBanner: React.FC<{ label: string }> = ({ label }) => (
+    <div className="flex items-center gap-2 px-3 py-2.5 mb-4 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs font-medium">
+        <Ban className="w-3.5 h-3.5 flex-shrink-0" />
+        This {label} section is marked <span className="font-bold ml-1">EXCLUDE</span>. Fields are locked — change the dropdown below to re-enable editing.
+    </div>
+);
 
 const SectionFields: React.FC<{
     data: RawSection;
     groups: typeof DOOR_GROUPS;
     onChange: (key: string, value: string) => void;
     dropdownFields?: Record<string, string[]>;
-}> = ({ data, groups, onChange, dropdownFields }) => {
+    /** Key of the Include/Exclude field — rendered as Shadcn Select and always stays enabled. */
+    includeExcludeKey?: string;
+    /** When true, all fields except includeExcludeKey are read-only. */
+    isExcluded?: boolean;
+    excludedLabel?: string;
+}> = ({ data, groups, onChange, dropdownFields, includeExcludeKey, isExcluded, excludedLabel = 'door' }) => {
     const allGroupedKeys = new Set(groups.flatMap(g => g.keys));
     const extraKeys = Object.keys(data).filter(k => !allGroupedKeys.has(k));
 
     const renderField = (key: string) => {
+        // Include/Exclude field always uses Shadcn Select and is never disabled.
+        if (key === includeExcludeKey) {
+            return <IncludeExcludeSelect value={data[key] ?? ''} onChange={val => onChange(key, val)} />;
+        }
+
+        const isFieldDisabled = isExcluded === true;
+
         const opts = dropdownFields?.[key];
         if (opts) {
             const currentVal = data[key] ?? '';
-            // If the Excel value isn't in the predefined list (e.g. different casing),
-            // add it as an option so it still displays correctly.
-            const allOpts = currentVal && !opts.includes(currentVal)
-                ? [...opts, currentVal]
-                : opts;
+            const allOpts = currentVal && !opts.includes(currentVal) ? [...opts, currentVal] : opts;
             return (
-                <select
-                    className={selectCls}
-                    value={currentVal}
-                    onChange={e => onChange(key, e.target.value)}
+                <Select
+                    disabled={isFieldDisabled}
+                    value={currentVal || '__none__'}
+                    onValueChange={v => onChange(key, v === '__none__' ? '' : v)}
                 >
-                    {allOpts.map(o => <option key={o} value={o}>{o || '—'}</option>)}
-                </select>
+                    <SelectTrigger className={`w-full h-9 text-sm ${isFieldDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                        <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {allOpts.map(o => <SelectItem key={o || '__none__'} value={o || '__none__'}>{o || '—'}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             );
         }
         return (
             <input
                 type="text"
-                className={inputCls}
+                disabled={isFieldDisabled}
+                className={`${inputCls} ${isFieldDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 value={data[key] ?? ''}
                 onChange={e => onChange(key, e.target.value)}
             />
@@ -110,6 +151,7 @@ const SectionFields: React.FC<{
 
     return (
         <div className="space-y-1 max-w-2xl">
+            {isExcluded && <ExcludedBanner label={excludedLabel} />}
             {groups.map(group => {
                 const presentKeys = group.keys.filter(k => k in data);
                 if (presentKeys.length === 0) return null;
@@ -198,9 +240,9 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
             'HAND OF OPENINGS':  door.handing              || '',
             'DOOR OPERATION':    door.operation            || '',
             'EXCLUDE REASON':    door.excludeReason        || '',
-            'WIDTH':             fmtInches(door.width),
-            'HEIGHT':            fmtInches(door.height),
-            'THICKNESS':         door.thickness != null ? String(door.thickness) : '',
+            'WIDTH':             door.widthDisplay     ?? fmtInches(door.width),
+            'HEIGHT':            door.heightDisplay    ?? fmtInches(door.height),
+            'THICKNESS':         door.thicknessDisplay ?? (door.thickness != null ? String(door.thickness) : ''),
             'FIRE RATING':       door.fireRating           || '',
         };
     });
@@ -276,6 +318,11 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
         const results = validateDoor(editedDoor);
         setValidationResults(results);
     }, [editedDoor]);
+
+    // Derive exclude flags — scoped per section; each section is independent.
+    const doorExcluded  = doorSec['DOOR INCLUDE/EXCLUDE']?.toUpperCase()  === 'EXCLUDE';
+    const frameExcluded = frameSec['FRAME INCLUDE/EXCLUDE']?.toUpperCase() === 'EXCLUDE';
+    const hwExcluded    = (editedDoor.hardwareIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
 
     const matchedSet = useMemo<HardwareSet | null>(() => {
         if (editedDoor.assignedHardwareSet) return editedDoor.assignedHardwareSet;
@@ -354,7 +401,6 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     };
 
     const criticalCount = validationResults.filter(r => r.severity === 'critical').length;
-    const warningCount = validationResults.filter(r => r.severity === 'warning').length;
     const [isIssuesOpen, setIsIssuesOpen] = useState(false);
 
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -415,13 +461,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                             {criticalCount} issue{criticalCount > 1 ? 's' : ''}
                         </button>
                     )}
-                    {criticalCount === 0 && warningCount > 0 && (
-                        <button onClick={() => setIsIssuesOpen(true)} className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-500/20 transition-colors">
-                            <AlertTriangle className="w-3 h-3" />
-                            {warningCount} warning{warningCount > 1 ? 's' : ''}
-                        </button>
-                    )}
-                    {criticalCount === 0 && warningCount === 0 && validationResults.length > 0 && (
+                    {criticalCount === 0 && validationResults.length > 0 && (
                         <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-[10px] font-semibold">
                             <CheckCircle2 className="w-3 h-3" />
                             Valid
@@ -445,7 +485,14 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                     {/* ── DOOR TAB ── */}
                     {activeTab === 'door' && (
                         Object.keys(doorSec).length > 0
-                            ? <SectionFields data={doorSec} groups={DOOR_GROUPS} onChange={updateDoorSec} dropdownFields={{ 'DOOR INCLUDE/EXCLUDE': INCLUDE_EXCLUDE_OPTS }} />
+                            ? <SectionFields
+                                data={doorSec}
+                                groups={DOOR_GROUPS}
+                                onChange={updateDoorSec}
+                                includeExcludeKey="DOOR INCLUDE/EXCLUDE"
+                                isExcluded={doorExcluded}
+                                excludedLabel="door"
+                              />
                             : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
                                 <DoorOpen className="w-8 h-8 opacity-40" />
                                 No door section data available. Upload a sectioned Excel schedule to populate fields.
@@ -455,7 +502,14 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                     {/* ── FRAME TAB ── */}
                     {activeTab === 'frame' && (
                         Object.keys(frameSec).length > 0
-                            ? <SectionFields data={frameSec} groups={FRAME_GROUPS} onChange={updateFrameSec} dropdownFields={{ 'FRAME INCLUDE/EXCLUDE': INCLUDE_EXCLUDE_OPTS }} />
+                            ? <SectionFields
+                                data={frameSec}
+                                groups={FRAME_GROUPS}
+                                onChange={updateFrameSec}
+                                includeExcludeKey="FRAME INCLUDE/EXCLUDE"
+                                isExcluded={frameExcluded}
+                                excludedLabel="frame"
+                              />
                             : <div className="flex flex-col items-center gap-2 py-12 text-[var(--text-faint)] text-xs">
                                 <Frame className="w-8 h-8 opacity-40" />
                                 No frame section data available. Upload a sectioned Excel schedule to populate fields.
@@ -466,47 +520,50 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                     {activeTab === 'hardware' && (
                         <div className="space-y-1 max-w-2xl">
 
-                            {/* Assignment controls */}
+                            {hwExcluded && <ExcludedBanner label="hardware" />}
+
+                            {/* Include / Exclude — always enabled */}
+                            <div className="pb-2">
+                                <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wide mb-1">Hardware Include / Exclude</label>
+                                <IncludeExcludeSelect
+                                    value={editedDoor.hardwareIncludeExclude ?? ''}
+                                    onChange={v => updateField('hardwareIncludeExclude', v || undefined)}
+                                />
+                            </div>
+
+                            {/* Assignment controls — disabled when excluded */}
                             <SectionHeader>Assignment</SectionHeader>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className={`grid grid-cols-2 gap-3 ${hwExcluded ? 'opacity-40 pointer-events-none' : ''}`}>
                                 <div>
                                     <Label>Provided Hardware Set</Label>
                                     <input type="text" className={inputCls}
+                                        disabled={hwExcluded}
                                         value={editedDoor.providedHardwareSet || ''}
                                         placeholder="e.g. Set 3.0, Set A…"
                                         onChange={e => updateField('providedHardwareSet', e.target.value || undefined)} />
                                 </div>
                                 <div>
                                     <Label>Assigned Hardware Set</Label>
-                                    <select className={selectCls}
-                                        value={editedDoor.assignedHardwareSet?.id || ''}
-                                        onChange={e => {
-                                            const set = hardwareSets.find(s => s.id === e.target.value);
+                                    <Select
+                                        disabled={hwExcluded}
+                                        value={editedDoor.assignedHardwareSet?.id || '__none__'}
+                                        onValueChange={v => {
+                                            const set = hardwareSets.find(s => s.id === v);
                                             updateField('assignedHardwareSet', set);
                                         }}>
-                                        <option value="">None</option>
-                                        {hardwareSets.map(set => (
-                                            <option key={set.id} value={set.id}>{set.name}</option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">None</SelectItem>
+                                            {hardwareSets.map(set => (
+                                                <SelectItem key={set.id} value={set.id}>{set.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
-                            <div className="pt-2">
-                                <Label>Hardware Include / Exclude</Label>
-                                <select className={selectCls}
-                                    value={editedDoor.hardwareIncludeExclude || ''}
-                                    onChange={e => updateField('hardwareIncludeExclude', e.target.value || undefined)}>
-                                    {(() => {
-                                        const cur = editedDoor.hardwareIncludeExclude || '';
-                                        const opts = cur && !INCLUDE_EXCLUDE_OPTS.includes(cur)
-                                            ? [...INCLUDE_EXCLUDE_OPTS, cur]
-                                            : INCLUDE_EXCLUDE_OPTS;
-                                        return opts.map(o => <option key={o} value={o}>{o || '—'}</option>);
-                                    })()}
-                                </select>
-                            </div>
 
-                            {/* Matched Hardware Set Items Table */}
+                            {/* Matched Hardware Set Items Table — hidden when excluded */}
+                            <div className={hwExcluded ? 'opacity-40 pointer-events-none' : ''}>
                             <SectionHeader>Matched Hardware Set</SectionHeader>
                             {matchedSet ? (
                                 <div className="border border-[var(--primary-border)] rounded-lg overflow-hidden">
@@ -580,7 +637,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                                     </p>
                                 </div>
                             )}
-
+                            </div>{/* end hwExcluded gate */}
 
                         </div>
                     )}

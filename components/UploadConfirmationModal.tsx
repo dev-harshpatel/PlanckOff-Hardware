@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -139,11 +139,11 @@ const UploadConfirmationModal: React.FC<UploadConfirmationModalProps> = ({
             disabled={isConfirmDisabled}
             variant={mode === 'overwrite' ? 'destructive' : 'default'}
             size="sm"
+            loading={isLoading}
+            loadingText={mode === 'overwrite' ? 'Overwriting...' : 'Processing Files...'}
             className="min-w-[120px]"
           >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : mode === 'overwrite' ? (
+            {mode === 'overwrite' ? (
               'Overwrite'
             ) : (
               'Process File(s)'

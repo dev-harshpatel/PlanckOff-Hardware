@@ -17,6 +17,8 @@ export interface ExtractedHardwareSet {
   setName: string;
   hardwareItems: HardwareItem[];
   notes?: string;
+  isManualEntry?: boolean;
+  prep?: string;
 }
 
 export interface DoorScheduleRow {
@@ -127,6 +129,7 @@ export interface MergedDoor {
   doorTag: string;
   hwSet: string;            // original code from schedule (may have suffix like .W)
   matchedSetName: string;   // the PDF setName this was matched to
+  isManualEntry?: boolean;
   buildingArea?: string;
   doorLocation?: string;
   interiorExterior?: string;
@@ -168,6 +171,8 @@ export interface MergedHardwareSet {
   hardwareItems: HardwareItem[];
   notes: string;
   doors: MergedDoor[];
+  isManualEntry?: boolean;
+  prep?: string;
 }
 
 /** A deleted hardware set or standalone door held in trash_json until restored or purged. */
@@ -178,6 +183,7 @@ export interface TrashItem {
   doorData?: MergedDoor;        // present when type = 'door'
   setName: string;      // display label (set name, or door tag for standalone doors)
   deletedAt: string;    // ISO timestamp
+  originalIndex?: number; // position in the doors array at delete time — used to restore in place
 }
 
 export interface ProjectHardwareFinal {

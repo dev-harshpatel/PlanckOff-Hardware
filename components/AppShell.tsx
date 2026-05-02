@@ -5,8 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import Header from '@/components/Header';
+import { RouteTransitionIndicator } from '@/components/RouteTransitionIndicator';
 import { Toaster } from '@/components/ui/sonner';
 import UploadProgressWidget from '@/components/UploadProgressWidget';
 import KeyboardShortcutsHelpModal from '@/components/KeyboardShortcutsHelpModal';
@@ -25,6 +27,7 @@ export function AppShell({ children }: AppShellProps) {
   const { user: currentUser, isAuthenticated, isLoading, logout } = useAuth();
   const { projects } = useProject();
   const { widget, expandModal } = useProcessingWidget();
+  const { startNavigation } = useNavigationLoading();
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function AppShell({ children }: AppShellProps) {
     if (widget.projectPath && pathname === widget.projectPath) {
       expandModal();
     } else if (widget.projectPath) {
+      startNavigation(widget.projectPath);
       router.push(widget.projectPath);
     }
   };
@@ -75,8 +79,9 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   const handleNavigate = (page: string) => {
-    if (page === 'dashboard') router.push('/');
-    else router.push(`/${page}`);
+    const href = page === 'dashboard' ? '/' : `/${page}`;
+    startNavigation(href);
+    router.push(href);
   };
 
   // Public paths — render without the shell
@@ -104,6 +109,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="h-full flex flex-col bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
       <Toaster />
+      <RouteTransitionIndicator />
       <UploadProgressWidget />
 
       <Header

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package } from 'lucide-react';
 import type { MasterHardwareItem } from '@/lib/db/masterHardware';
+import { Button } from '@/components/ui/button';
 
 interface MasterItemFormModalProps {
   isOpen: boolean;
@@ -74,7 +75,6 @@ export const MasterItemFormModal: React.FC<MasterItemFormModalProps> = ({
         className="bg-[var(--bg)] rounded-xl shadow-2xl w-full max-w-lg border border-[var(--border-subtle)] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)] bg-[var(--primary-bg)] rounded-t-xl">
           <div className="p-1.5 rounded-lg bg-[var(--primary-bg-hover)]">
             <Package className="w-4 h-4 text-[var(--primary-text-muted)]" />
@@ -90,7 +90,6 @@ export const MasterItemFormModal: React.FC<MasterItemFormModalProps> = ({
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className={labelCls}>Item Name <span className="text-red-500">*</span></label>
@@ -150,22 +149,22 @@ export const MasterItemFormModal: React.FC<MasterItemFormModalProps> = ({
             <p className="text-xs text-red-500 dark:text-red-400 font-medium">{error}</p>
           )}
 
-          {/* Footer */}
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-[var(--text-muted)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+              variant="outline"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSaving}
-              className="px-4 py-2 text-sm font-semibold text-white bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] rounded-lg transition-colors disabled:opacity-60"
+              loading={isSaving}
+              loadingText="Saving..."
             >
-              {isSaving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Item'}
-            </button>
+              {isEdit ? 'Save Changes' : 'Create Item'}
+            </Button>
           </div>
         </form>
       </div>

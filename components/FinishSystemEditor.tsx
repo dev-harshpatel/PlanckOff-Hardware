@@ -1,5 +1,6 @@
 import React from 'react';
 import { DoorFinishSystem } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FinishSystemEditorProps {
     finishSystem?: DoorFinishSystem;
@@ -48,54 +49,54 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
 
     return (
         <div className="space-y-4">
-            <div className="text-sm font-semibold text-gray-700 border-b pb-2">
+            <div className="text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border)] pb-2">
                 Finish System Specification
             </div>
 
             {/* Base Preparation */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Base Preparation
                 </label>
-                <select
-                    value={finishSystem?.basePrep || ''}
-                    onChange={(e) => updateField('basePrep', e.target.value as DoorFinishSystem['basePrep'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <Select
+                    value={finishSystem?.basePrep || '__none__'}
+                    onValueChange={v => updateField('basePrep', (v === '__none__' ? undefined : v) as DoorFinishSystem['basePrep'])}
                 >
-                    <option value="">Select Base Prep...</option>
-                    {basePrepOptions.map((option) => (
-                        <option key={option} value={option}>
-                            {option}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select Base Prep..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__none__">Select Base Prep...</SelectItem>
+                        {basePrepOptions.map(opt => (
+                            <SelectItem key={opt} value={opt!}>{opt}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Finish Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Finish Type
                 </label>
-                <select
-                    value={finishSystem?.finishType || ''}
-                    onChange={(e) => updateField('finishType', e.target.value as DoorFinishSystem['finishType'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <Select
+                    value={finishSystem?.finishType || '__none__'}
+                    onValueChange={v => updateField('finishType', (v === '__none__' ? undefined : v) as DoorFinishSystem['finishType'])}
                 >
-                    <option value="">Select Finish Type...</option>
-                    {finishTypeOptions.map((option) => (
-                        <option key={option} value={option}>
-                            {option}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select Finish Type..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__none__">Select Finish Type...</SelectItem>
+                        {finishTypeOptions.map(opt => (
+                            <SelectItem key={opt} value={opt!}>{opt}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Detailed Fields (conditional) */}
             {showDetailedFields && (
-                <div className="pl-4 border-l-2 border-green-200 bg-green-50/30 p-4 rounded-r-lg space-y-4">
+                <div className="pl-4 border-l-2 border-green-500/40 bg-green-500/5 p-4 rounded-r-lg space-y-4">
                     {/* Manufacturer */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                             Manufacturer
                         </label>
                         <input
@@ -103,13 +104,13 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
                             value={finishSystem?.manufacturer || ''}
                             onChange={(e) => updateField('manufacturer', e.target.value || undefined)}
                             placeholder="e.g., Sherwin Williams, Benjamin Moore..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                         />
                     </div>
 
                     {/* Product Code */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                             Product Code
                         </label>
                         <input
@@ -117,13 +118,13 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
                             value={finishSystem?.productCode || ''}
                             onChange={(e) => updateField('productCode', e.target.value || undefined)}
                             placeholder="e.g., SW 7006, BM HC-172..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                         />
                     </div>
 
                     {/* Color Name */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                             Color Name
                         </label>
                         <input
@@ -131,14 +132,14 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
                             value={finishSystem?.colorName || ''}
                             onChange={(e) => updateField('colorName', e.target.value || undefined)}
                             placeholder="e.g., Extra White, Chelsea Gray..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
                         />
                     </div>
 
                     {/* Sheen (for paint/stain) */}
                     {(finishSystem?.finishType === 'Paint' || finishSystem?.finishType === 'Stain' || finishSystem?.finishType === 'Clear Coat') && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                                 Sheen Level
                             </label>
                             <div className="grid grid-cols-5 gap-2">
@@ -147,13 +148,11 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
                                         key={sheen}
                                         type="button"
                                         onClick={() => updateField('sheen', sheen)}
-                                        className={`
-                                            px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all
-                                            ${finishSystem?.sheen === sheen
+                                        className={`px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                                            finishSystem?.sheen === sheen
                                                 ? 'border-green-600 bg-green-600 text-white shadow-md'
-                                                : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'
-                                            }
-                                        `}
+                                                : 'border-[var(--border)] bg-[var(--bg)] text-[var(--text-secondary)] hover:border-green-500/50'
+                                        }`}
                                     >
                                         {sheen}
                                     </button>
@@ -166,11 +165,11 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
 
             {/* Finish Summary */}
             {finishSystem && finishSystem.finishType !== 'None' && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <div className="mt-4 p-3 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border)]">
+                    <div className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1">
                         Finish Summary
                     </div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-[var(--text)]">
                         {[
                             finishSystem.basePrep,
                             finishSystem.finishType,
@@ -183,8 +182,7 @@ const FinishSystemEditor: React.FC<FinishSystemEditorProps> = ({ finishSystem, o
                 </div>
             )}
 
-            {/* Helper Text */}
-            <div className="text-xs text-gray-500 italic">
+            <div className="text-xs text-[var(--text-muted)] italic">
                 💡 Tip: Complete finish specifications prevent procurement delays and ensure accurate material ordering.
             </div>
         </div>

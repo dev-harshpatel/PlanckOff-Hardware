@@ -7,14 +7,11 @@ import { useEffect, useState } from 'react';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 import type { HardwareSet, Door } from '@/types';
 import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransformers';
-import { Package, Loader2 } from 'lucide-react';
+import { Package } from 'lucide-react';
+import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 const SubmittalGenerator = dynamic(() => import('@/components/SubmittalGenerator'), { ssr: false });
 
-/**
- * Reconstruct MergedHardwareSet[] from HardwareSet[] + Door[].
- * Used when final_json is empty but raw table data exists.
- */
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
   return hardwareSets
     .filter(set => set.items?.length > 0)
@@ -77,14 +74,11 @@ export default function SubmittalPackagePage() {
         const apiData = json?.data?.finalJson;
 
         if (apiData && apiData.length > 0) {
-          // final_json has data — use it as the authoritative source
           setFinalJson(apiData);
           setSource('api');
           return;
         }
 
-        // final_json is empty. Fetch from raw tables (same fallback as ProjectView)
-        // and write back to final_json so it becomes the source of truth.
         const [hwRes, dsRes] = await Promise.all([
           fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' }),
           fetch(`/api/projects/${id}/door-schedule`, { credentials: 'include' }),
@@ -105,7 +99,6 @@ export default function SubmittalPackagePage() {
         setFinalJson(reconstructed);
         setSource(reconstructed.length > 0 ? 'fallback' : null);
 
-        // Write back to final_json so reports are consistent going forward
         if (reconstructed.length > 0) {
           fetch(`/api/projects/${id}/hardware-merge`, {
             method: 'PUT',
@@ -116,7 +109,6 @@ export default function SubmittalPackagePage() {
         }
       })
       .catch(async () => {
-        // Network error — still try raw tables
         try {
           const [hwRes, dsRes] = await Promise.all([
             fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' }),
@@ -142,12 +134,16 @@ export default function SubmittalPackagePage() {
   const setCount = finalJson?.length ?? 0;
   const doorCount = finalJson?.reduce((s, set) => s + set.doors.length, 0) ?? 0;
 
+  if (loading) {
+    return <ReportPageSkeleton badgeWidth="w-36" rows={6} />;
+  }
+
   return (
     <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
       <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-5 py-3 flex items-center gap-3 flex-shrink-0">
         <Package className="h-4 w-4 text-[var(--primary-text-muted)]" />
         <h2 className="text-sm font-semibold text-[var(--text)]">Submittal Package</h2>
-        {!loading && finalJson && (
+        {finalJson && (
           <>
             <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text)]">
               {setCount} sets · {doorCount} doors
@@ -162,19 +158,13 @@ export default function SubmittalPackagePage() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {loading && (
-          <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading…
-          </div>
-        )}
-        {!loading && finalJson && finalJson.length > 0 && (
+        {finalJson && finalJson.length > 0 && (
           <SubmittalGenerator
             finalJson={finalJson}
             projectName={activeProject.name}
           />
         )}
-        {!loading && (!finalJson || finalJson.length === 0) && (
+        {(!finalJson || finalJson.length === 0) && (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
             <p>No hardware sets found in final JSON</p>
             <p className="text-xs">Run the merge pipeline first to generate the submittal package.</p>

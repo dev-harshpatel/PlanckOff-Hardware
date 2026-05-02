@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRBAC } from '@/hooks/useRBAC';
 import { getInvitableRoles } from '@/constants/roles';
 import type { RoleName } from '@/types/auth';
-import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface InviteTeamMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Pre-select a role when opened from a role group's "+ Invite" button. */
   defaultRole?: RoleName;
   onSuccess: () => void;
 }
@@ -31,7 +31,6 @@ export function InviteTeamMemberModal({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setName('');
@@ -71,7 +70,6 @@ export function InviteTeamMemberModal({
       }
 
       if (json.emailSent === false && json.inviteLink) {
-        // Email not configured — show the link directly
         setSuccessMsg(`Email service not configured. Share this invite link:\n${json.inviteLink}`);
       } else {
         setSuccessMsg(`Invitation sent to ${email}.`);
@@ -88,13 +86,11 @@ export function InviteTeamMemberModal({
   };
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-8 pt-8 pb-6">
           <h2 className="text-xl font-bold text-gray-900">Invite Team Member</h2>
           <button
@@ -109,7 +105,6 @@ export function InviteTeamMemberModal({
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
-          {/* Full Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               Full Name <span className="text-red-500">*</span>
@@ -124,7 +119,6 @@ export function InviteTeamMemberModal({
             />
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               Email Address <span className="text-red-500">*</span>
@@ -139,74 +133,59 @@ export function InviteTeamMemberModal({
             />
           </div>
 
-          {/* Role */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               Role
             </label>
-            <div className="relative">
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as RoleName)}
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-green-500 transition cursor-pointer"
-              >
+            <Select value={role} onValueChange={v => setRole(v as RoleName)}>
+              <SelectTrigger className="w-full h-12 rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
                 {invitableRoles.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
                 ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Info text */}
           <p className="text-sm text-gray-500 leading-relaxed">
             An invitation email will be sent to this address with a link to set their password.
             <br />
             If this email already has a pending invitation, sending again will resend it and refresh the expiry.
           </p>
 
-          {/* Error */}
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
-          {/* Success */}
           {successMsg && (
             <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
               <p className="text-sm text-green-700 whitespace-pre-line">{successMsg}</p>
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+              variant="outline"
+              className="flex-1 rounded-xl border-gray-200"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              loading={isSubmitting}
+              loadingText="Sending Invitation..."
+              className="flex-1 rounded-xl bg-green-700 hover:bg-green-800"
             >
-              {isSubmitting ? (
-                <Spinner size="sm" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              )}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
               Send / Resend Invitation
-            </button>
+            </Button>
           </div>
         </form>
       </div>

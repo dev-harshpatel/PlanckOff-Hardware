@@ -36,6 +36,96 @@ export interface ProjectValidationReport {
     canExport: boolean;
 }
 
+export type AssignedDoorConflictField =
+    | 'fireRating'
+    | 'leafCount'
+    | 'dimensions'
+    | 'doorMaterial'
+    | 'interiorExterior';
+
+export type AssignedDoorConflictMap = Partial<Record<AssignedDoorConflictField, string>>;
+
+const formatDoorDimension = (inches: number): string => {
+    if (!inches) return '0\'-0"';
+    const feet = Math.floor(inches / 12);
+    const remainingInches = inches % 12;
+    return `${feet}'-${remainingInches}"`;
+};
+
+const normalizeComparableValue = (value: string | number | undefined | null): string =>
+    String(value ?? '').trim().toLowerCase();
+
+const getFireRatingDisplay = (door: Door): string => door.fireRating?.trim() || '—';
+const getLeafCountDisplay = (door: Door): string => door.leafCountDisplay?.trim() || (door.leafCount != null ? String(door.leafCount) : '—');
+const getDimensionsDisplay = (door: Door): string => `${formatDoorDimension(door.width)} × ${formatDoorDimension(door.height)}`;
+const getDoorMaterialDisplay = (door: Door): string => door.doorMaterial?.trim() || '—';
+const getInteriorExteriorDisplay = (door: Door): string => door.interiorExterior?.trim() || '—';
+
+export function getAssignedDoorMismatchMap(doors: Door[]): Map<string, AssignedDoorConflictMap> {
+    const mismatches = new Map<string, AssignedDoorConflictMap>();
+    if (doors.length < 2) return mismatches;
+
+    const register = (
+        key: AssignedDoorConflictField,
+        label: string,
+        getNormalized: (door: Door) => string,
+        getDisplay: (door: Door) => string,
+    ) => {
+        const grouped = new Map<string, { display: string; doors: Door[] }>();
+
+        for (const door of doors) {
+            const normalized = getNormalized(door);
+            const entry = grouped.get(normalized);
+            if (entry) {
+                entry.doors.push(door);
+            } else {
+                grouped.set(normalized, { display: getDisplay(door), doors: [door] });
+            }
+        }
+
+        if (grouped.size <= 1) return;
+
+        for (const door of doors) {
+            const normalized = getNormalized(door);
+            const current = grouped.get(normalized);
+            if (!current) continue;
+
+            const otherDisplays = Array.from(grouped.entries())
+                .filter(([value]) => value !== normalized)
+                .map(([, value]) => value.display);
+
+            if (otherDisplays.length === 0) continue;
+
+            const existing = mismatches.get(door.id) ?? {};
+            existing[key] = `${label} mismatch: ${door.doorTag} has "${current.display}" but other door(s) in this set use ${otherDisplays.join(', ')}.`;
+            mismatches.set(door.id, existing);
+        }
+    };
+
+    register('fireRating', 'Rating', door => normalizeComparableValue(door.fireRating || '—'), getFireRatingDisplay);
+    register(
+        'leafCount',
+        'Leaf count',
+        door => normalizeComparableValue(door.leafCountDisplay || (door.leafCount != null ? String(door.leafCount) : '—')),
+        getLeafCountDisplay,
+    );
+    register(
+        'dimensions',
+        'W × H',
+        door => `${normalizeComparableValue(door.width)}x${normalizeComparableValue(door.height)}`,
+        getDimensionsDisplay,
+    );
+    register('doorMaterial', 'Door material', door => normalizeComparableValue(door.doorMaterial || '—'), getDoorMaterialDisplay);
+    register(
+        'interiorExterior',
+        'Interior / Exterior',
+        door => normalizeComparableValue(door.interiorExterior || '—'),
+        getInteriorExteriorDisplay,
+    );
+
+    return mismatches;
+}
+
 // ===== VALIDATION RULES =====
 
 export const VALIDATION_RULES: ValidationRule[] = [

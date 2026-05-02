@@ -121,6 +121,13 @@ interface DoorGroup {
     doors: Door[];
 }
 
+interface AggregatedDoorRow {
+    id: string;
+    doors: Door[];
+    quantity: number;
+    doorTags: string;
+}
+
 // ─── Static config ────────────────────────────────────────────────────────────
 
 const SECTION_DEFS: { key: SectionKey; label: string }[] = [
@@ -194,13 +201,15 @@ function parseColId(colId: string): { sectionKey: SectionKey; colKey: string } {
     return { sectionKey: colId.slice(0, idx) as SectionKey, colKey: colId.slice(idx + 2) };
 }
 
+function getDoorQuantityValue(door: Door): number {
+    const raw = (door.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)
+        ?.basic_information?.['QUANTITY'];
+    const q = parseInt(raw ?? '', 10);
+    return isNaN(q) || q < 1 ? 1 : q;
+}
+
 function sumQuantity(doors: Door[]): number {
-    return doors.reduce((sum, d) => {
-        const raw = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)
-            ?.basic_information?.['QUANTITY'];
-        const q = parseInt(raw ?? '', 10);
-        return sum + (isNaN(q) || q < 1 ? 1 : q);
-    }, 0);
+    return doors.reduce((sum, d) => sum + getDoorQuantityValue(d), 0);
 }
 
 function getSectionValue(door: Door, colId: string): string {
@@ -208,6 +217,45 @@ function getSectionValue(door: Door, colId: string): string {
     if (sectionKey === 'basic_information' && colKey === 'DOOR TAG') return door.doorTag;
     const sec = (door.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)?.[sectionKey];
     return sec?.[colKey] ?? '';
+}
+
+function isDoorIdentityColumn(colId: string): boolean {
+    const { sectionKey, colKey } = parseColId(colId);
+    return sectionKey === 'basic_information' && (colKey === 'DOOR TAG' || colKey === 'QUANTITY');
+}
+
+function aggregateDoorsBySelectedColumns(doors: Door[], selectedColumns: string[]): AggregatedDoorRow[] {
+    const comparisonColumns = selectedColumns.filter(col => !isDoorIdentityColumn(col));
+    const groups = new Map<string, AggregatedDoorRow>();
+
+    for (const door of doors) {
+        const key = comparisonColumns.length > 0
+            ? comparisonColumns.map(col => getSectionValue(door, col) || '').join('\u241F')
+            : '__all__';
+
+        const existing = groups.get(key);
+        if (existing) {
+            existing.doors.push(door);
+            existing.quantity += getDoorQuantityValue(door);
+            existing.doorTags = `${existing.doorTags}, ${door.doorTag}`;
+        } else {
+            groups.set(key, {
+                id: `agg-${door.id}`,
+                doors: [door],
+                quantity: getDoorQuantityValue(door),
+                doorTags: door.doorTag,
+            });
+        }
+    }
+
+    return Array.from(groups.values());
+}
+
+function getRowValue(row: AggregatedDoorRow, colId: string): string {
+    const { sectionKey, colKey } = parseColId(colId);
+    if (sectionKey === 'basic_information' && colKey === 'DOOR TAG') return row.doorTags;
+    if (sectionKey === 'basic_information' && colKey === 'QUANTITY') return String(row.quantity);
+    return getSectionValue(row.doors[0], colId);
 }
 
 function getGroupValue(door: Door, sectionKey: SectionKey, field: string): string {
@@ -406,14 +454,24 @@ const ColumnAccordion: React.FC<{
 const GroupedTable: React.FC<{
     group: DoorGroup;
     selectedColumns: string[];
+    uniqueData: boolean;
     index: number;
     total: number;
     format: ExportFormat;
     onHide: () => void;
     isCollapsed: boolean;
     onToggleCollapse: () => void;
-}> = ({ group, selectedColumns, index, total, format, onHide, isCollapsed, onToggleCollapse }) => {
+}> = ({ group, selectedColumns, uniqueData, index, total, format, onHide, isCollapsed, onToggleCollapse }) => {
     const isPdf = format === 'pdf';
+    const rows = useMemo(
+        () => uniqueData ? aggregateDoorsBySelectedColumns(group.doors, selectedColumns) : group.doors.map(door => ({
+            id: door.id,
+            doors: [door],
+            quantity: getDoorQuantityValue(door),
+            doorTags: door.doorTag,
+        })),
+        [group.doors, selectedColumns, uniqueData],
+    );
 
     return (
         <div className={`rounded-lg overflow-hidden border ${
@@ -498,14 +556,14 @@ const GroupedTable: React.FC<{
                                 </tr>
                             </thead>
                             <tbody>
-                                {group.doors.map((door, idx) => (
-                                    <tr key={door.id} className={
+                                {rows.map((row, idx) => (
+                                    <tr key={row.id} className={
                                         isPdf
                                             ? idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                                             : idx % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/50'
                                     }>
                                         {selectedColumns.map(col => {
-                                            const val = getSectionValue(door, col);
+                                            const val = getRowValue(row, col);
                                             return (
                                                 <td key={col} className={`px-3 py-2 whitespace-nowrap border-b ${
                                                     isPdf
@@ -608,6 +666,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     // ── Export / preview state ────────────────────────────────────────────────
     const [format, setFormat]                         = useState<ExportFormat>('excel');
     const [showElevationImages, setShowElevationImages] = useState(false);
+    const [uniqueData, setUniqueData] = useState(false);
     const [previewReady, setPreviewReady]             = useState(false);
     const [hiddenGroupKeys, setHiddenGroupKeys]       = useState<Set<string>>(new Set());
     const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
@@ -642,6 +701,16 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
         // Respect the same hidden-group filter as the preview panel
         const visibleGroups = groups.filter(g => !hiddenGroupKeys.has(g.breadcrumb.join('||') || 'all'));
         const groupsToExport = visibleGroups.length > 0 ? visibleGroups : [{ breadcrumb: [], doors: includedDoors }];
+        const rowsByGroup = groupsToExport.map(group =>
+            uniqueData
+                ? aggregateDoorsBySelectedColumns(group.doors, selectedColumns)
+                : group.doors.map(door => ({
+                    id: door.id,
+                    doors: [door],
+                    quantity: getDoorQuantityValue(door),
+                    doorTags: door.doorTag,
+                })),
+        );
 
         // ── Pre-load elevation images for all groups ──────────────────────────
         // Build a map of elevationType.id → ImageInfo (data URL + natural dimensions)
@@ -688,8 +757,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                     : (group.breadcrumb.join(' - ') || `Group ${i + 1}`);
                 const sheetName = rawName.replace(/[\\/*?[\]:]/g, '_').slice(0, 31) || `Sheet${i + 1}`;
 
-                const rows = group.doors.map(door =>
-                    selectedColumns.map(col => getSectionValue(door, col) || ''),
+                const rows = rowsByGroup[i].map(row =>
+                    selectedColumns.map(col => getRowValue(row, col) || ''),
                 );
                 const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
@@ -892,13 +961,13 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             const pdfHeaders = headers.map(h => PDF_ABBREV[h] ?? h);
 
             // Proportional column widths: longer content and header → wider column
-            const allExportDoors = groupsToExport.flatMap(g => g.doors);
+            const allExportRows = rowsByGroup.flatMap(r => r);
             const MIN_COL = Math.max(10, USABLE_W * 0.025);
             const MAX_COL = USABLE_W * 0.14;
             const rawWeights = selectedColumns.map((col, i) => {
                 const hLen = pdfHeaders[i].length;
-                const dLen = allExportDoors.reduce((mx, door) =>
-                    Math.max(mx, (getSectionValue(door, col) || '').length), 0);
+                const dLen = allExportRows.reduce((mx, row) =>
+                    Math.max(mx, (getRowValue(row, col) || '').length), 0);
                 // Weight = max of header length vs data length (cap data at 20 chars)
                 return Math.max(hLen, Math.min(dLen, 20));
             });
@@ -913,7 +982,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             for (const [i, group] of groupsToExport.entries()) {
                 if (i > 0) doc.addPage();
 
-                const title    = projectName || 'Door Schedule Report';
+                const title    = projectName || 'Door-Frame Reports';
                 const subtitle = group.breadcrumb.length > 0 ? group.breadcrumb.join(' › ') : 'All Doors';
 
                 doc.setFontSize(11); doc.setFont('helvetica', 'bold');
@@ -925,8 +994,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 autoTable(doc, {
                     startY: 25,
                     head: [pdfHeaders],
-                    body: group.doors.map(door =>
-                        selectedColumns.map(col => getSectionValue(door, col) || '—'),
+                    body: rowsByGroup[i].map(row =>
+                        selectedColumns.map(col => getRowValue(row, col) || '—'),
                     ),
                     tableWidth: USABLE_W,
                     columnStyles: pdfColumnStyles,
@@ -952,13 +1021,20 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                         .filter(et => imageInfoMap.has(et.id));
 
                     if (groupElevTypes.length > 0) {
-                        const LABEL_H  = 12;
-                        const ROW_GAP  = 10;
+                        const LABEL_H = 12;
+                        const ROW_GAP = 10;
+                        const COL_GAP = 10;
                         const HEADER_Y = 26;
-                        // Convert natural pixel dimensions to mm at 96 DPI
-                        const PX_TO_MM = 25.4 / 96;
-                        // Max available height per image on a page
-                        const MAX_IMG_H = PAGE_H - MARGIN - HEADER_Y - LABEL_H - ROW_GAP;
+                        const FOOTER_Y = PAGE_H - MARGIN;
+                        const colsPerPage = useA3 ? 3 : 2;
+                        const rowsPerPage = useA3 ? 3 : 2;
+                        const cardsPerPage = colsPerPage * rowsPerPage;
+                        const cardW = (USABLE_W - COL_GAP * (colsPerPage - 1)) / colsPerPage;
+                        const cardH = (FOOTER_Y - HEADER_Y - ROW_GAP * (rowsPerPage - 1)) / rowsPerPage;
+                        const INNER_PAD = 4;
+                        const CARD_LABEL_SPACE = LABEL_H + 4;
+                        const MAX_IMG_W = Math.max(20, cardW - INNER_PAD * 2);
+                        const MAX_IMG_H = Math.max(20, cardH - CARD_LABEL_SPACE - INNER_PAD * 2);
 
                         const addElevPageHeader = (sub: string) => {
                             doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
@@ -970,58 +1046,46 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
                         doc.addPage();
                         addElevPageHeader(subtitle);
-                        let rowTop = HEADER_Y;
 
-                        for (const et of groupElevTypes) {
+                        for (const [idx, et] of groupElevTypes.entries()) {
                             const info = imageInfoMap.get(et.id)!;
+                            const slotIndex = idx % cardsPerPage;
+                            const row = Math.floor(slotIndex / colsPerPage);
+                            const col = slotIndex % colsPerPage;
 
-                            // Natural size: 1px = PX_TO_MM mm; scale only if too wide or too tall
-                            let imgW = info.w * PX_TO_MM;
-                            let imgH = info.h * PX_TO_MM;
-                            if (imgW > USABLE_W) {
-                                const scale = USABLE_W / imgW;
-                                imgW = USABLE_W;
-                                imgH = imgH * scale;
-                            }
-                            if (imgH > MAX_IMG_H) {
-                                const scale = MAX_IMG_H / imgH;
-                                imgH = MAX_IMG_H;
-                                imgW = imgW * scale;
-                            }
-
-                            const CELL_H = imgH + LABEL_H + ROW_GAP;
-
-                            // New page if this image won't fit vertically
-                            if (rowTop + CELL_H > PAGE_H - MARGIN) {
+                            if (idx > 0 && slotIndex === 0) {
                                 doc.addPage();
                                 addElevPageHeader(`${subtitle} (continued)`);
-                                rowTop = HEADER_Y;
                             }
 
-                            const y = rowTop;
+                            const cardX = MARGIN + col * (cardW + COL_GAP);
+                            const cardY = HEADER_Y + row * (cardH + ROW_GAP);
+                            const scale = Math.min(MAX_IMG_W / info.w, MAX_IMG_H / info.h, 1);
+                            const imgW = info.w * scale;
+                            const imgH = info.h * scale;
+                            const imgX = cardX + (cardW - imgW) / 2;
+                            const imgY = cardY + INNER_PAD;
 
                             // Subtle card background
                             doc.setDrawColor(220, 220, 220);
                             doc.setLineWidth(0.25);
                             doc.setFillColor(250, 250, 250);
-                            doc.roundedRect(MARGIN, y, imgW, imgH + LABEL_H + 2, 1.5, 1.5, 'FD');
+                            doc.roundedRect(cardX, cardY, cardW, cardH, 1.5, 1.5, 'FD');
 
                             // Image at natural aspect ratio
                             try {
-                                doc.addImage(info.dataUrl, MARGIN, y, imgW, imgH);
+                                doc.addImage(info.dataUrl, imgX, imgY, imgW, imgH);
                             } catch { /* skip broken */ }
 
                             // Label below image
-                            const labelY = y + imgH + 4;
+                            const labelY = cardY + cardH - LABEL_H;
                             doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-                            doc.text(et.code || et.id, MARGIN + 2, labelY, { maxWidth: imgW - 4 });
+                            doc.text(et.code || et.id, cardX + INNER_PAD, labelY, { maxWidth: cardW - INNER_PAD * 2 });
                             if (et.name && et.code && et.name !== et.code) {
                                 doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(100);
-                                doc.text(et.name, MARGIN + 2, labelY + 4, { maxWidth: imgW - 4 });
+                                doc.text(et.name, cardX + INNER_PAD, labelY + 4, { maxWidth: cardW - INNER_PAD * 2 });
                             }
                             doc.setTextColor(0);
-
-                            rowTop += CELL_H;
                         }
                     }
                 }
@@ -1205,6 +1269,25 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                 </div>
                             </div>
                         )}
+
+                        <div className="mt-3 border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--bg)]">
+                            <label className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-[var(--primary-bg)] transition-colors group">
+                                <input
+                                    type="checkbox"
+                                    checked={uniqueData}
+                                    onChange={e => { setUniqueData(e.target.checked); setPreviewReady(false); }}
+                                    className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0 mt-0.5"
+                                />
+                                <div className="min-w-0">
+                                    <span className="text-xs font-medium text-[var(--text-secondary)] group-hover:text-[var(--primary-text)] transition-colors">
+                                        Unique Data
+                                    </span>
+                                    <span className="text-[10px] text-[var(--text-faint)] block mt-0.5">
+                                        Merge rows with matching selected columns, combine door tags, and sum quantity.
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1242,22 +1325,22 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             <div className="flex-1 min-w-0 flex flex-col bg-[var(--bg)]">
 
                 {/* Preview panel header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
-                    <div className="flex items-center gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
+                    <div className="flex min-w-0 items-center gap-2">
                         {format === 'pdf'
                             ? <FileText className="w-4 h-4 text-[var(--text-muted)]" />
                             : <Table2   className="w-4 h-4 text-[var(--text-muted)]" />
                         }
-                        <span className="text-xs font-semibold text-[var(--text)]">
+                        <span className="shrink-0 text-xs font-semibold text-[var(--text)]">
                             {previewReady ? `Preview — ${format === 'pdf' ? 'PDF' : 'Excel'}` : 'Preview'}
                         </span>
                         {previewReady && (
-                            <span className="text-[10px] text-[var(--text-faint)] ml-1">
+                            <span className="min-w-0 truncate text-[10px] text-[var(--text-faint)] ml-1">
                                 {sumQuantity(includedDoors)} doors · {selectedColumns.length} cols · {groups.length} table{groups.length !== 1 ? 's' : ''}
                             </span>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex justify-self-center">
                         {previewReady && visibleGroupKeys.length > 0 && (
                             <CollapseAllButton
                                 allCollapsed={allCollapsed}
@@ -1265,6 +1348,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                 onExpandAll={handleExpandAll}
                             />
                         )}
+                    </div>
+                    <div className="flex justify-self-end">
                         {previewReady && (
                             <button
                                 onClick={handleDownload}
@@ -1318,7 +1403,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                             {/* PDF header banner */}
                             {format === 'pdf' && (
                                 <div className="bg-white dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[var(--border)] shadow-sm px-5 py-4 mb-5">
-                                    <p className="text-base font-bold text-gray-800 dark:text-[var(--text)]">{projectName || 'Door Schedule Report'}</p>
+                                    <p className="text-base font-bold text-gray-800 dark:text-[var(--text)]">{projectName || 'Door-Frame Reports'}</p>
                                     <p className="text-xs text-gray-400 dark:text-[var(--text-faint)] mt-0.5">
                                         {sumQuantity(includedDoors)} doors · Generated {new Date().toLocaleDateString()}
                                         {excludedCount > 0 && ` · ${excludedCount} excluded`}
@@ -1335,6 +1420,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                                             key={key}
                                             group={group}
                                             selectedColumns={selectedColumns}
+                                            uniqueData={uniqueData}
                                             index={idx}
                                             total={visible.length}
                                             format={format}

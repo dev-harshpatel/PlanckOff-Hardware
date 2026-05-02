@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { RouteLoadingState } from '@/components/RouteLoadingState';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { validateProject } from '@/utils/doorValidation';
 import { FileSpreadsheet, Settings2, Package, DollarSign, ArrowLeft } from 'lucide-react';
@@ -20,7 +22,7 @@ const REPORT_CARDS: {
   {
     id: 'door-schedule',
     route: 'door-schedule',
-    label: 'Door Schedule Report',
+    label: 'Door-Frame Reports',
     description: 'Export comprehensive door data with full customization. Choose from 30+ fields including dimensions, materials, fire ratings, and hardware assignments.',
     features: ['30+ customizable columns', 'Excel, PDF, or CSV export', 'Professional formatting & summaries'],
     icon: <FileSpreadsheet className="h-6 w-6" />,
@@ -58,10 +60,15 @@ const REPORT_CARDS: {
 export default function ReportsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { projects } = useProject();
+  const { projects, projectsHydrated } = useProject();
+  const { startNavigation } = useNavigationLoading();
   const [loadingCard, setLoadingCard] = useState<string | null>(null);
 
   const activeProject = projects.find((p) => p.id === id);
+  if (!projectsHydrated) {
+    return <RouteLoadingState title="Opening reports" message="Loading project data and available report options." />;
+  }
+
   if (!activeProject) return null;
 
   const doors = activeProject.doors ?? [];
@@ -73,7 +80,9 @@ export default function ReportsPage() {
       // Still navigate — submittal page handles validation display
     }
     setLoadingCard(route);
-    router.push(`/project/${id}/reports/${route}`);
+    const href = `/project/${id}/reports/${route}`;
+    startNavigation(href);
+    router.push(href);
   };
 
   return (

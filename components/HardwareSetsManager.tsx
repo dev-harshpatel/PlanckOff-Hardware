@@ -8,6 +8,7 @@ import Tooltip from './Tooltip';
 import { useAnnounce } from '../contexts/AnnouncementContext';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import ContextualProgressBar from './ContextualProgressBar';
+import { getAssignedDoorMismatchMap } from '../utils/doorValidation';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,7 +18,8 @@ import { Progress } from '@/components/ui/progress';
 import {
     Upload, Plus, Search, ChevronRight, ChevronDown, ChevronUp,
     Copy, Pencil, Trash2, AlertTriangle, AlertCircle, Package, X,
-    Layers, DoorOpen, Info, Loader2, CheckCircle2,
+    Layers, DoorOpen, Info, Loader2, CheckCircle2, Wrench, Sparkles,
+    RefreshCw,
 } from 'lucide-react';
 
 interface ActiveUploadTask {
@@ -27,6 +29,7 @@ interface ActiveUploadTask {
 }
 
 interface HardwareSetsManagerProps {
+    projectId: string;
     hardwareSets: HardwareSet[];
     doors: Door[];
     isLoading: boolean;
@@ -49,7 +52,7 @@ const formatDimension = (inches: number): string => {
 };
 
 const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
-    const { hardwareSets = [], doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant, activeTask, onCancelTask, canReupload = true } = props;
+    const { projectId, hardwareSets = [], doors = [], isLoading, onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant, activeTask, onCancelTask, canReupload = true } = props;
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -64,7 +67,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
     const [selectedDoors, setSelectedDoors] = useState<Record<string, Set<string>>>({});
     const [variantMode, setVariantMode] = useState<'all' | 'selection' | null>(null);
-    const [activeTab, setActiveTab] = useState<Record<string, 'components' | 'doors' | 'details'>>({});
+    const [activeTab, setActiveTab] = useState<Record<string, 'components' | 'doors' | 'details' | 'prep'>>({});
+    const [prepGenerating, setPrepGenerating] = useState<Set<string>>(new Set());
+    const [prepErrors, setPrepErrors] = useState<Record<string, string>>({});
     const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'doors' | 'items'; direction: 'asc' | 'desc' } | null>(null);
 
     // Locks in the PDF sequence the first time a non-empty set list arrives.
@@ -135,10 +140,18 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 return 0;
             });
         } else {
-            // Default: preserve PDF sequence using captured order (stable across deletes/restores)
+            // Default: preserve PDF sequence using captured order (stable across deletes/restores).
+            // For sets not yet in pdfOrderRef (e.g. a variant just created this render cycle
+            // before the useEffect has a chance to update the ref), fall back to the set's
+            // actual position in the incoming hardwareSets array so it renders in the right
+            // spot immediately rather than jumping to the bottom.
             result = [...result].sort((a, b) => {
-                const ia = pdfOrderRef.current.get(a.name) ?? 9999;
-                const ib = pdfOrderRef.current.get(b.name) ?? 9999;
+                const ia = pdfOrderRef.current.has(a.name)
+                    ? pdfOrderRef.current.get(a.name)!
+                    : hardwareSets.findIndex(s => s.id === a.id);
+                const ib = pdfOrderRef.current.has(b.name)
+                    ? pdfOrderRef.current.get(b.name)!
+                    : hardwareSets.findIndex(s => s.id === b.id);
                 return ia - ib;
             });
         }
@@ -236,11 +249,49 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         });
     };
 
+    const handleGeneratePrep = async (set: HardwareSet) => {
+        setPrepGenerating(prev => new Set(prev).add(set.id));
+        setPrepErrors(prev => { const n = { ...prev }; delete n[set.id]; return n; });
+
+        try {
+            const res = await fetch(`/api/projects/${projectId}/hardware-set-prep`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ setName: set.name }),
+            });
+
+            let json: { prep?: string; error?: string };
+            try {
+                json = (await res.json()) as { prep?: string; error?: string };
+            } catch {
+                throw new Error('Server returned an invalid response. Please try again.');
+            }
+
+            if (!res.ok) {
+                throw new Error(json.error ?? 'Prep generation failed.');
+            }
+
+            if (!json.prep) {
+                throw new Error('Server did not return prep data.');
+            }
+
+            // Update only the prep field in local state — does not trigger onProjectUpdate
+            // because we update in-place without re-saving the full set to the project API.
+            onSaveSet({ ...set, prep: json.prep });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error occurred';
+            setPrepErrors(prev => ({ ...prev, [set.id]: message }));
+        } finally {
+            setPrepGenerating(prev => { const s = new Set(prev); s.delete(set.id); return s; });
+        }
+    };
+
     const isAllSelected = selectedRows.size > 0 && selectedRows.size === filteredAndSortedSets.length;
     const isIndeterminate = selectedRows.size > 0 && selectedRows.size < filteredAndSortedSets.length;
 
-    const getDoorConflicts = (set: HardwareSet, door: Door): Partial<Record<keyof Door | 'general', string>> => {
-        const conflicts: Partial<Record<keyof Door | 'general', string>> = {};
+    const getDoorConflicts = (set: HardwareSet, door: Door): Partial<Record<'fireRating' | 'dimensions' | 'doorMaterial', string>> => {
+        const conflicts: Partial<Record<'fireRating' | 'dimensions' | 'doorMaterial', string>> = {};
         const setDesc = set.description.toLowerCase();
         const setItemsText = set.items.map(i => (i.name + i.description).toLowerCase()).join(' ');
         const isSetFireRated = setDesc.includes('fire') || setDesc.includes('rated') || setItemsText.includes('fire') || setItemsText.includes('rated') || setItemsText.includes('label');
@@ -254,7 +305,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         });
         if (hingeItems.length > 0) {
             const totalHinges = hingeItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-            if (door.height > 90 && totalHinges < 4) conflicts.height = `CRITICAL: Door height ${formatDimension(door.height)} (> 90") usually requires 4 hinges, set has ${totalHinges}.`;
+            if (door.height > 90 && totalHinges < 4) conflicts.dimensions = `CRITICAL: Door height ${formatDimension(door.height)} (> 90") usually requires 4 hinges, set has ${totalHinges}.`;
         }
         const doorMat = (door.doorMaterial || '').toLowerCase();
         if (setDesc.includes('wood door') && (doorMat.includes('hollow') || doorMat.includes('metal') || doorMat.includes('alum') || doorMat.includes('steel'))) conflicts.doorMaterial = `CONFLICT: Set specified for 'Wood Door', applied to '${door.doorMaterial}'.`;
@@ -346,6 +397,8 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                             variant="outline"
                             onClick={() => canReupload && fileInputRef.current?.click()}
                             disabled={isLoading || !canReupload}
+                            loading={isLoading}
+                            loadingText="Processing..."
                             title={!canReupload ? 'Use "Process Files" to upload your first PDF and Excel together' : undefined}
                             className="gap-1.5"
                         >
@@ -488,14 +541,27 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                 const doorCount = doorCounts.get(set.id) || 0;
                                 const hasZeroQtyItem = set.items.some(item => !item.quantity || item.quantity <= 0);
                                 const assignedDoors = doors.filter(d => d.assignedHardwareSet?.id === set.id);
+                                const assignedDoorMismatches = getAssignedDoorMismatchMap(assignedDoors);
                                 const currentDoorSelection = selectedDoors[set.id] || new Set();
                                 const isUnavailable = set.isAvailable === false;
-                                const hasAnyConflicts = assignedDoors.some(d => Object.keys(getDoorConflicts(set, d)).length > 0);
+                                const isManualEntry = set.isManualEntry === true;
+                                const hasAnyConflicts = assignedDoors.some(d => {
+                                    const setConflicts = getDoorConflicts(set, d);
+                                    const groupConflicts = assignedDoorMismatches.get(d.id) ?? {};
+                                    return Object.keys(setConflicts).length > 0 || Object.keys(groupConflicts).length > 0;
+                                });
                                 const isSelected = selectedRows.has(set.id);
 
                                 return (
                                     <React.Fragment key={set.id}>
-                                        <tr className={`transition-colors ${isUnavailable ? 'border-l-2 border-l-red-400 bg-red-50 hover:bg-red-100' : isSelected ? 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)]' : 'hover:bg-[var(--bg-subtle)]'}`}>
+                                        <tr className={`transition-colors ${isUnavailable
+                                            ? 'border-l-2 border-l-red-400 bg-red-50 hover:bg-red-100'
+                                            : isManualEntry
+                                                ? 'border-l-2 border-l-amber-300 bg-amber-50/80 hover:bg-amber-100'
+                                                : isSelected
+                                                    ? 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)]'
+                                                    : 'hover:bg-[var(--bg-subtle)]'
+                                        }`}>
                                             <td className="px-4 py-3">
                                                 <input type="checkbox" className="rounded border-gray-300 text-primary-600" checked={isSelected} onChange={() => toggleSelectRow(set.id)} />
                                             </td>
@@ -509,6 +575,11 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                     <span className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${isUnavailable ? 'bg-red-100 text-red-700 line-through' : 'bg-[var(--bg-muted)] text-[var(--text)]'}`}>
                                                         {set.name}
                                                     </span>
+                                                    {isManualEntry && (
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700">
+                                                            Manual
+                                                        </span>
+                                                    )}
                                                     {isUnavailable && <Badge variant="destructive" className="text-[10px] py-0 px-1.5">Unavailable</Badge>}
                                                     {hasZeroQtyItem && (
                                                         <Tooltip content="Set contains items with zero quantity">
@@ -555,13 +626,13 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                         {/* ── Expanded row ──────────────────────────────────────── */}
                                         {isExpanded && (() => {
                                             const currentTab = activeTab[set.id] || 'components';
-                                            const setActiveTabForSet = (tab: 'components' | 'doors' | 'details') =>
+                                            const setActiveTabForSet = (tab: 'components' | 'doors' | 'details' | 'prep') =>
                                                 setActiveTab(prev => ({ ...prev, [set.id]: tab }));
 
                                             return (
                                                 <tr className="bg-[var(--bg-subtle)]">
                                                     <td colSpan={5} className="px-5 py-4">
-                                                        <Tabs value={currentTab} onValueChange={(v) => setActiveTabForSet(v as 'components' | 'doors' | 'details')}>
+                                                        <Tabs value={currentTab} onValueChange={(v) => setActiveTabForSet(v as 'components' | 'doors' | 'details' | 'prep')}>
                                                             <TabsList className="mb-3">
                                                                 <TabsTrigger value="components" className="gap-1.5 text-xs">
                                                                     <Layers className="w-3.5 h-3.5" />
@@ -581,6 +652,15 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                 <TabsTrigger value="details" className="gap-1.5 text-xs">
                                                                     <Info className="w-3.5 h-3.5" />
                                                                     Details
+                                                                </TabsTrigger>
+                                                                <TabsTrigger value="prep" className="gap-1.5 text-xs">
+                                                                    <Wrench className="w-3.5 h-3.5" />
+                                                                    Hardware Prep
+                                                                    {set.prep && (
+                                                                        <span className="ml-1 bg-[var(--primary-bg-hover)] text-[var(--primary-text)] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                                                            ✓
+                                                                        </span>
+                                                                    )}
                                                                 </TabsTrigger>
                                                             </TabsList>
 
@@ -666,15 +746,19 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Qty</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Door Location</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Rating</th>
+                                                                                        <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Leaf Count</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">W × H</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Thk</th>
                                                                                         <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Material</th>
-                                                                                        <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Frame</th>
+                                                                                        <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Int / Ext</th>
                                                                                     </tr>
                                                                                 </thead>
                                                                                 <tbody className="divide-y divide-[var(--border-subtle)]">
                                                                                     {assignedDoors.map(door => {
-                                                                                        const conflicts = getDoorConflicts(set, door);
+                                                                                        const conflicts = {
+                                                                                            ...assignedDoorMismatches.get(door.id),
+                                                                                            ...getDoorConflicts(set, door),
+                                                                                        };
                                                                                         const getCellClass = (warning: string | undefined) => {
                                                                                             if (!warning) return '';
                                                                                             if (warning.includes('CRITICAL') || warning.includes('CONFLICT')) return 'bg-red-50 text-red-800 font-medium';
@@ -694,14 +778,18 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                                                 <td className={`px-3 py-2 ${getCellClass(conflicts.fireRating)}`} title={conflicts.fireRating}>
                                                                                                     {door.fireRating}{conflicts.fireRating && renderConflictIcon(conflicts.fireRating, conflicts.fireRating.includes('CRITICAL'))}
                                                                                                 </td>
-                                                                                                <td className={`px-3 py-2 ${getCellClass(conflicts.height)}`} title={conflicts.height}>
-                                                                                                    {`${formatDimension(door.width)} × ${formatDimension(door.height)}`}{conflicts.height && renderConflictIcon(conflicts.height, true)}
+                                                                                                <td className={`px-3 py-2 text-[var(--text-muted)] tabular-nums ${getCellClass(conflicts.leafCount)}`} title={conflicts.leafCount}>
+                                                                                                    {door.leafCountDisplay ?? (door.leafCount != null ? String(door.leafCount) : '—')}
+                                                                                                    {conflicts.leafCount && renderConflictIcon(conflicts.leafCount, false)}
+                                                                                                </td>
+                                                                                                <td className={`px-3 py-2 ${getCellClass(conflicts.dimensions)}`} title={conflicts.dimensions}>
+                                                                                                    {`${formatDimension(door.width)} × ${formatDimension(door.height)}`}{conflicts.dimensions && renderConflictIcon(conflicts.dimensions, conflicts.dimensions.includes('CRITICAL') || conflicts.dimensions.includes('CONFLICT'))}
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2 text-[var(--text-muted)]">{`${door.thickness}"`}</td>
                                                                                                 <td className={`px-3 py-2 ${getCellClass(conflicts.doorMaterial)}`} title={conflicts.doorMaterial}>
                                                                                                     {door.doorMaterial}{conflicts.doorMaterial && renderConflictIcon(conflicts.doorMaterial, true)}
                                                                                                 </td>
-                                                                                                <td className="px-3 py-2 text-[var(--text-muted)]">{door.frameMaterial}</td>
+                                                                                                <td className={`px-3 py-2 text-[var(--text-muted)] ${getCellClass(conflicts.interiorExterior)}`} title={conflicts.interiorExterior}>{door.interiorExterior || '—'}{conflicts.interiorExterior && renderConflictIcon(conflicts.interiorExterior, false)}</td>
                                                                                             </tr>
                                                                                         );
                                                                                     })}
@@ -720,6 +808,92 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                                     <div><span className="font-medium text-[var(--text-muted)] text-xs uppercase tracking-wide">Description</span><p className="mt-1">{set.description || '—'}</p></div>
                                                                     <div><span className="font-medium text-[var(--text-muted)] text-xs uppercase tracking-wide">Division</span><p className="mt-1">{set.division || '—'}</p></div>
                                                                 </div>
+                                                            </TabsContent>
+
+                                                            {/* Hardware Prep tab */}
+                                                            <TabsContent value="prep">
+                                                                {(() => {
+                                                                    const isGenerating = prepGenerating.has(set.id);
+                                                                    const prepError = prepErrors[set.id];
+                                                                    const prep = set.prep;
+
+                                                                    if (isGenerating) {
+                                                                        return (
+                                                                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                                                                <Loader2 className="w-8 h-8 text-[var(--primary-text-muted)] animate-spin mb-3" />
+                                                                                <p className="text-sm font-medium text-[var(--text-secondary)]">Analyzing hardware components…</p>
+                                                                                <p className="text-xs text-[var(--text-muted)] mt-1">Generating function string and prep detail</p>
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    if (!prep) {
+                                                                        return (
+                                                                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                                                                <div className="w-12 h-12 rounded-full bg-[var(--bg-muted)] flex items-center justify-center mb-4">
+                                                                                    <Wrench className="w-6 h-6 text-[var(--text-faint)]" />
+                                                                                </div>
+                                                                                <h4 className="text-sm font-semibold text-[var(--text-secondary)] mb-1">No hardware prep generated yet</h4>
+                                                                                <p className="text-xs text-[var(--text-muted)] mb-5 max-w-xs">
+                                                                                    Prep is generated automatically during the upload pipeline. Use this button if it was missed.
+                                                                                </p>
+                                                                                {prepError && (
+                                                                                    <div className="mb-4 px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-xs text-red-700 dark:text-red-400 max-w-sm text-left">
+                                                                                        <span className="font-semibold">Error: </span>{prepError}
+                                                                                    </div>
+                                                                                )}
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    onClick={() => handleGeneratePrep(set)}
+                                                                                    disabled={set.items.length === 0}
+                                                                                    className="gap-1.5"
+                                                                                >
+                                                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                                                    Generate Hardware Prep
+                                                                                </Button>
+                                                                                {set.items.length === 0 && (
+                                                                                    <p className="text-[10px] text-[var(--text-faint)] mt-2">Add components to this set first</p>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    return (
+                                                                        <div>
+                                                                            {/* Header row */}
+                                                                            <div className="flex items-center justify-between mb-3">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                                                                    <span className="text-xs text-[var(--text-muted)]">Hardware prep generated</span>
+                                                                                </div>
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    onClick={() => handleGeneratePrep(set)}
+                                                                                    className="gap-1.5 h-7 text-xs"
+                                                                                >
+                                                                                    <RefreshCw className="w-3 h-3" />
+                                                                                    Regenerate
+                                                                                </Button>
+                                                                            </div>
+
+                                                                            {/* Function string — primary display */}
+                                                                            <div className="mb-4 px-4 py-3.5 rounded-lg border border-[var(--primary-border)] bg-[var(--primary-bg)] flex items-center gap-3">
+                                                                                <Wrench className="w-4 h-4 text-[var(--primary-text-muted)] flex-shrink-0" />
+                                                                                <div>
+                                                                                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--primary-text-muted)] mb-0.5">Function</p>
+                                                                                    <p className="text-sm font-semibold text-[var(--text)]">{prep || '—'}</p>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {prepError && (
+                                                                                <div className="mb-3 px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-xs text-red-700 dark:text-red-400">
+                                                                                    <span className="font-semibold">Regeneration failed: </span>{prepError}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                             </TabsContent>
                                                         </Tabs>
                                                     </td>

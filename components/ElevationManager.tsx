@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ElevationType } from '../types';
 import { compressElevationImage, deleteElevationImage, uploadElevationImage } from '../services/elevationService';
+import { Button } from '@/components/ui/button';
 
 interface ElevationManagerProps {
     elevationTypes: ElevationType[];
@@ -485,17 +486,20 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                             {/* Action buttons */}
                             <div className={`flex gap-2 ${isEditMode ? 'flex-row' : ''}`}>
                                 {isEditMode && (
-                                    <button
+                                    <Button
                                         onClick={resetForm}
                                         disabled={isSaving}
-                                        className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] transition-colors"
+                                        variant="outline"
+                                        className="px-4 py-2.5"
                                     >
                                         Cancel
-                                    </button>
+                                    </Button>
                                 )}
-                                <button
+                                <Button
                                     onClick={handleSave}
                                     disabled={!canSave}
+                                    loading={isSaving}
+                                    loadingText={isEditMode ? 'Saving Changes...' : 'Creating Elevation Type...'}
                                     className={`flex-1 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
                                         !canSave
                                             ? 'bg-[var(--bg-muted)] text-[var(--text-faint)] cursor-not-allowed'
@@ -512,7 +516,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                         ? <><RefreshCw className="w-4 h-4" /> Replace Image for {duplicate.code}</>
                                         : <><Plus className="w-4 h-4" /> Create Elevation Type</>
                                     }
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -520,12 +524,12 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
 
                 {/* ── Footer ── */}
                 <div className="flex items-center justify-end px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg)] rounded-b-xl flex-shrink-0">
-                    <button
+                    <Button
                         onClick={onClose}
-                        className="px-5 py-2 text-sm bg-[var(--primary-action)] text-white rounded-lg hover:bg-[var(--primary-action-hover)] font-semibold transition-colors shadow-sm"
+                        disabled={isSaving}
                     >
                         Done
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

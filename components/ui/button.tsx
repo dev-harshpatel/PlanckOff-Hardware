@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-ring)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-[var(--bg)]',
@@ -35,17 +36,31 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  loading?: boolean;
+  loadingText?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, loadingText, children, disabled, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
+    const spinnerSize = size === 'icon' ? 'sm' : size === 'lg' ? 'sm' : size === 'sm' ? 'xs' : 'sm';
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={disabled || loading}
         {...props}
-      />
+      >
+        {loading ? (
+          <>
+            <Spinner size={spinnerSize} className="text-current" />
+            {size !== 'icon' && (loadingText ?? children)}
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
     );
   },
 );

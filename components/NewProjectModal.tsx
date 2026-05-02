@@ -39,8 +39,6 @@ interface NewProjectModalProps {
   projectToEdit?: Project | null;
 }
 
-import { Spinner } from '@/components/ui/spinner';
-
 const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave, isLoading, addToast, teamMembers = [], projectToEdit = null }) => {
   const [projectData, setProjectData] = useState<NewProjectData>({
     name: '',
@@ -73,7 +71,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           assignedTo: projectToEdit.assignedTo ?? '',
         });
       } else {
-        // Reset form when modal opens
         setProjectData({
           name: '',
           description: '',
@@ -176,7 +173,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         </DialogHeader>
 
         <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
-          {/* Project Name */}
           <div>
             <Label htmlFor="name" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Project Name <span className="text-red-500">*</span>
@@ -223,7 +219,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="country" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Project Location <span className="text-red-500">*</span>
+                Project Location <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -246,7 +242,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
             <div>
               <Label htmlFor="province" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Project Province <span className="text-red-500">*</span>
+                Project Province <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -268,7 +264,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             </div>
           </div>
 
-          {/* Project Number and Due Date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="projectNumber" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
@@ -293,7 +288,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
             <div>
               <Label htmlFor="dueDate" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Due Date <span className="text-red-500">*</span>
+                Due Date <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -312,11 +307,10 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             </div>
           </div>
 
-          {/* Assign To */}
           {teamMembers.length > 0 && (
             <div>
               <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Assign To <span className="text-red-500">*</span>
+                Assign To <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
@@ -338,7 +332,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
             </div>
           )}
 
-          {/* Status Selector */}
           <div>
             <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Status <span className="text-red-500">*</span>
@@ -373,16 +366,12 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           <Button
             onClick={handleSave}
             disabled={isSaveDisabled}
+            loading={isLoading}
+            loadingText={isEditMode ? 'Saving Changes...' : 'Creating Project...'}
             className="min-w-[160px]"
           >
-            {isLoading ? (
-              <Spinner size="sm" className="text-current" />
-            ) : (
-              <>
-                <CheckIcon className="h-4 w-4" />
-                {isEditMode ? 'Save Changes' : 'Create Project'}
-              </>
-            )}
+            <CheckIcon className="h-4 w-4" />
+            {isEditMode ? 'Save Changes' : 'Create Project'}
           </Button>
         </DialogFooter>
       </DialogContent>

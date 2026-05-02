@@ -245,32 +245,31 @@ const HardwareGroupTable: React.FC<{
             {/* Group header */}
             <button
                 onClick={onToggleCollapse}
-                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                className={`w-full flex items-start justify-between px-4 py-3 text-left transition-colors ${
                     isPdf
                         ? 'bg-gray-50 hover:bg-gray-100 border-b border-gray-200'
                         : 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)] border-b border-[var(--primary-border)]'
                 }`}
             >
-                {/* Left: set name + door tags */}
-                <div className="flex items-center gap-2.5 min-w-0">
+                {/* Left: set name + door tags (wraps to second line) */}
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     {collapsed
-                        ? <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 ${isPdf ? 'text-gray-400' : 'text-[var(--primary-text-muted)]'}`} />
-                        : <ChevronDown  className={`w-3.5 h-3.5 flex-shrink-0 ${isPdf ? 'text-gray-400' : 'text-[var(--primary-text-muted)]'}`} />
+                        ? <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${isPdf ? 'text-gray-400' : 'text-[var(--primary-text-muted)]'}`} />
+                        : <ChevronDown  className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${isPdf ? 'text-gray-400' : 'text-[var(--primary-text-muted)]'}`} />
                     }
-                    <span className={`text-xs font-semibold flex-shrink-0 ${isPdf ? 'text-gray-700' : 'text-[var(--primary-text)]'}`}>
-                        {group.label}
-                    </span>
-                    {doorTagText && (
-                        <>
-                            <span className={`text-[10px] flex-shrink-0 ${isPdf ? 'text-gray-300' : 'text-[var(--primary-border)]'}`}>|</span>
-                            <span className={`text-[10px] truncate ${isPdf ? 'text-gray-500' : 'text-[var(--primary-text-muted)]'}`}>
+                    <div className="min-w-0 flex-1">
+                        <span className={`text-xs font-semibold ${isPdf ? 'text-gray-700' : 'text-[var(--primary-text)]'}`}>
+                            {group.label}
+                        </span>
+                        {doorTagText && (
+                            <p className={`text-[10px] mt-0.5 break-words leading-relaxed ${isPdf ? 'text-gray-500' : 'text-[var(--primary-text-muted)]'}`}>
                                 {doorTagText}
-                            </span>
-                        </>
-                    )}
+                            </p>
+                        )}
+                    </div>
                 </div>
                 {/* Right: position + item count */}
-                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                <div className="flex items-center gap-2 flex-shrink-0 ml-3 mt-0.5">
                     <span className={`text-[10px] ${isPdf ? 'text-gray-400' : 'text-[var(--text-faint)]'}`}>{index + 1} / {total}</span>
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                         isPdf
@@ -364,7 +363,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
     const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
 
     // ── Usage stats (for flat / manufacturer / type groupings) ───────────────
-    // Deduplicates items across all sets using all 4 identifying fields.
+    // Deduplicates items across all sets using the identifying fields plus Qty/Set.
     // Accumulates multipliedQuantity (qty × doors for that set) so totals
     // reflect the real procurement count across every set the item appears in.
     const usageStats = useMemo(() => {
@@ -373,7 +372,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             const setName = set.name.toLowerCase();
             const doorsWithSet = doors.filter(d => getDoorHwSetName(d)?.toLowerCase() === setName);
             set.items.forEach(item => {
-                const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}`;
+                const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
                 if (!map.has(key)) map.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
                 const usage = map.get(key)!;
                 doorsWithSet.forEach(door => {
@@ -475,9 +474,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 import('jspdf'),
                 import('jspdf-autotable'),
             ]);
-            const doc     = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-            const headers = colDefs.map(c => c.label);
-            let isFirst   = true;
+            const doc       = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const headers   = colDefs.map(c => c.label);
+            const marginL   = 14;
+            const marginR   = 14;
+            const pageW     = doc.internal.pageSize.getWidth();
+            const maxTextW  = pageW - marginL - marginR;
+            let isFirst     = true;
 
             for (const group of groups) {
                 if (!isFirst) doc.addPage();
@@ -487,18 +490,38 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                     ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
                     : '';
 
+                // Project name header
                 doc.setFontSize(11);
                 doc.setFont('helvetica', 'bold');
-                doc.text(projectName || 'Hardware Set Report', 14, 14);
+                doc.setTextColor(0);
+                doc.text(projectName || 'Hardware Set Report', marginL, 14);
+
+                // Group label + item count on one line
                 doc.setFontSize(8);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(100);
-                const subtitle = doorTagText ? `${group.label}  —  ${doorTagText}` : group.label;
-                doc.text(`${subtitle}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`, 14, 20);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(30);
+                doc.text(
+                    `${group.label}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`,
+                    marginL, 21,
+                );
+
+                let startY = 27;
+
+                // Door tags — wrap to fit page width
+                if (doorTagText) {
+                    doc.setFontSize(7);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(100);
+                    const wrappedLines = doc.splitTextToSize(doorTagText, maxTextW) as string[];
+                    doc.text(wrappedLines, marginL, startY);
+                    // Each wrapped line is ~3.5 mm tall at 7pt; add 2 mm gap before table
+                    startY += wrappedLines.length * 3.5 + 2;
+                }
+
                 doc.setTextColor(0);
 
                 autoTable(doc, {
-                    startY: 25,
+                    startY,
                     head: [headers],
                     body: group.items.map(usage =>
                         colDefs.map(c => getCellValue(usage, c.id) || '—'),
@@ -506,7 +529,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                     styles:      { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
                     headStyles:  { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 6.5 },
                     alternateRowStyles: { fillColor: [248, 250, 252] },
-                    margin: { left: 14, right: 14 },
+                    margin: { left: marginL, right: marginR },
                 });
             }
             doc.save(`${safeProjectName}.pdf`);
@@ -691,40 +714,44 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             <div className="flex-1 min-w-0 flex flex-col bg-[var(--bg)]">
 
                 {/* Preview panel header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
-                    <div className="flex items-center gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
+                    <div className="flex min-w-0 items-center gap-2">
                         {format === 'pdf'
                             ? <FileText        className="w-4 h-4 text-[var(--text-muted)]" />
                             : <FileSpreadsheet className="w-4 h-4 text-[var(--text-muted)]" />
                         }
-                        <span className="text-xs font-semibold text-[var(--text)]">
+                        <span className="shrink-0 text-xs font-semibold text-[var(--text)]">
                             {previewReady
                                 ? `Preview — ${format === 'pdf' ? 'PDF' : 'Excel'}`
                                 : 'Preview'
                             }
                         </span>
                         {previewReady && (
-                            <span className="text-[10px] text-[var(--text-faint)] ml-1">
+                            <span className="min-w-0 truncate text-[10px] text-[var(--text-faint)] ml-1">
                                 {usageStats.length} items · {requiredColumns.length} cols · {groups.length} group{groups.length !== 1 ? 's' : ''}
                             </span>
                         )}
                     </div>
-                    {previewReady && groups.length > 0 && (
-                        <CollapseAllButton
-                            allCollapsed={allCollapsed}
-                            onCollapseAll={handleCollapseAll}
-                            onExpandAll={handleExpandAll}
-                        />
-                    )}
-                    {previewReady && (
-                        <button
-                            onClick={handleDownload}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] text-white text-xs font-semibold transition-all shadow-sm"
-                        >
-                            <Download className="w-3.5 h-3.5" />
-                            Export {format === 'pdf' ? 'PDF' : 'Excel'}
-                        </button>
-                    )}
+                    <div className="flex justify-self-center">
+                        {previewReady && groups.length > 0 && (
+                            <CollapseAllButton
+                                allCollapsed={allCollapsed}
+                                onCollapseAll={handleCollapseAll}
+                                onExpandAll={handleExpandAll}
+                            />
+                        )}
+                    </div>
+                    <div className="flex justify-self-end">
+                        {previewReady && (
+                            <button
+                                onClick={handleDownload}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)] text-white text-xs font-semibold transition-all shadow-sm"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Export {format === 'pdf' ? 'PDF' : 'Excel'}
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Preview content area */}

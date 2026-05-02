@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Role, TeamMemberStatus } from '../types';
 import InviteUserPanel from '../components/InviteUserPanel';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TeamManagementProps {
   teamMembers: TeamMember[];
@@ -111,23 +112,21 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ teamMembers, onInviteUs
                             />
                         </div>
                         <div className="flex items-center gap-4 w-full md:w-auto">
-                            <select
-                                value={roleFilter}
-                                onChange={e => setRoleFilter(e.target.value as Role | 'all')}
-                                className="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            >
-                                <option value="all">All Roles</option>
-                                {Object.values(Role).map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                            <select
-                                value={statusFilter}
-                                onChange={e => setStatusFilter(e.target.value as TeamMemberStatus | 'all')}
-                                className="w-full md:w-auto pl-3 pr-8 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            >
-                                <option value="all">All Statuses</option>
-                                <option value="Active">Active</option>
-                                <option value="Pending">Pending</option>
-                            </select>
+                            <Select value={roleFilter} onValueChange={v => setRoleFilter(v as Role | 'all')}>
+                                <SelectTrigger className="w-full md:w-auto min-w-[130px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Roles</SelectItem>
+                                    {Object.values(Role).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as TeamMemberStatus | 'all')}>
+                                <SelectTrigger className="w-full md:w-auto min-w-[140px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="Active">Active</SelectItem>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

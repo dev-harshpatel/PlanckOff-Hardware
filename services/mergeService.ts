@@ -260,6 +260,7 @@ export function mergeHardwareData(
       })),
       notes: pdfSet.notes ?? '',
       doors: assignedDoors,
+      prep: pdfSet.prep,
     };
   });
 

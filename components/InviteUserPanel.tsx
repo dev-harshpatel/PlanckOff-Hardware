@@ -1,15 +1,15 @@
 
 import React, { useState } from 'react';
 import { Role } from '../types';
-import { 
-  EnvelopeIcon, 
-  UserPlusIcon, 
-  ArrowPathIcon, 
-  ClipboardDocumentIcon, 
-  CheckCircleIcon, 
-  ShieldCheckIcon,
+import {
+  EnvelopeIcon,
+  UserPlusIcon,
+  ArrowPathIcon,
+  ClipboardDocumentIcon,
+  CheckCircleIcon,
   LockClosedIcon
 } from './icons';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface InviteUserPanelProps {
   onInvite: (userData: { email: string; role: Role; id: string; }) => void;
@@ -161,20 +161,14 @@ const InviteUserPanel: React.FC<InviteUserPanelProps> = ({ onInvite }) => {
 
         <div className="space-y-1">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Access Role</label>
-            <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    <ShieldCheckIcon className="w-5 h-5" />
-                </div>
-                <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as Role)}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all appearance-none"
-                >
+            <Select value={role} onValueChange={v => setRole(v as Role)}>
+                <SelectTrigger className="w-full h-12"><SelectValue /></SelectTrigger>
+                <SelectContent>
                     {Object.values(Role).map(r => (
-                        <option key={r} value={r}>{r}</option>
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
                     ))}
-                </select>
-            </div>
+                </SelectContent>
+            </Select>
         </div>
 
         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-3">

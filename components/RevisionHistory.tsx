@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SubmittalRevision, SubmittalStatus } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface RevisionHistoryProps {
     revisions: SubmittalRevision[];
@@ -325,14 +326,16 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
                                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                     Initial Status
                                 </label>
-                                <select
+                                <Select
                                     value={newRevisionData.status}
-                                    onChange={(e) => setNewRevisionData(prev => ({ ...prev, status: e.target.value as SubmittalStatus }))}
-                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
+                                    onValueChange={(v) => setNewRevisionData(prev => ({ ...prev, status: v as SubmittalStatus }))}
                                 >
-                                    <option value="Draft">Draft</option>
-                                    <option value="Submitted">Submitted</option>
-                                </select>
+                                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Draft">Draft</SelectItem>
+                                        <SelectItem value="Submitted">Submitted</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ElectrificationSpec } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ElectrificationEditorProps {
     value?: ElectrificationSpec;
@@ -83,31 +84,35 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
                                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                                     Voltage <span className="text-red-500">*</span>
                                 </label>
-                                <select
-                                    value={value.voltage || ''}
-                                    onChange={(e) => updateField('voltage', e.target.value as ElectrificationSpec['voltage'])}
-                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                                <Select
+                                    value={value.voltage || '__none__'}
+                                    onValueChange={v => updateField('voltage', (v === '__none__' ? undefined : v) as ElectrificationSpec['voltage'])}
                                 >
-                                    <option value="">Select...</option>
-                                    <option value="12V DC">12V DC</option>
-                                    <option value="24V DC">24V DC (Most Common)</option>
-                                    <option value="120V AC">120V AC</option>
-                                    <option value="POE">POE (Power over Ethernet)</option>
-                                </select>
+                                    <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">Select...</SelectItem>
+                                        <SelectItem value="12V DC">12V DC</SelectItem>
+                                        <SelectItem value="24V DC">24V DC (Most Common)</SelectItem>
+                                        <SelectItem value="120V AC">120V AC</SelectItem>
+                                        <SelectItem value="POE">POE (Power over Ethernet)</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Wiring Method</label>
-                                <select
-                                    value={value.wiringMethod || ''}
-                                    onChange={(e) => updateField('wiringMethod', e.target.value as ElectrificationSpec['wiringMethod'])}
-                                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                                <Select
+                                    value={value.wiringMethod || '__none__'}
+                                    onValueChange={v => updateField('wiringMethod', (v === '__none__' ? undefined : v) as ElectrificationSpec['wiringMethod'])}
                                 >
-                                    <option value="">Select...</option>
-                                    <option value="EPT">EPT (Electric Power Transfer)</option>
-                                    <option value="Loop">Loop / Conduit</option>
-                                    <option value="Wireless">Wireless / Battery</option>
-                                </select>
+                                    <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">Select...</SelectItem>
+                                        <SelectItem value="EPT">EPT (Electric Power Transfer)</SelectItem>
+                                        <SelectItem value="Loop">Loop / Conduit</SelectItem>
+                                        <SelectItem value="Wireless">Wireless / Battery</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 
@@ -132,17 +137,19 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
 
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Access Control Type</label>
-                            <select
+                            <Select
                                 value={value.accessControlType || 'None'}
-                                onChange={(e) => updateField('accessControlType', e.target.value as ElectrificationSpec['accessControlType'])}
-                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                                onValueChange={v => updateField('accessControlType', v as ElectrificationSpec['accessControlType'])}
                             >
-                                <option value="None">None / Mechanical Only</option>
-                                <option value="Card Reader">Card Reader (Proximity/RFID)</option>
-                                <option value="Keypad">Keypad / PIN Entry</option>
-                                <option value="Biometric">Biometric (Fingerprint/Facial)</option>
-                                <option value="Mobile Credential">Mobile Credential (Bluetooth/NFC)</option>
-                            </select>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="None">None / Mechanical Only</SelectItem>
+                                    <SelectItem value="Card Reader">Card Reader (Proximity/RFID)</SelectItem>
+                                    <SelectItem value="Keypad">Keypad / PIN Entry</SelectItem>
+                                    <SelectItem value="Biometric">Biometric (Fingerprint/Facial)</SelectItem>
+                                    <SelectItem value="Mobile Credential">Mobile Credential (Bluetooth/NFC)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -176,12 +183,12 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
 
                     {/* Warning for missing voltage */}
                     {!value.voltage && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                             <div className="flex items-start gap-2">
-                                <span className="text-yellow-600 text-lg">⚠️</span>
+                                <span className="text-amber-600 text-lg">⚠️</span>
                                 <div>
-                                    <div className="text-sm font-semibold text-yellow-800">Voltage Required</div>
-                                    <div className="text-xs text-yellow-700">
+                                    <div className="text-sm font-semibold text-amber-800 dark:text-amber-400">Voltage Required</div>
+                                    <div className="text-xs text-amber-700 dark:text-amber-500">
                                         Electrified doors must specify voltage for proper power supply planning
                                     </div>
                                 </div>
@@ -192,11 +199,11 @@ const ElectrificationEditor: React.FC<ElectrificationEditorProps> = ({ value, on
             )}
 
             {/* Live Summary Preview */}
-            <div className={`border rounded-lg p-3 ${value?.isElectrified ? 'bg-yellow-50 border-yellow-200' : 'bg-[var(--bg-subtle)] border-[var(--border)]'}`}>
-                <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${value?.isElectrified ? 'text-yellow-700' : 'text-[var(--text-muted)]'}`}>
+            <div className={`border rounded-lg p-3 ${value?.isElectrified ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-[var(--bg-subtle)] border-[var(--border)]'}`}>
+                <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${value?.isElectrified ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--text-muted)]'}`}>
                     Electrification Summary
                 </div>
-                <div className={`text-sm font-medium ${value?.isElectrified ? 'text-yellow-900' : 'text-[var(--text-secondary)]'}`}>
+                <div className={`text-sm font-medium ${value?.isElectrified ? 'text-amber-900 dark:text-amber-300' : 'text-[var(--text-secondary)]'}`}>
                     {getSummary()}
                 </div>
             </div>

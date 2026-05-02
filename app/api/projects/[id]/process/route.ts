@@ -19,15 +19,17 @@ import { parseDoorSchedule } from '@/services/doorScheduleService';
 import type { DoorScheduleResult } from '@/services/doorScheduleService';
 import { extractDoorScheduleFromPdf } from '@/services/doorSchedulePdfService';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
+import { generatePrepForAllSets } from '@/services/hardwarePrepService';
 import {
   upsertDoorScheduleImport,
   upsertHardwarePdfExtraction,
   upsertProjectHardwareFinal,
 } from '@/lib/db/hardware';
+import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
@@ -151,9 +153,28 @@ export const POST = withAuth(
       );
     }
 
+    // ── Step 3b: Generate hardware prep (function strings) for all sets ───
+    console.log(`[process:prep] Generating prep for ${pdfResult.sets.length} sets…`);
+    const prepStart = Date.now();
+    let prepMap: Record<string, string> = {};
+    try {
+      prepMap = await generatePrepForAllSets(pdfResult.sets);
+      console.log(
+        `[process:prep] Done in ${Date.now() - prepStart}ms — ` +
+        `got=${Object.keys(prepMap).length}/${pdfResult.sets.length}  keys=${JSON.stringify(Object.keys(prepMap))}`,
+      );
+    } catch (prepErr) {
+      console.error('[process:prep] Prep generation failed (non-fatal):', prepErr);
+    }
+
+    const setsWithPrep: ExtractedHardwareSet[] = pdfResult.sets.map(set => ({
+      ...set,
+      prep: prepMap[set.setName],
+    }));
+
     // ── Step 4: Persist PDF extraction ────────────────────────────────────
     const { data: pdfData, error: pdfError } = await upsertHardwarePdfExtraction(projectId, {
-      extractedJson: pdfResult.sets,
+      extractedJson: setsWithPrep,
       fileName: pdfField.name,
       uploadedBy: ctx.user.id,
     });
@@ -163,8 +184,8 @@ export const POST = withAuth(
     }
 
     // ── Step 4b: Queue new unique items for master hardware DB approval ───
-    console.log(`[process:master] PDF extracted sets=${pdfResult.sets.length}  items=${pdfResult.itemCount}`);
-    const candidateItems = pdfResult.sets
+    console.log(`[process:master] PDF extracted sets=${setsWithPrep.length}  items=${pdfResult.itemCount}`);
+    const candidateItems = setsWithPrep
       .flatMap(set =>
         (set.hardwareItems ?? []).map(item => ({
           name: (item.item ?? '').trim(),
@@ -197,7 +218,7 @@ export const POST = withAuth(
     }
 
     // ── Step 5: Merge ─────────────────────────────────────────────────────
-    const mergeResult = mergeHardwareData(pdfResult.sets, scheduleResult.rows, projectId);
+    const mergeResult = mergeHardwareData(setsWithPrep, scheduleResult.rows, projectId);
 
     // ── Step 6: Persist merged final JSON ─────────────────────────────────
     const { error: finalError } = await upsertProjectHardwareFinal(projectId, {

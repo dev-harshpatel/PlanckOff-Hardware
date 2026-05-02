@@ -1,6 +1,7 @@
-
 import React, { useState } from 'react';
 import { Role } from '../types';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface InviteMemberModalProps {
   isOpen: boolean;
@@ -8,8 +9,6 @@ interface InviteMemberModalProps {
   onInvite: (email: string, role: Role) => void;
   isLoading: boolean;
 }
-
-import { Spinner } from '@/components/ui/spinner';
 
 const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, onInvite, isLoading }) => {
   const [email, setEmail] = useState('');
@@ -28,13 +27,13 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, 
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4"
       onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
-      <div 
+      <div
         className="bg-white rounded-lg shadow-xl w-full max-w-md"
         onClick={e => e.stopPropagation()}
       >
@@ -45,11 +44,11 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, 
         <div className="p-6 space-y-4">
           <div>
             <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-700">Email Address</label>
-            <input 
-              type="email" 
-              id="inviteEmail" 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
+            <input
+              type="email"
+              id="inviteEmail"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
               placeholder="name@company.com"
               required
@@ -57,31 +56,28 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, 
           </div>
           <div>
             <label htmlFor="inviteRole" className="block text-sm font-medium text-gray-700">Role</label>
-            <select
-              id="inviteRole"
-              value={role}
-              onChange={e => setRole(e.target.value as Role)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-            >
-              {Object.values(Role).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            <Select value={role} onValueChange={v => setRole(v as Role)}>
+              <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.values(Role).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
         <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
-          <button 
-            onClick={onClose} 
-            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 text-sm font-semibold"
-          >
+          <Button onClick={onClose} variant="outline" className="bg-white">
             Cancel
-          </button>
-          <button 
+          </Button>
+          <Button
             onClick={handleInviteClick}
             disabled={!email.trim() || isLoading}
-            className="w-32 flex justify-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-semibold disabled:opacity-50"
+            loading={isLoading}
+            loadingText="Sending Invite..."
+            className="w-32"
           >
-            {isLoading ? <Spinner size="md" className="text-white" /> : 'Send Invite'}
-          </button>
+            Send Invite
+          </Button>
         </div>
       </div>
     </div>

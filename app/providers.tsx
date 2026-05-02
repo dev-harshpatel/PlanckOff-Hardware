@@ -7,6 +7,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { BackgroundUploadProvider } from '@/contexts/BackgroundUploadContext';
 import { AnnouncementProvider } from '@/contexts/AnnouncementContext';
 import { ProcessingWidgetProvider } from '@/contexts/ProcessingWidgetContext';
+import { NavigationLoadingProvider } from '@/contexts/NavigationLoadingContext';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -21,9 +22,11 @@ export function Providers({ children }: ProvidersProps) {
           <ProjectProvider>
             <BackgroundUploadProvider>
               <ProcessingWidgetProvider>
-                <AnnouncementProvider>
-                  {children}
-                </AnnouncementProvider>
+                <NavigationLoadingProvider>
+                  <AnnouncementProvider>
+                    {children}
+                  </AnnouncementProvider>
+                </NavigationLoadingProvider>
               </ProcessingWidgetProvider>
             </BackgroundUploadProvider>
           </ProjectProvider>

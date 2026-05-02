@@ -136,7 +136,7 @@ export const exportDoorScheduleToPDF = async (
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Door Schedule Report', 14, yPosition);
+    doc.text('Door-Frame Reports', 14, yPosition);
     yPosition += 6;
 
     doc.setFontSize(10);

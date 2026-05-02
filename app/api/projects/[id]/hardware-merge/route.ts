@@ -75,6 +75,10 @@ export const POST = withAuth(
       );
     }
 
+    // Log prep state from extraction before merging
+    const extractedSets = pdfResult.data.extractedJson;
+    console.log('[hw-merge] Prep state in extracted JSON:', extractedSets.map(s => ({ name: s.setName, prep: s.prep ?? 'MISSING' })));
+
     // Run the merge
     const mergeResult = mergeHardwareData(
       pdfResult.data.extractedJson,

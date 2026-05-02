@@ -16,10 +16,18 @@ interface HardwareSetModalProps {
 const inputCls = "w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] placeholder:text-[var(--text-faint)] transition-colors";
 const labelCls = "block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)] mb-1.5";
 
-const SuggestionBox: React.FC<{ suggestions: string[]; onSelect: (s: string) => void }> = ({ suggestions, onSelect }) => {
+const SuggestionBox: React.FC<{
+  suggestions: string[];
+  onSelect: (s: string) => void;
+  direction?: 'up' | 'down';
+}> = ({ suggestions, onSelect, direction = 'down' }) => {
   if (suggestions.length === 0) return null;
   return (
-    <ul className="absolute z-20 w-full bg-[var(--bg)] border border-[var(--border-strong)] rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+    <ul
+      className={`absolute z-20 w-full bg-[var(--bg)] border border-[var(--border-strong)] rounded-md max-h-40 overflow-y-auto shadow-lg ${
+        direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
+      }`}
+    >
       {suggestions.map(s => (
         <li
           key={s}
@@ -94,19 +102,21 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
         items: JSON.parse(JSON.stringify(setToEdit.items)),
         extractionWarnings: setToEdit.extractionWarnings || [],
         isAvailable: setToEdit.isAvailable !== false,
+        isManualEntry: setToEdit.isManualEntry === true,
       };
     } else if (variantSource) {
       initialData = {
-        name: `${variantSource.name} - Variant`, description: variantSource.description,
+        name: `${variantSource.name}.W`, description: variantSource.description,
         doorTags: variantSource.doorTags || '', division: variantSource.division,
         items: variantSource.items.map(item => ({
           ...item, id: `item-var-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         })),
         extractionWarnings: variantSource.extractionWarnings || [],
         isAvailable: variantSource.isAvailable !== false,
+        isManualEntry: true,
       };
     } else {
-      initialData = { name: '', description: '', doorTags: '', division: '', items: [], extractionWarnings: [], isAvailable: true };
+      initialData = { name: '', description: '', doorTags: '', division: '', items: [], extractionWarnings: [], isAvailable: true, isManualEntry: true };
     }
 
     if (autoAddItem) {
@@ -332,6 +342,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
                       />
                       {activeSuggestionBox === `name-${index}` && item.name && (
                         <SuggestionBox
+                          direction="up"
                           suggestions={commonHardwareItems.filter(h => h.toLowerCase().includes(item.name.toLowerCase()) && h.toLowerCase() !== item.name.toLowerCase())}
                           onSelect={s => { handleItemChange(index, 'name', s); setActiveSuggestionBox(null); }}
                         />
@@ -359,6 +370,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
                       />
                       {activeSuggestionBox === `mfr-${index}` && item.manufacturer && (
                         <SuggestionBox
+                          direction="up"
                           suggestions={allManufacturers.filter(m => m.toLowerCase().includes(item.manufacturer.toLowerCase()) && m.toLowerCase() !== item.manufacturer.toLowerCase())}
                           onSelect={s => { handleItemChange(index, 'manufacturer', s); setActiveSuggestionBox(null); }}
                         />
@@ -378,6 +390,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
                       />
                       {activeSuggestionBox === `finish-${index}` && item.finish && (
                         <SuggestionBox
+                          direction="up"
                           suggestions={allFinishes.filter(f => f.toLowerCase().includes(item.finish.toLowerCase()) && f.toLowerCase() !== item.finish.toLowerCase())}
                           onSelect={s => { handleItemChange(index, 'finish', s); setActiveSuggestionBox(null); }}
                         />

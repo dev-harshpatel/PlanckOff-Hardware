@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { DoorCoreType, DoorFaceType, WoodSpecies, DoorFaceGrade } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DoorMaterialSelectorProps {
     coreType?: DoorCoreType;
@@ -58,13 +59,9 @@ const DoorMaterialSelector: React.FC<DoorMaterialSelectorProps> = ({
 
     const gradeOptions: DoorFaceGrade[] = ['Premium', 'Custom', 'Standard', 'Economy'];
 
-    // Show species selector only for wood veneer
     const showSpeciesSelector = faceType === 'Wood Veneer';
-
-    // Show grade selector for wood veneer or plastic laminate
     const showGradeSelector = faceType === 'Wood Veneer' || faceType === 'Plastic Laminate';
 
-    // Auto-clear species if face type changes away from wood
     useEffect(() => {
         if (!showSpeciesSelector && faceSpecies) {
             onFaceSpeciesChange(undefined);
@@ -73,78 +70,78 @@ const DoorMaterialSelector: React.FC<DoorMaterialSelectorProps> = ({
 
     return (
         <div className="space-y-4">
-            <div className="text-sm font-semibold text-gray-700 border-b pb-2">
+            <div className="text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border)] pb-2">
                 Door Material Specification
             </div>
 
             {/* Core Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Core Type
                 </label>
-                <select
-                    value={coreType || ''}
-                    onChange={(e) => onCoreTypeChange(e.target.value as DoorCoreType || undefined)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <Select
+                    value={coreType || '__none__'}
+                    onValueChange={v => onCoreTypeChange((v === '__none__' ? undefined : v) as DoorCoreType)}
                 >
-                    <option value="">Select Core Type...</option>
-                    {coreTypes.map((type) => (
-                        <option key={type} value={type}>
-                            {type}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select Core Type..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__none__">Select Core Type...</SelectItem>
+                        {coreTypes.map(type => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 {coreType === 'Custom' && (
                     <input
                         type="text"
                         placeholder="Specify custom core type..."
-                        className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="mt-2 w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] text-sm"
                     />
                 )}
             </div>
 
             {/* Face Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Face Type
                 </label>
-                <select
-                    value={faceType || ''}
-                    onChange={(e) => onFaceTypeChange(e.target.value as DoorFaceType || undefined)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <Select
+                    value={faceType || '__none__'}
+                    onValueChange={v => onFaceTypeChange((v === '__none__' ? undefined : v) as DoorFaceType)}
                 >
-                    <option value="">Select Face Type...</option>
-                    {faceTypes.map((type) => (
-                        <option key={type} value={type}>
-                            {type}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select Face Type..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__none__">Select Face Type...</SelectItem>
+                        {faceTypes.map(type => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Wood Species (conditional) */}
             {showSpeciesSelector && (
-                <div className="pl-4 border-l-2 border-blue-200 bg-blue-50/30 p-3 rounded-r-lg">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="pl-4 border-l-2 border-blue-500/40 bg-blue-500/5 p-3 rounded-r-lg">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Wood Species
                     </label>
-                    <select
-                        value={faceSpecies || ''}
-                        onChange={(e) => onFaceSpeciesChange(e.target.value || undefined)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    <Select
+                        value={faceSpecies || '__none__'}
+                        onValueChange={v => onFaceSpeciesChange(v === '__none__' ? undefined : v)}
                     >
-                        <option value="">Select Species...</option>
-                        {woodSpeciesList.map((species) => (
-                            <option key={species} value={species}>
-                                {species}
-                            </option>
-                        ))}
-                    </select>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select Species..." /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none__">Select Species...</SelectItem>
+                            {woodSpeciesList.map(species => (
+                                <SelectItem key={species} value={species}>{species}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     {faceSpecies === 'Custom' && (
                         <input
                             type="text"
                             placeholder="Specify custom species..."
-                            className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                            className="mt-2 w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] text-sm"
                         />
                     )}
                 </div>
@@ -152,8 +149,8 @@ const DoorMaterialSelector: React.FC<DoorMaterialSelectorProps> = ({
 
             {/* Grade (conditional) */}
             {showGradeSelector && (
-                <div className="pl-4 border-l-2 border-blue-200 bg-blue-50/30 p-3 rounded-r-lg">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="pl-4 border-l-2 border-blue-500/40 bg-blue-500/5 p-3 rounded-r-lg">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                         Face Grade
                     </label>
                     <div className="grid grid-cols-2 gap-2">
@@ -162,13 +159,11 @@ const DoorMaterialSelector: React.FC<DoorMaterialSelectorProps> = ({
                                 key={grade}
                                 type="button"
                                 onClick={() => onFaceGradeChange(grade)}
-                                className={`
-                                    px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all
-                                    ${faceGrade === grade
+                                className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                                    faceGrade === grade
                                         ? 'border-blue-600 bg-blue-600 text-white shadow-md'
-                                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                                    }
-                                `}
+                                        : 'border-[var(--border)] bg-[var(--bg)] text-[var(--text-secondary)] hover:border-blue-500/50'
+                                }`}
                             >
                                 {grade}
                             </button>
@@ -179,11 +174,11 @@ const DoorMaterialSelector: React.FC<DoorMaterialSelectorProps> = ({
 
             {/* Summary Preview */}
             {(coreType || faceType) && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <div className="mt-4 p-3 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border)]">
+                    <div className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1">
                         Material Summary
                     </div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-[var(--text)]">
                         {[
                             faceGrade && `${faceGrade} Grade`,
                             faceSpecies && faceSpecies !== 'Custom' && faceSpecies,

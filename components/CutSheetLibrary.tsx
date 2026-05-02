@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ManufacturerCutSheet } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CutSheetLibraryProps {
     cutSheets: ManufacturerCutSheet[];
@@ -147,33 +148,31 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                         <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Manufacturer
                         </label>
-                        <select
-                            value={filterManufacturer}
-                            onChange={(e) => setFilterManufacturer(e.target.value)}
-                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
-                        >
-                            <option value="">All Manufacturers</option>
-                            {manufacturers.map(mfr => (
-                                <option key={mfr} value={mfr}>{mfr}</option>
-                            ))}
-                        </select>
+                        <Select value={filterManufacturer || '__none__'} onValueChange={v => setFilterManufacturer(v === '__none__' ? '' : v)}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="All Manufacturers" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">All Manufacturers</SelectItem>
+                                {manufacturers.map(mfr => (
+                                    <SelectItem key={mfr} value={mfr}>{mfr}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                             Category
                         </label>
-                        <select
-                            value={filterCategory}
-                            onChange={(e) => setFilterCategory(e.target.value)}
-                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)]"
-                        >
-                            <option value="">All Categories</option>
-                            <option value="Door">Door</option>
-                            <option value="Frame">Frame</option>
-                            <option value="Hardware">Hardware</option>
-                            <option value="Finish">Finish</option>
-                        </select>
+                        <Select value={filterCategory || '__none__'} onValueChange={v => setFilterCategory(v === '__none__' ? '' : v)}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="All Categories" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">All Categories</SelectItem>
+                                <SelectItem value="Door">Door</SelectItem>
+                                <SelectItem value="Frame">Frame</SelectItem>
+                                <SelectItem value="Hardware">Hardware</SelectItem>
+                                <SelectItem value="Finish">Finish</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div>
@@ -341,16 +340,15 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                         Category
                                     </label>
-                                    <select
-                                        value={newCutSheet.category}
-                                        onChange={(e) => setNewCutSheet(prev => ({ ...prev, category: e.target.value as any }))}
-                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)]"
-                                    >
-                                        <option value="Door">Door</option>
-                                        <option value="Frame">Frame</option>
-                                        <option value="Hardware">Hardware</option>
-                                        <option value="Finish">Finish</option>
-                                    </select>
+                                    <Select value={newCutSheet.category} onValueChange={v => setNewCutSheet(prev => ({ ...prev, category: v as any }))}>
+                                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Door">Door</SelectItem>
+                                            <SelectItem value="Frame">Frame</SelectItem>
+                                            <SelectItem value="Hardware">Hardware</SelectItem>
+                                            <SelectItem value="Finish">Finish</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div>

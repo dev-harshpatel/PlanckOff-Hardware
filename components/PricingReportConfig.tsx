@@ -1271,24 +1271,35 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           Grand Total: {fmt.format(grandTotal)}
         </span>
         <div className="flex items-center gap-2 border-l border-[var(--primary-border)] pl-4">
-          {activeTab !== 'proposal' && (
+          {activeTab === 'proposal' ? (
             <button
-              onClick={handleDownloadExcel}
-              title="Download Excel"
+              onClick={() => void handleDownloadProposalPdf()}
+              title="Export Proposal PDF"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              Excel
+              <FileDown className="w-3.5 h-3.5" />
+              Export Proposal
             </button>
+          ) : (
+            <>
+              <button
+                onClick={handleDownloadExcel}
+                title="Download Pricing Report Excel"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Excel
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                title="Download Pricing Report PDF"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                PDF
+              </button>
+            </>
           )}
-          <button
-            onClick={activeTab === 'proposal' ? () => void handleDownloadProposalPdf() : handleDownloadPdf}
-            title={activeTab === 'proposal' ? 'Export Proposal PDF' : 'Download PDF'}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-            {activeTab === 'proposal' ? 'Export Proposal' : 'PDF'}
-          </button>
         </div>
       </div>
 

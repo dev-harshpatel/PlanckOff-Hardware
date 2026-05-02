@@ -32,7 +32,7 @@ const REPORT_CARDS: {
 }[] = [
     {
         id: 'door-schedule',
-        label: 'Door Schedule Report',
+        label: 'Door-Frame Reports',
         description: 'Export comprehensive door data with full customization. Choose from 30+ fields including dimensions, materials, fire ratings, and hardware assignments.',
         features: ['30+ customizable columns', 'Excel, PDF, or CSV export', 'Professional formatting & summaries'],
         icon: <FileSpreadsheet className="h-6 w-6" />,
@@ -201,7 +201,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({
                     <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] overflow-hidden">
                         <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-5 py-3 flex items-center gap-3">
                             <FileSpreadsheet className="h-4 w-4 text-[var(--primary-text-muted)]" />
-                            <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule Report</h2>
+                            <h2 className="text-sm font-semibold text-[var(--text)]">Door-Frame Reports</h2>
                             <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text)]">
                                 {doors.length} doors
                             </span>

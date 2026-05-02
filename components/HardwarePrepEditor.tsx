@@ -1,5 +1,6 @@
 import React from 'react';
 import { HardwarePrepSpec } from '../types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface HardwarePrepEditorProps {
     value?: HardwarePrepSpec;
@@ -21,14 +22,12 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
         } else {
             onChange({
                 prepType,
-                // Auto-suggest defaults based on prep type
                 backset: prepType === 'Mortise' ? '2-3/4"' : prepType === 'Cylindrical' ? '2-3/8"' : undefined,
                 strikeType: prepType === 'Mortise' ? 'Box Strike' : 'Standard'
             });
         }
     };
 
-    // Generate summary text
     const getSummary = (): string => {
         if (!value || value.prepType === 'None') return 'No hardware prep specified';
 
@@ -54,18 +53,17 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Prep Type <span className="text-red-500">*</span>
                 </label>
-                <select
-                    value={value?.prepType || 'None'}
-                    onChange={(e) => handlePrepTypeChange(e.target.value as HardwarePrepSpec['prepType'])}
-                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
-                >
-                    <option value="None">None / Not Specified</option>
-                    <option value="Cylindrical">Cylindrical Lock</option>
-                    <option value="Mortise">Mortise Lock</option>
-                    <option value="Exit Device">Exit Device / Panic Hardware</option>
-                    <option value="Multipoint">Multipoint Lock</option>
-                    <option value="Electrified">Electrified Hardware</option>
-                </select>
+                <Select value={value?.prepType || 'None'} onValueChange={v => handlePrepTypeChange(v as HardwarePrepSpec['prepType'])}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="None">None / Not Specified</SelectItem>
+                        <SelectItem value="Cylindrical">Cylindrical Lock</SelectItem>
+                        <SelectItem value="Mortise">Mortise Lock</SelectItem>
+                        <SelectItem value="Exit Device">Exit Device / Panic Hardware</SelectItem>
+                        <SelectItem value="Multipoint">Multipoint Lock</SelectItem>
+                        <SelectItem value="Electrified">Electrified Hardware</SelectItem>
+                    </SelectContent>
+                </Select>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
                     Select the primary lock/latch preparation type
                 </p>
@@ -74,38 +72,41 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
             {/* Conditional Fields - Only show if prep type is selected */}
             {value && value.prepType !== 'None' && (
                 <>
-                    {/* Backset */}
+                    {/* Backset & Strike Type */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Backset</label>
-                            <select
-                                value={value.backset || ''}
-                                onChange={(e) => updateField('backset', e.target.value as HardwarePrepSpec['backset'])}
-                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                            <Select
+                                value={value.backset || '__none__'}
+                                onValueChange={v => updateField('backset', (v === '__none__' ? undefined : v) as HardwarePrepSpec['backset'])}
                             >
-                                <option value="">Not Specified</option>
-                                <option value='2-3/4"'>2-3/4" (Standard Mortise)</option>
-                                <option value='2-3/8"'>2-3/8" (Standard Cylindrical)</option>
-                                <option value='5"'>5" (Extended)</option>
-                                <option value="Custom">Custom</option>
-                            </select>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Not Specified" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">Not Specified</SelectItem>
+                                    <SelectItem value='2-3/4"'>2-3/4" (Standard Mortise)</SelectItem>
+                                    <SelectItem value='2-3/8"'>2-3/8" (Standard Cylindrical)</SelectItem>
+                                    <SelectItem value='5"'>5" (Extended)</SelectItem>
+                                    <SelectItem value="Custom">Custom</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
-                        {/* Strike Type */}
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Strike Type</label>
-                            <select
-                                value={value.strikeType || ''}
-                                onChange={(e) => updateField('strikeType', e.target.value as HardwarePrepSpec['strikeType'])}
-                                className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                            <Select
+                                value={value.strikeType || '__none__'}
+                                onValueChange={v => updateField('strikeType', (v === '__none__' ? undefined : v) as HardwarePrepSpec['strikeType'])}
                             >
-                                <option value="">Not Specified</option>
-                                <option value="Standard">Standard Strike</option>
-                                <option value="Box Strike">Box Strike</option>
-                                <option value="Electric Strike">Electric Strike</option>
-                                <option value="Magnetic">Magnetic Lock</option>
-                                <option value="Roller Latch">Roller Latch</option>
-                            </select>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Not Specified" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">Not Specified</SelectItem>
+                                    <SelectItem value="Standard">Standard Strike</SelectItem>
+                                    <SelectItem value="Box Strike">Box Strike</SelectItem>
+                                    <SelectItem value="Electric Strike">Electric Strike</SelectItem>
+                                    <SelectItem value="Magnetic">Magnetic Lock</SelectItem>
+                                    <SelectItem value="Roller Latch">Roller Latch</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
@@ -134,32 +135,36 @@ const HardwarePrepEditor: React.FC<HardwarePrepEditorProps> = ({ value, onChange
                             <div className="grid grid-cols-2 gap-4 ml-6">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Closer Type</label>
-                                    <select
-                                        value={value.closerType || ''}
-                                        onChange={(e) => updateField('closerType', e.target.value as HardwarePrepSpec['closerType'])}
-                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                                    <Select
+                                        value={value.closerType || '__none__'}
+                                        onValueChange={v => updateField('closerType', (v === '__none__' ? undefined : v) as HardwarePrepSpec['closerType'])}
                                     >
-                                        <option value="">Select...</option>
-                                        <option value="Surface">Surface Mounted</option>
-                                        <option value="Concealed">Concealed</option>
-                                        <option value="Overhead">Overhead Concealed</option>
-                                        <option value="Floor">Floor Closer</option>
-                                    </select>
+                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Select...</SelectItem>
+                                            <SelectItem value="Surface">Surface Mounted</SelectItem>
+                                            <SelectItem value="Concealed">Concealed</SelectItem>
+                                            <SelectItem value="Overhead">Overhead Concealed</SelectItem>
+                                            <SelectItem value="Floor">Floor Closer</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Arm Type</label>
-                                    <select
-                                        value={value.closerArmType || ''}
-                                        onChange={(e) => updateField('closerArmType', e.target.value as HardwarePrepSpec['closerArmType'])}
-                                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-lg bg-[var(--bg)] text-[var(--text)] focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)]"
+                                    <Select
+                                        value={value.closerArmType || '__none__'}
+                                        onValueChange={v => updateField('closerArmType', (v === '__none__' ? undefined : v) as HardwarePrepSpec['closerArmType'])}
                                     >
-                                        <option value="">Select...</option>
-                                        <option value="Regular Arm">Regular Arm</option>
-                                        <option value="Parallel Arm">Parallel Arm</option>
-                                        <option value="Top Jamb">Top Jamb</option>
-                                        <option value="Slide Track">Slide Track</option>
-                                    </select>
+                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Select...</SelectItem>
+                                            <SelectItem value="Regular Arm">Regular Arm</SelectItem>
+                                            <SelectItem value="Parallel Arm">Parallel Arm</SelectItem>
+                                            <SelectItem value="Top Jamb">Top Jamb</SelectItem>
+                                            <SelectItem value="Slide Track">Slide Track</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         )}

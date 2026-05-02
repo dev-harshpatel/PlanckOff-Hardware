@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useToast } from '@/contexts/ToastContext';
 import type { TeamMember } from '@/types';
 
@@ -15,6 +16,7 @@ export default function HomePage() {
   const router = useRouter();
   const { projects, trash, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
   const { user } = useAuth();
+  const { startNavigation } = useNavigationLoading();
   const { addToast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
@@ -39,7 +41,11 @@ export default function HomePage() {
     <Dashboard
       projects={projects}
       trash={trash}
-      onSelectProject={(id) => router.push(`/project/${id}`)}
+      onSelectProject={(id) => {
+        const href = `/project/${id}`;
+        startNavigation(href);
+        router.push(href);
+      }}
       onAddNewProject={addProject}
       onProjectUpdate={updateProject}
       onDeleteProject={deleteProject}

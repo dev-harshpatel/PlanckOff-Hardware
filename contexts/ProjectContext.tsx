@@ -115,11 +115,15 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateProject = async (updatedProject: Project) => {
     try {
+      // Strip large domain arrays before sending to the project metadata API —
+      // the API only persists metadata columns (name, status, etc.) and ignores
+      // hardwareSets/doors/elevationTypes. Sending them causes oversized payloads.
+      const { hardwareSets: _hs, doors: _d, elevationTypes: _et, ...metaPayload } = updatedProject;
       const res = await fetch(`/api/projects/${updatedProject.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(updatedProject),
+        body: JSON.stringify(metaPayload),
       });
       const json = (await res.json()) as { data?: Project; error?: string };
       if (!res.ok) throw new Error(json.error ?? 'Failed to update project.');

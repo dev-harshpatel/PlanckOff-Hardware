@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
+import { RouteLoadingState } from '@/components/RouteLoadingState';
 import { FileText, NotebookPen } from 'lucide-react';
 import {
   Breadcrumb,
@@ -17,20 +18,27 @@ import { Button } from '@/components/ui/button';
 import { ProjectNotesPanel } from '@/components/ProjectNotesPanel';
 
 const ROUTE_TITLES: Record<string, string> = {
-  'door-schedule': 'Door Schedule Report',
+  'door-schedule': 'Door-Frame Reports',
   'hardware-set': 'Hardware Set Report',
   'submittal-package': 'Submittal Package',
+  'pricing': 'Pricing Report',
 };
 
 export default function ReportsLayout({ children }: { children: React.ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
+  const router = useRouter();
   const { projects, projectsHydrated } = useProject();
+  const { startNavigation } = useNavigationLoading();
   const [isNotesOpen, setIsNotesOpen] = useState(false);
 
   const activeProject = projects.find((p) => p.id === id);
 
-  if (!projectsHydrated || !activeProject) return null;
+  if (!projectsHydrated) {
+    return <RouteLoadingState title="Opening reports" message="Loading project data and report configuration." />;
+  }
+
+  if (!activeProject) return null;
 
   // Determine if we're on the selector page or a sub-page
   const segments = pathname.split('/').filter(Boolean);
@@ -48,14 +56,34 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href={`/project/${id}`}>Project</BreadcrumbLink>
+                  <BreadcrumbLink
+                    href={`/project/${id}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      const href = `/project/${id}`;
+                      startNavigation(href);
+                      router.push(href);
+                    }}
+                  >
+                    Project
+                  </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   {isSelector ? (
                     <BreadcrumbPage>Reports</BreadcrumbPage>
                   ) : (
-                    <BreadcrumbLink href={`/project/${id}/reports`}>Reports</BreadcrumbLink>
+                    <BreadcrumbLink
+                      href={`/project/${id}/reports`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        const href = `/project/${id}/reports`;
+                        startNavigation(href);
+                        router.push(href);
+                      }}
+                    >
+                      Reports
+                    </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
                 {!isSelector && (

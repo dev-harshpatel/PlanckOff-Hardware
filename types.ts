@@ -88,10 +88,13 @@ export interface HardwareSet {
   items: HardwareItem[];
   extractionWarnings?: string[];
   isAvailable?: boolean; // New field for availability status
+  isManualEntry?: boolean; // Added when the set is created manually in the UI
   
   // Phase 24: Pricing
   pricing?: HardwareSetPricing;
   totalSetCost?: number;
+
+  prep?: string;
 }
 
 // New explicit interface to replace `Omit<HardwareSet, 'id'>`
@@ -103,8 +106,10 @@ export interface NewHardwareSetData {
   items: HardwareItem[];
   extractionWarnings?: string[];
   isAvailable?: boolean;
+  isManualEntry?: boolean;
   pricing?: HardwareSetPricing;
   totalSetCost?: number;
+  prep?: string;
 }
 
 // ===== PHASE 19: CRITICAL DATA FIELDS =====
@@ -196,7 +201,12 @@ export interface HardwarePrepSpec {
     backset?: string;
     thickness?: string;
     notes?: string;
+    strikeType?: string;
+    closerPrep?: boolean;
+    closerType?: string;
+    closerArmType?: string;
 }
+
 
 export interface ElectrificationSpec {
     isElectrified: boolean;
@@ -298,6 +308,7 @@ export interface Door {
   assignmentConfidence?: 'high' | 'medium' | 'low';
   assignmentReason?: string;
   errorMessage?: string;
+  isManualEntry?: boolean; // Added when the door is created manually in the UI
   elevationTypeId?: string;
   customFields?: Record<string, any>;
   // Basic fields that were missing
@@ -355,6 +366,9 @@ export interface Door {
   buildingLocation?: string;
   leafCount?: number;
   leafCountDisplay?: string;
+  widthDisplay?: string;     // raw Excel string e.g. "(2)3'-0\""
+  heightDisplay?: string;    // raw Excel string e.g. "7'-0\""
+  thicknessDisplay?: string; // raw Excel string e.g. "1 3/4\""
   excludeReason?: string;
   doorCore?: string;
   doorFace?: string;

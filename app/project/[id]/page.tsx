@@ -2,6 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { RouteLoadingState } from '@/components/RouteLoadingState';
+import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -11,12 +13,17 @@ const ProjectView = dynamic(() => import('@/views/ProjectView'), { ssr: false })
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { startNavigation } = useNavigationLoading();
   const { projects, projectsHydrated, updateProject, appSettings } = useProject();
   const { addToast } = useToast();
 
   const activeProject = projects.find((p) => p.id === id);
 
-  if (!projectsHydrated || !activeProject) {
+  if (!projectsHydrated) {
+    return <RouteLoadingState title="Opening project" message="Loading project data and saved hardware information." />;
+  }
+
+  if (!activeProject) {
     return null;
   }
 
@@ -25,7 +32,10 @@ export default function ProjectPage() {
       project={activeProject}
       onProjectUpdate={updateProject}
       appSettings={appSettings}
-      onBackToDashboard={() => router.push('/')}
+      onBackToDashboard={() => {
+        startNavigation('/');
+        router.push('/');
+      }}
       addToast={addToast}
     />
   );

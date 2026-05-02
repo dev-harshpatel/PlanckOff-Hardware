@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
+import { generatePrepForAllSets } from '@/services/hardwarePrepService';
 import { upsertHardwarePdfExtraction, getHardwarePdfExtraction } from '@/lib/db/hardware';
+import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
 
 export const GET = withAuth(
@@ -76,8 +78,31 @@ export const POST = withAuth(
       );
     }
 
+    // Generate hardware prep for all sets in a single AI call.
+    // Failures are non-fatal — sets that fail get no prep (the UI will show the fallback button).
+    const apiKeyPresent = Boolean(process.env.OPENROUTER_API_KEY);
+    console.log(`[hw-pdf:prep] Starting prep generation — sets=${result.sets.length}  apiKeyPresent=${apiKeyPresent}`);
+    const prepStart = Date.now();
+    let prepMap: Record<string, string> = {};
+    try {
+      prepMap = await generatePrepForAllSets(result.sets);
+      console.log(
+        `[hw-pdf:prep] Prep generation done in ${Date.now() - prepStart}ms — ` +
+        `got=${Object.keys(prepMap).length}/${result.sets.length}  keys=${JSON.stringify(Object.keys(prepMap))}`,
+      );
+    } catch (prepErr) {
+      console.error('[hw-pdf:prep] Prep generation threw (non-fatal):', prepErr);
+    }
+
+    // Attach prep to each set (sets with no prep entry get prep: undefined)
+    const setsWithPrep: ExtractedHardwareSet[] = result.sets.map(set => ({
+      ...set,
+      prep: prepMap[set.setName],
+    }));
+    console.log('[hw-pdf:prep] Prep values per set:', setsWithPrep.map(s => ({ name: s.setName, prep: s.prep ?? 'MISSING' })));
+
     const { data, error } = await upsertHardwarePdfExtraction(projectId, {
-      extractedJson: result.sets,
+      extractedJson: setsWithPrep,
       fileName: filename,
       uploadedBy: ctx.user.id,
     });
@@ -87,19 +112,20 @@ export const POST = withAuth(
     // Queue new unique items into the master hardware pending table.
     // Must be awaited — serverless functions terminate once the response is sent,
     // so fire-and-forget (.then()) would be silently dropped.
-    console.log(`[hw-pdf:master] Starting queue step — sets=${result.sets.length}  totalItems=${result.itemCount}`);
+    console.log(`[hw-pdf:master] Starting queue step — sets=${setsWithPrep.length}  totalItems=${result.itemCount}`);
 
     // Log the raw shape of the first set so we can verify field names
-    if (result.sets.length > 0) {
-      const firstSet = result.sets[0];
+    if (setsWithPrep.length > 0) {
+      const firstSet = setsWithPrep[0];
       console.log('[hw-pdf:master] First set sample:', JSON.stringify({
         setName: firstSet.setName,
         itemCount: firstSet.hardwareItems?.length ?? 0,
         firstItem: firstSet.hardwareItems?.[0] ?? null,
+        hasPrep: Boolean(firstSet.prep),
       }));
     }
 
-    const candidateItems = result.sets
+    const candidateItems = setsWithPrep
       .flatMap(set =>
         (set.hardwareItems ?? []).map(item => ({
           name: (item.item ?? '').trim(),
@@ -154,5 +180,31 @@ export const POST = withAuth(
         masterQueueWarning: queueWarning,
       },
     });
+  },
+);
+
+// Patch the stored extraction with an updated set list (e.g. after a variant is created).
+// Only updates extractedJson — fileName / uploadedBy are preserved from the existing row.
+export const PUT = withAuth(
+  async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+    const projectId = params?.id as string;
+
+    let body: { extractedJson?: ExtractedHardwareSet[] };
+    try {
+      body = await req.json() as { extractedJson?: ExtractedHardwareSet[] };
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    }
+
+    if (!Array.isArray(body.extractedJson)) {
+      return NextResponse.json({ error: 'extractedJson must be an array.' }, { status: 400 });
+    }
+
+    const { data, error } = await upsertHardwarePdfExtraction(projectId, {
+      extractedJson: body.extractedJson,
+    });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data: { id: data!.id, setCount: body.extractedJson.length } });
   },
 );
