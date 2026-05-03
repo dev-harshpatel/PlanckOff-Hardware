@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import HardwarePrepEditor from './HardwarePrepEditor';
 import ElectrificationEditor from './ElectrificationEditor';
@@ -204,6 +204,10 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
     const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
 
+    // Stable snapshots used to detect unsaved changes — captured once at mount
+    const initialDoor = useMemo(() => JSON.stringify(door), []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+
     // Raw section state — initialized from door.sections (uppercase Excel keys).
     // For new doors without sections, seed with empty-string defaults so all fields render.
     const rawSections = door.sections as unknown as {
@@ -310,9 +314,23 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
         return { ...DEFAULT_FRAME_SEC(), ...typedFallback };
     });
 
+    // Snapshots of sections as-initialized (after defaults/fallbacks are applied)
+    const initialBasicInfoSec = useRef(JSON.stringify(basicInfoSec));
+    const initialDoorSec      = useRef(JSON.stringify(doorSec));
+    const initialFrameSec     = useRef(JSON.stringify(frameSec));
+
     const updateBasicInfoSec = (key: string, value: string) => setBasicInfoSec(prev => ({ ...prev, [key]: value }));
     const updateDoorSec = (key: string, value: string) => setDoorSec(prev => ({ ...prev, [key]: value }));
     const updateFrameSec = (key: string, value: string) => setFrameSec(prev => ({ ...prev, [key]: value }));
+
+    // isDirty: true when any field differs from the initialized state
+    const isDirty = useMemo(() => {
+        if (JSON.stringify(editedDoor)  !== initialDoor)                  return true;
+        if (JSON.stringify(basicInfoSec) !== initialBasicInfoSec.current) return true;
+        if (JSON.stringify(doorSec)      !== initialDoorSec.current)      return true;
+        if (JSON.stringify(frameSec)     !== initialFrameSec.current)     return true;
+        return false;
+    }, [editedDoor, basicInfoSec, doorSec, frameSec, initialDoor]);
 
     React.useEffect(() => {
         const results = validateDoor(editedDoor);
@@ -639,6 +657,16 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                             )}
                             </div>{/* end hwExcluded gate */}
 
+                            {/* Hardware Prep — sourced from the matched set's prep field */}
+                            {matchedSet?.prep && (
+                                <div className="pt-2">
+                                    <SectionHeader>Hardware Prep</SectionHeader>
+                                    <div className="px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] text-sm text-[var(--text-secondary)] leading-relaxed">
+                                        {matchedSet.prep}
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
                     )}
 
@@ -696,7 +724,8 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                         </button>
                         <button
                             onClick={handleSave}
-                            className="px-5 py-2 text-sm bg-[var(--primary-action)] text-white rounded-lg hover:bg-[var(--primary-action-hover)] font-semibold transition-colors shadow-sm"
+                            disabled={!isDirty}
+                            className="px-5 py-2 text-sm bg-[var(--primary-action)] text-white rounded-lg font-semibold transition-colors shadow-sm enabled:hover:bg-[var(--primary-action-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Save Changes
                         </button>

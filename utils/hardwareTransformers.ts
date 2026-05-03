@@ -207,6 +207,7 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
 
       // Hardware section
       hardwareIncludeExclude: hw?.['HARDWARE INCLUDE/EXCLUDE'] ?? row.hardwareIncludeExclude,
+      hardwarePrep: row.hardwarePrep ?? assignedSet?.prep ?? undefined,
 
       // Carry raw sections through as-is for preservation
       sections: row.sections as unknown as Door['sections'],
@@ -347,7 +348,7 @@ export function transformFromFinalJson(
         assignmentConfidence: assignedSet ? 'high' : undefined,
         assignmentReason: assignedSet ? 'Matched from door schedule' : undefined,
 
-        hardwarePrep: door.hardwarePrep,
+        hardwarePrep: door.hardwarePrep ?? set.prep ?? undefined,
       };
 
       doorsWithOrder.push({ door: builtDoor, order: door.scheduleOrder ?? Infinity });

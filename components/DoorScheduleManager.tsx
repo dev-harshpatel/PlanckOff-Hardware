@@ -139,7 +139,7 @@ interface DoorScheduleManagerProps {
     onDoorSaved?: () => void;
 }
 
-type StatusFilter = 'all' | 'pending' | 'complete' | 'error';
+type StatusFilter = 'all' | 'pending' | 'complete';
 
 const ConfidenceIndicator: React.FC<{ confidence?: 'high' | 'medium' | 'low'; reason?: string }> = ({ confidence }) => {
     if (!confidence) return null;
@@ -333,7 +333,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
         return doors.reduce((acc, door) => {
             acc[door.status] = (acc[door.status] || 0) + 1;
             return acc;
-        }, {} as Record<'pending' | 'complete' | 'error', number>);
+        }, {} as Record<'pending' | 'complete', number>);
     }, [doors]);
 
     const uniqueDoorMaterials = useMemo(() => {
@@ -626,16 +626,12 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     }> = ({ filter, label, count, tooltip }) => {
         const isActive = statusFilter === filter;
         const edgeRadiusClass =
-            filter === 'all'
-                ? 'rounded-l-md'
-                : filter === 'error'
-                    ? 'rounded-r-md'
-                    : '';
+            filter === 'all'     ? 'rounded-l-md' :
+            filter === 'complete' ? 'rounded-r-md' : '';
         const dotColors: Record<StatusFilter, string> = {
             all:      '',
             pending:  'bg-amber-400',
             complete: 'bg-green-500',
-            error:    'bg-red-500',
         };
         return (
             <button
@@ -1073,7 +1069,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     <FilterButton filter="all" label="All" count={doors.length} tooltip="Show all doors" />
                     <FilterButton filter="pending" label="Pending" count={statusCounts.pending || 0} tooltip="Show doors waiting for assignment" />
                     <FilterButton filter="complete" label="Complete" count={statusCounts.complete || 0} tooltip="Show doors with assigned hardware" />
-                    <FilterButton filter="error" label="Error" count={statusCounts.error || 0} tooltip="Show doors that failed assignment" />
                 </div>
 
                 <div className="flex-1" />
@@ -1195,7 +1190,6 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         const statusColors: Record<string, string> = {
                             pending: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100',
                             complete: 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100',
-                            error: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30',
                         };
                         return (
                             <button

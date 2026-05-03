@@ -216,7 +216,12 @@ function getSectionValue(door: Door, colId: string): string {
     const { sectionKey, colKey } = parseColId(colId);
     if (sectionKey === 'basic_information' && colKey === 'DOOR TAG') return door.doorTag;
     const sec = (door.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)?.[sectionKey];
-    return sec?.[colKey] ?? '';
+    const secVal = sec?.[colKey];
+    if (secVal !== undefined && secVal !== '') return secVal;
+    // Fallback to top-level Door fields for columns that may not be in the Excel sections
+    if (sectionKey === 'hardware' && colKey === 'HARDWARE PREP') return door.hardwarePrep ?? '';
+    if (sectionKey === 'hardware' && colKey === 'HW SET') return door.providedHardwareSet ?? sec?.['HARDWARE SET'] ?? '';
+    return secVal ?? '';
 }
 
 function isDoorIdentityColumn(colId: string): boolean {
@@ -280,6 +285,11 @@ function deriveColumnGroups(doors: Door[]): DynamicColumnGroup[] {
         }
 
         const canonical = CANONICAL_COLUMN_ORDER[key] ?? [];
+
+        // Always include all canonical columns so the picker is complete even when
+        // the current dataset has no values for a given template column.
+        canonical.forEach(k => allKeys.add(k));
+
         const canonicalIndex = new Map(canonical.map((k, i) => [k, i]));
 
         // Keys in the canonical list come first (in template order).
