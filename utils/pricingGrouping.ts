@@ -43,6 +43,8 @@ export interface DoorPricingGroup {
   materials: string[];
   floors: string[];
   buildings: string[];
+  /** Unique prep values across doors in this group — display only, not part of the group key */
+  prep: string[];
   isVariant?: boolean;
   variantKey?: string;
 }
@@ -169,6 +171,7 @@ function buildVariantGroups(variantDoors: Door[], overrides: VariantOverrideMap)
         materials: [],
         floors: [],
         buildings: [],
+        prep: [],
         isVariant: true,
         variantKey: ov.variantKey,
       });
@@ -212,6 +215,7 @@ function groupByFields(
         materials:  [],
         floors:     [],
         buildings:  [],
+        prep:       [],
       });
     }
 
@@ -227,6 +231,10 @@ function groupByFields(
 
     const bldg  = (door.buildingTag ?? '').trim();
     if (bldg && !group.buildings.includes(bldg)) group.buildings.push(bldg);
+
+    // Collect prep: prefer hardware set prep, fall back to door-level hardwarePrep
+    const prepVal = (door.assignedHardwareSet?.prep ?? door.hardwarePrep ?? '').trim();
+    if (prepVal && !group.prep.includes(prepVal)) group.prep.push(prepVal);
   }
 
   return Array.from(map.values());

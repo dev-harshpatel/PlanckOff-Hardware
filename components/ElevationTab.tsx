@@ -189,14 +189,19 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
       </div>
 
       {/* Description */}
-      <input
-        type="text"
-        value={description}
-        onChange={e => setDescription(e.target.value)}
-        onBlur={handleDescriptionBlur}
-        placeholder="Description (optional — e.g. Double Door, Pair with Sidelight…)"
-        className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] placeholder:text-[var(--text-faint)] transition-colors"
-      />
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)] mb-1.5">
+          Description
+        </label>
+        <input
+          type="text"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          onBlur={handleDescriptionBlur}
+          placeholder="e.g. Double Door, Pair with Sidelight…"
+          className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm text-[var(--text)] bg-[var(--bg)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] placeholder:text-[var(--text-faint)] transition-colors"
+        />
+      </div>
 
       {/* Uploading state */}
       {isUploading && (

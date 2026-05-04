@@ -310,7 +310,7 @@ export const exportHardwareSetToCSV = (
   }
 
   // Add summary if requested
-  if (config.includeCostSummary && config.optionalColumns.includes('extendedCost')) {
+  if (config.optionalColumns.includes('extendedCost')) {
     csv += '\n';
     csv += 'Cost Summary\n';
     const totalCost = usageStats.reduce((sum, item) => {

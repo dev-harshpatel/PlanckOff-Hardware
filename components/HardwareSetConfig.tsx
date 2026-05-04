@@ -15,9 +15,6 @@ export interface HardwareSetExportConfig {
     groupBy: 'set' | 'type' | 'manufacturer' | 'flat';
     usageDisplay: string[];
     format: 'xlsx' | 'pdf';
-    includeSetSummary: boolean;
-    includeCostSummary: boolean;
-    includeProcurement: boolean;
 }
 
 // ─── Local types ──────────────────────────────────────────────────────────────
@@ -356,9 +353,6 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
     const [groupBy, setGroupBy]                 = useState<GroupByOption>('set');
     const [usageDisplay, setUsageDisplay]       = useState<string[]>(['all']);
     const [format, setFormat]                   = useState<ExportFormat>('xlsx');
-    const [includeSetSummary, setIncludeSetSummary]   = useState(true);
-    const [includeCostSummary, setIncludeCostSummary] = useState(true);
-    const [includeProcurement, setIncludeProcurement] = useState(false);
     const [previewReady, setPreviewReady]         = useState(false);
     const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
 
@@ -436,6 +430,12 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
         const getCellValue = (u: HardwareItemUsage, colId: string): string =>
             colId === 'usage' ? getUsageCellValue(u, usageDisplay) : getItemValue(u, colId);
 
+        const getExcelCellValue = (u: HardwareItemUsage, colId: string): string | number => {
+            if (colId === 'qty_per_set') return u.item.quantity > 0 ? u.item.quantity : 0;
+            if (colId === 'quantity')    return u.totalQuantity > 0 ? u.totalQuantity : 0;
+            return getCellValue(u, colId);
+        };
+
         if (format === 'xlsx') {
             const XLSX = await import('xlsx');
             const wsData: unknown[][] = [
@@ -450,7 +450,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 wsData.push([doorTagText ? `${group.label}  —  ${doorTagText}` : group.label]);
                 wsData.push(colDefs.map(c => c.label));
                 for (const usage of group.items) {
-                    wsData.push(colDefs.map(c => getCellValue(usage, c.id)));
+                    wsData.push(colDefs.map(c => getExcelCellValue(usage, c.id)));
                 }
                 wsData.push([]);
             }
@@ -661,27 +661,6 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                         </div>
                     </div>
 
-                    {/* ── Include ── */}
-                    <div>
-                        <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-2">Include</p>
-                        <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--bg)]">
-                            {[
-                                { key: 'setSum',  label: 'Hardware Set Summary',  checked: includeSetSummary,  onChange: setIncludeSetSummary  },
-                                { key: 'costSum', label: 'Total Cost Summary',    checked: includeCostSummary, onChange: setIncludeCostSummary },
-                                { key: 'proc',    label: 'Procurement Checklist', checked: includeProcurement, onChange: setIncludeProcurement },
-                            ].map(opt => (
-                                <label key={opt.key} className="flex items-center gap-2.5 cursor-pointer px-3 py-2 hover:bg-[var(--primary-bg)] transition-colors group border-b border-[var(--border)] last:border-b-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={opt.checked}
-                                        onChange={(e) => opt.onChange(e.target.checked)}
-                                        className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0"
-                                    />
-                                    <span className="text-xs text-[var(--text-secondary)] group-hover:text-[var(--primary-text)] transition-colors">{opt.label}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
                 </div>
 
                 {/* Sticky footer actions */}

@@ -55,7 +55,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
   isOpen, onClose, onSave, setToEdit, hardwareSets, autoAddItem, variantSource,
 }) => {
   const [formData, setFormData] = useState<NewHardwareSetData>({
-    name: '', description: '', doorTags: '', division: '', items: [], isAvailable: true,
+    name: '', description: '', doorTags: '', division: '', items: [], isAvailable: true, prep: '',
   });
   const [formErrors, setFormErrors] = useState<{ name?: string; division?: string }>({});
   const [itemErrors, setItemErrors] = useState<Record<string, { quantity?: string }>>({});
@@ -103,6 +103,7 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
         extractionWarnings: setToEdit.extractionWarnings || [],
         isAvailable: setToEdit.isAvailable !== false,
         isManualEntry: setToEdit.isManualEntry === true,
+        prep: setToEdit.prep || '',
       };
     } else if (variantSource) {
       initialData = {
@@ -291,6 +292,18 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
               className={inputCls}
               placeholder="Optional notes about this hardware set..."
             />
+          </div>
+
+          {/* Hardware Prep */}
+          <div>
+            <label htmlFor="prep" className={labelCls}>Hardware Prep</label>
+            <textarea
+              name="prep" id="prep" rows={2}
+              value={formData.prep || ''} onChange={handleInputChange}
+              className={inputCls}
+              placeholder="e.g. Continuous Hinge + Exit Device + Power Transfer + Card Reader"
+            />
+            <p className="mt-1 text-xs text-[var(--text-faint)]">Summary of prep requirements. Can be generated via AI or entered manually.</p>
           </div>
 
           {/* Hardware Items */}

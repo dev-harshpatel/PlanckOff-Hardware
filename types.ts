@@ -95,6 +95,7 @@ export interface HardwareSet {
   totalSetCost?: number;
 
   prep?: string;
+  parentSetId?: string; // Set when this is a variant; references the source set's id
 }
 
 // New explicit interface to replace `Omit<HardwareSet, 'id'>`

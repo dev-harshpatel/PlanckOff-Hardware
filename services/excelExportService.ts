@@ -336,7 +336,7 @@ export const exportHardwareSetToExcel = (
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Hardware Items');
 
   // Add cost summary sheet if requested
-  if (config.includeCostSummary && config.optionalColumns.includes('extendedCost')) {
+  if (config.optionalColumns.includes('extendedCost')) {
     const totalCost = usageStats.reduce((sum, item) => {
       return sum + ((item.item.unitCost || 0) * (item.totalQuantity || 0));
     }, 0);
@@ -505,7 +505,7 @@ function createComprehensiveHardwareScheduleSheet(
         // Add set header row
         const setHeaderRow = [
             `${set.name} - ${set.description || ''}`,
-            '', '', '', '', '', '', doorCount.toString(), '', '', '', ''
+            '', '', '', '', '', '', doorCount, '', '', '', ''
         ];
         data.push(setHeaderRow);
 
@@ -521,9 +521,9 @@ function createComprehensiveHardwareScheduleSheet(
                 item.manufacturer || '',
                 item.modelNumber || '',
                 item.finish || '',
-                item.quantity?.toString() || '1',
-                doorCount.toString(),
-                totalQty.toString(),
+                item.quantity ?? 1,
+                doorCount,
+                totalQty,
                 item.ansiGrade || '',
                 item.leadTime || '',
                 csiSection
@@ -587,7 +587,7 @@ function createFrameDetailsSheet(
             door.frameProfile || '',
             door.anchorType || '',
             door.anchorSpacing || '',
-            door.silencerQty?.toString() || '',
+            door.silencerQty ?? null,
             door.framePreparationNotes || ''
         ];
         data.push(row);
@@ -682,7 +682,7 @@ function createProcurementSummarySheet(
                 '', // Empty for manufacturer column
                 item.name,
                 item.modelNumber || '',
-                totalQty.toString(),
+                totalQty,
                 item.leadTime || '',
                 item.ansiGrade || '',
                 csiSection,

@@ -409,7 +409,7 @@ export const exportHardwareSetToPDF = async (
   }
 
   // Add cost summary if requested
-  if (config.includeCostSummary && config.optionalColumns.includes('extendedCost')) {
+  if (config.optionalColumns.includes('extendedCost')) {
     const finalY = (doc as any).lastAutoTable.finalY + 10;
 
     if (finalY > 180) {

@@ -19,7 +19,7 @@ import {
     Upload, Plus, Search, ChevronRight, ChevronDown, ChevronUp,
     Copy, Pencil, Trash2, AlertTriangle, AlertCircle, Package, X,
     Layers, DoorOpen, Info, Loader2, CheckCircle2, Wrench, Sparkles,
-    RefreshCw,
+    RefreshCw, Ban,
 } from 'lucide-react';
 
 interface ActiveUploadTask {
@@ -99,7 +99,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         const counts = new Map<string, number>();
         if (Array.isArray(doors)) {
             doors.forEach(door => {
-                if (door.assignedHardwareSet?.id) {
+                if (door.assignedHardwareSet?.id && door.hardwareIncludeExclude?.toUpperCase() !== 'EXCLUDE') {
                     counts.set(door.assignedHardwareSet.id, (counts.get(door.assignedHardwareSet.id) || 0) + 1);
                 }
             });
@@ -551,16 +551,21 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                     return Object.keys(setConflicts).length > 0 || Object.keys(groupConflicts).length > 0;
                                 });
                                 const isSelected = selectedRows.has(set.id);
+                                const hasZeroDoors = doorCount === 0;
+                                const allHwExcluded = assignedDoors.length > 0 &&
+                                    assignedDoors.every(d => d.hardwareIncludeExclude?.toUpperCase() === 'EXCLUDE');
 
                                 return (
                                     <React.Fragment key={set.id}>
-                                        <tr className={`transition-colors ${isUnavailable
-                                            ? 'border-l-2 border-l-red-400 bg-red-50 hover:bg-red-100'
-                                            : isManualEntry
-                                                ? 'border-l-2 border-l-amber-300 bg-amber-50/80 hover:bg-amber-100'
-                                                : isSelected
-                                                    ? 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)]'
-                                                    : 'hover:bg-[var(--bg-subtle)]'
+                                        <tr className={`transition-colors ${allHwExcluded ? 'opacity-50' : ''} ${isUnavailable
+                                            ? 'border-l-2 border-l-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                            : hasZeroDoors
+                                                ? 'border-l-2 border-l-red-400 dark:border-l-red-800 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                                : isManualEntry
+                                                    ? 'border-l-2 border-l-amber-300 bg-amber-50/80 hover:bg-amber-100'
+                                                    : isSelected
+                                                        ? 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)]'
+                                                        : 'hover:bg-[var(--bg-subtle)]'
                                         }`}>
                                             <td className="px-4 py-3">
                                                 <input type="checkbox" className="rounded border-gray-300 text-primary-600" checked={isSelected} onChange={() => toggleSelectRow(set.id)} />
@@ -581,6 +586,12 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                         </span>
                                                     )}
                                                     {isUnavailable && <Badge variant="destructive" className="text-[10px] py-0 px-1.5">Unavailable</Badge>}
+                                                    {allHwExcluded && (
+                                                        <Badge variant="secondary" className="text-[10px] gap-1 py-0 px-1.5">
+                                                            <Ban className="w-2.5 h-2.5" />
+                                                            HW Excluded
+                                                        </Badge>
+                                                    )}
                                                     {hasZeroQtyItem && (
                                                         <Tooltip content="Set contains items with zero quantity">
                                                             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
@@ -597,7 +608,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                <span className="text-sm font-medium text-[var(--text-secondary)]">{doorCount}</span>
+                                                <span className={`text-sm font-medium ${hasZeroDoors ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}`}>
+                                                    {doorCount}
+                                                </span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className="text-sm font-medium text-[var(--text-secondary)]">{set.items.length}</span>

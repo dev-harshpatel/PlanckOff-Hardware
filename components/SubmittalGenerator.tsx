@@ -72,9 +72,8 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ finalJson, proj
       }
     }
 
-    return Array.from(map.values()).sort((a, b) =>
-      a.setNames[0].localeCompare(b.setNames[0]),
-    );
+    // Preserve finalJson insertion order — this matches the door schedule sheet sequence.
+    return Array.from(map.values());
   }, [finalJson]);
 
   const handlePrint = useReactToPrint({
@@ -128,7 +127,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ finalJson, proj
 
       {/* Printable preview */}
       {groups.length > 0 && (
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-2">
           <div ref={componentRef}>
             {/* Print-specific font import */}
             <style>{`
@@ -142,12 +141,12 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ finalJson, proj
               .submittal-root { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
             `}</style>
 
-            <div className="submittal-root max-w-[794px] mx-auto">
+            <div className="submittal-root max-w-[900px] mx-auto">
               {setsWithDoors.map((group, idx) => (
                 <div
                   key={group.fingerprint}
                   className={`bg-white${idx < setsWithDoors.length - 1 ? ' page-break' : ''}`}
-                  style={{ minHeight: '1050px', display: 'flex', flexDirection: 'column', padding: '36px 44px' }}
+                  style={{ minHeight: '1050px', display: 'flex', flexDirection: 'column', padding: '24px 28px' }}
                 >
                   {/* ── Top accent bar ── */}
                   <div style={{ height: 4, background: '#1e293b', borderRadius: 2, marginBottom: 28 }} />

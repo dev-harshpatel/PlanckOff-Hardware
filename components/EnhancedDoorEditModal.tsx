@@ -25,7 +25,7 @@ type TabId = 'basic' | 'door' | 'frame' | 'hardware' | 'elevation';
 type RawSection = Record<string, string | undefined>;
 
 const BASIC_INFO_GROUPS: { header: string; cols: number; keys: string[] }[] = [
-    { header: 'Identity', cols: 2, keys: ['DOOR TAG', 'BUILDING TAG', 'BUILDING LOCATION', 'BUILDING AREA', 'DOOR LOCATION', 'INTERIOR/EXTERIOR'] },
+    { header: 'Identity', cols: 2, keys: ['DOOR TAG', 'BUILDING TAG', 'BUILDING LOCATION', 'DOOR LOCATION', 'INTERIOR/EXTERIOR'] },
     { header: 'Operation', cols: 3, keys: ['QUANTITY', 'LEAF COUNT', 'HAND OF OPENINGS', 'DOOR OPERATION', 'EXCLUDE REASON'] },
     { header: 'Dimensions', cols: 3, keys: ['WIDTH', 'HEIGHT', 'THICKNESS'] },
     { header: 'Classification', cols: 2, keys: ['FIRE RATING'] },
@@ -202,6 +202,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [elevationMode, setElevationMode] = useState<'door' | 'frame'>('door');
     const [editedDoor, setEditedDoor] = useState<Door>({ ...door });
+    const [elevationDirty, setElevationDirty] = useState(false);
     const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
 
     // Stable snapshots used to detect unsaved changes — captured once at mount
@@ -236,7 +237,6 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
             'DOOR TAG':          door.doorTag              || '',
             'BUILDING TAG':      door.buildingTag          || '',
             'BUILDING LOCATION': door.buildingLocation     || '',
-            'BUILDING AREA':     '',
             'DOOR LOCATION':     door.location             || '',
             'INTERIOR/EXTERIOR': door.interiorExterior     || '',
             'QUANTITY':          door.quantity != null ? String(door.quantity) : '',
@@ -325,12 +325,13 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
 
     // isDirty: true when any field differs from the initialized state
     const isDirty = useMemo(() => {
+        if (elevationDirty)                                               return true;
         if (JSON.stringify(editedDoor)  !== initialDoor)                  return true;
         if (JSON.stringify(basicInfoSec) !== initialBasicInfoSec.current) return true;
         if (JSON.stringify(doorSec)      !== initialDoorSec.current)      return true;
         if (JSON.stringify(frameSec)     !== initialFrameSec.current)     return true;
         return false;
-    }, [editedDoor, basicInfoSec, doorSec, frameSec, initialDoor]);
+    }, [editedDoor, basicInfoSec, doorSec, frameSec, initialDoor, elevationDirty]);
 
     React.useEffect(() => {
         const results = validateDoor(editedDoor);
@@ -703,7 +704,10 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                                 door={editedDoor}
                                 elevationTypes={elevationTypes}
                                 projectId={projectId}
-                                onElevationTypeUpdate={onElevationTypeUpdate}
+                                onElevationTypeUpdate={(updated) => {
+                                    setElevationDirty(true);
+                                    onElevationTypeUpdate(updated);
+                                }}
                                 mode={elevationMode}
                             />
                         </div>

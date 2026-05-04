@@ -375,6 +375,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
     const [dropTargetStatus, setDropTargetStatus] = useState<ProjectStatus | null>(null);
     const [optimisticStatuses, setOptimisticStatuses] = useState<ProjectStatusOverrides>({});
     const [updatingProjectIds, setUpdatingProjectIds] = useState<Set<string>>(new Set());
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [listDeleteTarget, setListDeleteTarget] = useState<Project | null>(null);
+    const [listDeleteConfirmation, setListDeleteConfirmation] = useState('');
 
     const effectiveProjects = useMemo(
         () => applyProjectStatusOverrides(projects, optimisticStatuses),
@@ -639,10 +642,18 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                         />
                     </div>
                     <div className="ml-auto flex items-center gap-1">
-                        <button className="p-1.5 rounded-md bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border border-[var(--primary-border)]" title="Grid view">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-1.5 rounded-md border transition-colors ${viewMode === 'grid' ? 'bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border-[var(--primary-border)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] border-transparent'}`}
+                            title="Grid view"
+                        >
                             <LayoutGrid className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 rounded-md text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] transition-colors border border-transparent" title="List view">
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-1.5 rounded-md border transition-colors ${viewMode === 'list' ? 'bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border-[var(--primary-border)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] border-transparent'}`}
+                            title="List view"
+                        >
                             <List className="w-4 h-4" />
                         </button>
                     </div>
@@ -650,7 +661,102 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
                 {/* Projects content */}
                 <div className="flex-grow overflow-x-auto overflow-y-hidden px-6 py-5">
-                    {selectedStatusFilter === 'All' ? (
+                    {viewMode === 'list' ? (
+                        /* ── List view (flat table across all statuses) ── */
+                        <div className="h-full overflow-y-auto">
+                            {filteredProjects.length > 0 ? (
+                                <div className="rounded-md border border-[var(--border)] overflow-hidden bg-[var(--bg)]">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border)]">
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Project</th>
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Client</th>
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Status</th>
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Due Date</th>
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Project #</th>
+                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Assigned To</th>
+                                                <th className="px-4 py-2.5" />
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[var(--border-subtle)]">
+                                            {filteredProjects.map(project => {
+                                                const statusStyle = STAT_COLORS[project.status || 'Active'] ?? STAT_COLORS['Active'];
+                                                const col = KANBAN_COLUMNS.find(c => c.id === (project.status || 'Active'));
+                                                const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
+                                                const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
+                                                const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
+                                                return (
+                                                    <tr
+                                                        key={project.id}
+                                                        onClick={() => onSelectProject(project.id)}
+                                                        className="hover:bg-[var(--bg-subtle)] cursor-pointer group transition-colors"
+                                                    >
+                                                        <td className="px-4 py-3">
+                                                            <span className="font-medium text-[var(--text)] text-sm">{project.name}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{project.client || '—'}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${col?.dot ?? statusStyle.dot}`} />
+                                                                {project.status || 'Active'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-[var(--text-muted)] text-sm whitespace-nowrap">
+                                                            <span className="flex items-center gap-1">
+                                                                <Calendar className="w-3 h-3 text-[var(--text-faint)]" />
+                                                                {formatDate(project.dueDate)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-xs">{project.projectNumber || '—'}</td>
+                                                        <td className="px-4 py-3 text-[var(--text-muted)] text-sm">
+                                                            {assignedMember ? (
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <span className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                                                        {assignedMember.name.charAt(0)}
+                                                                    </span>
+                                                                    {assignedMember.name}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[var(--text-faint)] italic">Unassigned</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                                                                {canEdit && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleOpenEdit(project); }}
+                                                                        className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] transition-colors"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <Pencil className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                {canDelete && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setListDeleteConfirmation(''); setListDeleteTarget(project); }}
+                                                                        className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center min-h-[240px] border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg)] text-center px-6">
+                                    <h3 className="text-base font-semibold text-[var(--text)]">No projects found</h3>
+                                    <p className="text-sm text-[var(--text-muted)] mt-1">Try changing the filters or search text.</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : selectedStatusFilter === 'All' ? (
+                        /* ── Kanban view (All statuses) ── */
                         <div className="flex gap-4 h-full min-w-[1200px]">
                             {KANBAN_COLUMNS.map(col => {
                                 const colProjects = filteredProjects.filter(p => (p.status || 'Active') === col.id);
@@ -721,6 +827,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                             })}
                         </div>
                     ) : (
+                        /* ── Grid view (single status filter) ── */
                         <div className="h-full overflow-y-auto">
                             <div className="flex items-center justify-between mb-5">
                                 <div className="flex items-center gap-3 min-w-0">
@@ -786,6 +893,37 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                 onRestore={onRestoreProject}
                 onPermDelete={onPermDeleteProject}
             />
+
+            <AlertDialog open={listDeleteTarget !== null} onOpenChange={open => { if (!open) { setListDeleteTarget(null); setListDeleteConfirmation(''); } }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Move project to trash</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            <span className="font-medium text-[var(--text)]">{listDeleteTarget?.name}</span> will be moved to trash and <strong>automatically deleted after 30 days</strong>. You can restore it from the Trash before then.
+                            <br /><br />
+                            Type <span className="font-medium text-[var(--text)]">confirm</span> to proceed.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="list-delete-confirm">Confirmation</Label>
+                        <Input
+                            id="list-delete-confirm"
+                            value={listDeleteConfirmation}
+                            onChange={(e) => setListDeleteConfirmation(e.target.value)}
+                            placeholder='Type "confirm"'
+                        />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => { setListDeleteTarget(null); setListDeleteConfirmation(''); }}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => { if (listDeleteTarget) { onDeleteProject(listDeleteTarget.id); setListDeleteTarget(null); setListDeleteConfirmation(''); } }}
+                            disabled={listDeleteConfirmation.trim().toLowerCase() !== 'confirm'}
+                        >
+                            Move to Trash
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 };

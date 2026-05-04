@@ -185,9 +185,23 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
     const [validationReportTitle, setValidationReportTitle] = useState('');
 
+    const persistElevationTypes = async (updatedTypes: ElevationType[]) => {
+        try {
+            await fetch(`/api/projects/${project.id}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ elevationTypes: updatedTypes }),
+            });
+        } catch {
+            // Non-critical — local state is still updated
+        }
+    };
+
     const handleElevationUpdate = (updatedTypes: ElevationType[]) => {
         const updatedProject = { ...project, elevationTypes: updatedTypes };
         onProjectUpdate(updatedProject);
+        void persistElevationTypes(updatedTypes);
     };
 
     const handleSingleElevationTypeUpdate = (updated: ElevationType) => {
@@ -197,6 +211,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             ? current.map(et => et.id === updated.id ? updated : et)
             : [...current, updated]; // new type created on-the-fly from ElevationTab
         onProjectUpdate({ ...project, elevationTypes: next });
+        void persistElevationTypes(next);
     };
 
     const doorScheduleInputRef = useRef<HTMLInputElement>(null);
@@ -209,10 +224,12 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const report = useMemo(() => generateReport(doors), [doors]);
 
     useEffect(() => {
-        setHardwareSets(project.hardwareSets ?? []);
-        setDoors(project.doors ?? []);
         setSaveStatus('idle');
         isInitialMount.current = true;
+        // State reset (hardwareSets / doors) is handled at the top of loadProjectData
+        // using functional updates that bail out when already empty — doing it here
+        // creates a second render where isInitialMount is already false, causing the
+        // auto-save effect to fire with empty state and overwrite final_json in the DB.
     }, [project.id]);
 
     // Poll both raw tables after the user navigated away mid-processing and returns.
@@ -273,6 +290,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             try {
                 const processingKey = `planckoff_proc_${project.id}`;
 
+                // Clear state from a previous project before fetching new data.
+                // Functional updates bail out (return same ref) when already empty,
+                // so on a page refresh this causes zero re-renders and zero auto-saves.
+                // On navigation A → B they do reset, but isInitialMount is true so the
+                // auto-save effect skips that render.
+                setHardwareSets(prev => prev.length > 0 ? [] : prev);
+                setDoors(prev => prev.length > 0 ? [] : prev);
+                isInitialMount.current = true;
+
                 // If a combined upload is in-flight, wait for it instead of showing partial data.
                 if (sessionStorage.getItem(processingKey)) {
                     if (!cancelled) startPollingForResult();
@@ -317,17 +343,53 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 let sets: typeof pdfSets;
                 if (finalData && finalData.hardwareSets.length > 0) {
                     const pdfSetsByName = new Map(pdfSets.map(s => [s.name.toLowerCase(), s]));
-                    const setsFromFinal = finalData.hardwareSets.map(s => {
+                    const setsFromFinal = finalData.hardwareSets
+                    // '__unassigned__' is a sentinel used to persist orphan manual doors —
+                    // it must never appear as a real hardware set in the UI.
+                    .filter(s => s.name !== '__unassigned__')
+                    .map(s => {
                         const pdfVersion = pdfSetsByName.get(s.name.toLowerCase());
                         if (pdfVersion) {
-                            // Use fresh PDF item data but preserve Final JSON metadata
-                            return { ...pdfVersion, isManualEntry: s.isManualEntry };
+                            // Use fresh PDF item data but preserve all user-edited fields from
+                            // the final JSON (prep, description/notes, doorTags, isManualEntry).
+                            // These fields are set by the user via the Edit modal and must survive
+                            // a refresh — the PDF extraction never has these edits.
+                            return {
+                                ...pdfVersion,
+                                isManualEntry: s.isManualEntry,
+                                prep: s.prep ?? pdfVersion.prep,
+                                description: s.description || pdfVersion.description,
+                                doorTags: s.doorTags ?? pdfVersion.doorTags,
+                            };
                         }
                         return s;
                     });
                     const finalSetNames = new Set(finalData.hardwareSets.map(s => s.name.toLowerCase()));
-                    const newPdfOnlySets = pdfSets.filter(s => !finalSetNames.has(s.name.toLowerCase()));
-                    sets = [...setsFromFinal, ...newPdfOnlySets];
+
+                    // Exclude sets that the user has deleted — they live in trashJson but are
+                    // absent from finalJson, so without this check they'd be re-added on every
+                    // reload because hardware_pdf_extractions is never mutated on delete.
+                    const trashedSetNames = new Set<string>(
+                        (mergeJson?.data?.trashJson ?? [])
+                            .filter((t: TrashItem) => t.type === 'set')
+                            .map((t: TrashItem) => t.setName?.toLowerCase())
+                            .filter(Boolean) as string[],
+                    );
+
+                    const newPdfOnlySets = pdfSets.filter(s =>
+                        !finalSetNames.has(s.name.toLowerCase()) &&
+                        !trashedSetNames.has(s.name.toLowerCase()),
+                    );
+                    const merged = [...setsFromFinal, ...newPdfOnlySets];
+                    // Deduplicate by ID — guards against corrupted finalJson that
+                    // may contain the same set twice (caused by the now-fixed stale
+                    // closure bug writing deleted sets back to finalJson).
+                    const seenIds = new Set<string>();
+                    sets = merged.filter(s => {
+                        if (seenIds.has(s.id)) return false;
+                        seenIds.add(s.id);
+                        return true;
+                    });
                 } else {
                     sets = pdfSets;
                 }
@@ -379,14 +441,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     });
 
                     // Append manually-added doors: they live only in Final JSON, not in Sheet JSON.
+                    // Doors stored under '__unassigned__' sentinel have no real set — clear that ref.
                     const rawDoorTags = new Set(rawDoors.map(d => d.doorTag));
                     const manualDoors = finalData.doors
                         .filter(d => !rawDoorTags.has(d.doorTag) && !trashedDoorTags.has(d.doorTag))
                         .map(d => ({
                             ...d,
-                            assignedHardwareSet: d.assignedHardwareSet
-                                ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
-                                : undefined,
+                            assignedHardwareSet:
+                                d.assignedHardwareSet && d.assignedHardwareSet.name !== '__unassigned__'
+                                    ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
+                                    : undefined,
                         }));
 
                     loadedDoors = [...loadedDoors, ...manualDoors];
@@ -405,11 +469,12 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     isInitialMount.current = true;
                 }
 
-                // Only initialise finalJson when it doesn't exist yet (first upload).
-                // If finalJson already has data, do NOT overwrite it — that would erase
-                // variants and manually-created sets that live only in finalJson.
+                // Only initialise finalJson when it doesn't exist yet (first upload)
+                // AND there are hardware sets to write — an empty sets array would save []
+                // which is indistinguishable from "never initialised", creating a permanent
+                // loop that overwrites manual-door saves on every refresh.
                 const hasFinalJson = Boolean(finalRaw);
-                if (!hasFinalJson && (sets.length > 0 || loadedDoors.length > 0) && !cancelled) {
+                if (!hasFinalJson && sets.length > 0 && !cancelled) {
                     saveToFinalJson(sets, loadedDoors).catch(() => {});
                 }
             } catch {
@@ -546,6 +611,45 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                     prep: set.prep,
                 };
             });
+
+            // Collect manual doors not matched to any hardware set — they would otherwise
+            // be lost on refresh because saveToFinalJson only serializes matched doors.
+            // Save them under a sentinel entry so transformFromFinalJson includes them in
+            // its flat doors list, which loadProjectData then appends as manualDoors.
+            const serializedDoorTags = new Set(finalJson.flatMap(s => s.doors.map(d => d.doorTag)));
+            const orphanManualDoors = currentDoors.filter(
+                d => d.isManualEntry === true && !serializedDoorTags.has(d.doorTag),
+            );
+            if (orphanManualDoors.length > 0) {
+                finalJson.push({
+                    setName: '__unassigned__',
+                    isManualEntry: true,
+                    hardwareItems: [],
+                    notes: '',
+                    doors: orphanManualDoors.map((d): MergedDoor => ({
+                        doorTag: d.doorTag,
+                        hwSet: d.providedHardwareSet ?? '',
+                        matchedSetName: '',
+                        isManualEntry: true,
+                        buildingArea: undefined,
+                        doorLocation: d.location,
+                        interiorExterior: d.interiorExterior,
+                        quantity: d.quantity,
+                        fireRating: d.fireRating,
+                        leafCount: d.leafCountDisplay ?? (d.leafCount !== undefined ? String(d.leafCount) : undefined),
+                        doorType: d.type,
+                        doorElevationType: d.elevationTypeId,
+                        doorWidth: d.width ? `${Math.floor(d.width / 12)}'-${d.width % 12}"` : undefined,
+                        doorHeight: d.height ? `${Math.floor(d.height / 12)}'-${d.height % 12}"` : undefined,
+                        thickness: d.thickness ? String(d.thickness) : undefined,
+                        doorMaterial: d.doorMaterial,
+                        frameMaterial: d.frameMaterial as string | undefined,
+                        hardwarePrep: d.hardwarePrep,
+                        excludeReason: d.excludeReason,
+                        sections: d.sections as unknown as MergedDoor['sections'],
+                    })),
+                });
+            }
 
             await fetch(`/api/projects/${project.id}/hardware-merge`, {
                 method: 'PUT',
@@ -1264,15 +1368,19 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 });
             },
             onConfirm: () => {
-                setTrashItems(prev => [...prev, trashItem]);
-                // Trigger a save now that trash is updated
+                // Build newTrash explicitly before setState so we can pass it
+                // directly to saveToFinalJson. Calling performSave() here would
+                // use a stale closure (captured before setHardwareSets/setDoors
+                // committed) and write the deleted set back to finalJson.
+                const newTrash = [...trashItemsRef.current, trashItem];
+                setTrashItems(newTrash);
                 setTimeout(() => {
                     hasPendingUndoRef.current = false;
-                    performSave();
+                    saveToFinalJson(hardwareSetsRef.current, doorsRef.current, newTrash).catch(() => {});
                 }, 0);
             },
         });
-    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, performSave]);
+    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, saveToFinalJson]);
 
     const handleBulkDeleteSets = useCallback((setIds: Set<string>) => {
         const setsToDelete = hardwareSets.filter(s => setIds.has(s.id));
@@ -1299,14 +1407,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 setDoors(prev => [...prev, ...doorsToRemove]);
             },
             onConfirm: () => {
-                setTrashItems(prev => [...prev, ...trashEntries]);
+                const newTrash = [...trashItemsRef.current, ...trashEntries];
+                setTrashItems(newTrash);
                 setTimeout(() => {
                     hasPendingUndoRef.current = false;
-                    performSave();
+                    saveToFinalJson(hardwareSetsRef.current, doorsRef.current, newTrash).catch(() => {});
                 }, 0);
             },
         });
-    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, performSave]);
+    }, [hardwareSets, doors, buildTrashItemForSet, pushUndoToast, saveToFinalJson]);
 
     // ── Trash restore / permanent delete ─────────────────────────────────────
 
@@ -1402,11 +1511,17 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setTrashItems([]);
     }, []);
 
-    const handleSplitSetAndReassign = (newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
+    const handleSplitSetAndReassign = useCallback((newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
         const newSet: HardwareSet = {
             ...newSetData,
             id: `hs-variant-${Date.now()}`,
+            parentSetId: sourceSetId,
         };
+
+        // Snapshot the original door state for the doors we're about to reassign.
+        // Stored in the closure so onUndo can restore exact pre-variant values.
+        const originalDoorStates = doors.filter(d => doorIds.includes(d.id));
+
         let updatedSets: HardwareSet[] = [];
         setHardwareSets(prevSets => {
             const idx = prevSets.findIndex(s => s.id === sourceSetId);
@@ -1418,19 +1533,42 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             }
             return updatedSets;
         });
-        setDoors(prevDoors => {
-            return prevDoors.map(door => {
-                if (doorIds.includes(door.id)) {
-                    return { ...door, assignedHardwareSet: newSet, providedHardwareSet: newSet.name, status: 'complete' };
-                }
-                return door;
-            });
+        setDoors(prevDoors =>
+            prevDoors.map(door =>
+                doorIds.includes(door.id)
+                    ? { ...door, assignedHardwareSet: newSet, providedHardwareSet: newSet.name, status: 'complete' as const }
+                    : door,
+            ),
+        );
+
+        // Show undo toast — auto-save is blocked while the toast is live.
+        pushUndoToast({
+            id: `variant-${newSet.id}`,
+            label: `Variant "${newSet.name}" created — undo available for`,
+            onUndo: () => {
+                // Atomically remove the variant set and restore the reassigned doors.
+                setHardwareSets(prev => prev.filter(s => s.id !== newSet.id));
+                setDoors(prevDoors =>
+                    prevDoors.map(door => {
+                        const original = originalDoorStates.find(od => od.id === door.id);
+                        return original ?? door;
+                    }),
+                );
+                // hasPendingUndoRef is cleared by dismissUndoToast; the debounce
+                // will then fire and persist the reverted state automatically.
+            },
+            onConfirm: () => {
+                // Persist to hardware-pdf now that the undo window has closed.
+                saveToHardwarePdf(updatedSets).catch(() => {});
+                setTimeout(() => {
+                    hasPendingUndoRef.current = false;
+                    // Use refs — performSave() would be stale here (captured before
+                    // setHardwareSets/setDoors committed the variant).
+                    saveToFinalJson(hardwareSetsRef.current, doorsRef.current, trashItemsRef.current).catch(() => {});
+                }, 0);
+            },
         });
-        // Persist the new set to the hardware-pdf extraction table so it survives
-        // a full reload without relying solely on finalJson.
-        // updatedSets is captured synchronously from the setState callback above.
-        saveToHardwarePdf(updatedSets).catch(() => {});
-    };
+    }, [doors, pushUndoToast, performSave, saveToHardwarePdf]);
 
     const handleDoorsUpdate = useCallback((updater: React.SetStateAction<Door[]>) => {
         setDoors(updater);
@@ -1472,14 +1610,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 setDoors(prev => [...prev, ...doorsToDelete]);
             },
             onConfirm: () => {
-                setTrashItems(prev => [...prev, ...trashEntries]);
+                const newTrash = [...trashItemsRef.current, ...trashEntries];
+                setTrashItems(newTrash);
                 setTimeout(() => {
                     hasPendingUndoRef.current = false;
-                    performSave();
+                    saveToFinalJson(hardwareSetsRef.current, doorsRef.current, newTrash).catch(() => {});
                 }, 0);
             },
         });
-    }, [doors, pushUndoToast, performSave]);
+    }, [doors, pushUndoToast, saveToFinalJson]);
 
     const handleProvidedSetChange = (doorId: string, newSetName: string) => {
         const trimmedName = newSetName.trim();

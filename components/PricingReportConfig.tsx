@@ -34,6 +34,9 @@ interface Props {
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
+const withPrep = (g: { description: string; prep: string[] }) =>
+  g.prep.length ? `${g.description} | Prep: ${g.prep.join('; ')}` : g.description;
+
 function calcTotal(groups: Array<{ totalPrice: number }>): number {
   return groups.reduce((s, g) => s + g.totalPrice, 0);
 }
@@ -543,6 +546,35 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     hardware: flattenNodes(buildHwHierarchy(hardwareGroups,  proposalFilters, doors)),
   }), [doorGroups, frameGroups, hardwareGroups, proposalFilters, doors]);
 
+  // ── Hardware set → door count (for proposal detail table) ─────────────────
+  const hwSetList = useMemo(() => {
+    const countMap = new Map<string, number>();
+    const includedDoors = doors.filter(d => d.hardwareIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE');
+    for (const door of includedDoors) {
+      const name = (
+        door.assignedHardwareSet?.name?.trim() ||
+        (door.sections as unknown as Record<string, Record<string, string | undefined>> | undefined)?.hardware?.['HARDWARE SET']?.trim() ||
+        door.providedHardwareSet?.trim() ||
+        ''
+      );
+      if (!name) continue;
+      const qty = door.quantity != null && door.quantity > 0 ? door.quantity : 1;
+      countMap.set(name.toLowerCase(), (countMap.get(name.toLowerCase()) ?? 0) + qty);
+    }
+    const seen = new Set<string>();
+    const result: { name: string; doorCount: number }[] = [];
+    for (const g of hardwareGroups) {
+      for (const s of g.sets) {
+        const key = s.setName.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({ name: s.setName, doorCount: countMap.get(key) ?? 0 });
+        }
+      }
+    }
+    return result;
+  }, [doors, hardwareGroups]);
+
   // ── Proposal profit percentages ────────────────────────────────────────────
   const [profitPct, setProfitPct] = useState<{ door: string; frame: string; hardware: string }>({
     door: '', frame: '', hardware: '',
@@ -874,7 +906,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
 
     utils.book_append_sheet(wb,
       makeSheet(doorGroups, doorTotal, g => ({
-        'Description': g.description,
+        'Description': withPrep(g),
         'Total Qty':   g.totalQty,
         'Unit Price':  g.unitPrice,
         'Total Price': g.totalPrice,
@@ -883,7 +915,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     );
     utils.book_append_sheet(wb,
       makeSheet(frameGroups, frameTotal, g => ({
-        'Description': g.description,
+        'Description': withPrep(g),
         'Total Qty':   g.totalQty,
         'Unit Price':  g.unitPrice,
         'Total Price': g.totalPrice,
@@ -948,7 +980,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       startY: headerBottomY + 6,
       head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
       body: [
-        ...doorGroups.map(g => [g.description, g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+        ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
         ['', '', 'Total', fmt.format(doorTotal)],
       ],
       styles: { fontSize: 8 },
@@ -965,7 +997,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       startY: nextY(18),
       head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
       body: [
-        ...frameGroups.map(g => [g.description, g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+        ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
         ['', '', 'Total', fmt.format(frameTotal)],
       ],
       styles: { fontSize: 8 },
@@ -1445,6 +1477,87 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
               </table>
             </div>
 
+            {/* Door detail table */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Doors</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doorGroups.length === 0 ? (
+                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No door groups</td></tr>
+                  ) : doorGroups.map((g, i) => (
+                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
+                      {doorGroups.reduce((s, g) => s + g.totalQty, 0)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Frame detail table */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Frames</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {frameGroups.length === 0 ? (
+                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No frame groups</td></tr>
+                  ) : frameGroups.map((g, i) => (
+                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
+                      {frameGroups.reduce((s, g) => s + g.totalQty, 0)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Hardware detail table */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Hardware</p>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Hardware Set</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-32">Doors Used In</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hwSetList.length === 0 ? (
+                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No hardware sets</td></tr>
+                  ) : hwSetList.map((s, i) => (
+                    <tr key={s.name} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{s.name}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{s.doorCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             {/* Extra Expenses */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -1747,6 +1860,11 @@ const DoorRow: React.FC<{
             {visibleFields.slice(0, 4).map(f => (
               <span key={f.key} className="text-[10px] px-1 py-px rounded bg-[var(--bg-muted)] text-[var(--text-faint)]">
                 {f.label}: {group.fields[f.key]}
+              </span>
+            ))}
+            {group.prep.map((p, i) => (
+              <span key={`prep-${i}`} className="text-[10px] px-1.5 py-px rounded bg-[var(--primary-bg)] border border-[var(--primary-border)] text-[var(--primary-text-muted)]">
+                Prep: {p}
               </span>
             ))}
           </div>

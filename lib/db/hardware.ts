@@ -395,13 +395,15 @@ export async function updateProjectHardwareFinal(
 ): Promise<DbResult<ProjectHardwareFinal>> {
   try {
     const db = createSupabaseAdminClient();
-    const patch: Record<string, unknown> = { final_json: finalJson };
+    const patch: Record<string, unknown> = {
+      project_id: projectId,
+      final_json: finalJson,
+    };
     if (trashJson !== undefined) patch.trash_json = trashJson;
 
     const { data, error } = await db
       .from('project_hardware_finals')
-      .update(patch)
-      .eq('project_id', projectId)
+      .upsert(patch, { onConflict: 'project_id' })
       .select()
       .single();
 

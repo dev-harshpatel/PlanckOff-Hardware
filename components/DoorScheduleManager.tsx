@@ -201,6 +201,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
     // Enhanced Edit Modal State (Phase 19)
     const [editModalDoor, setEditModalDoor] = useState<Door | null>(null);
+    const [savingDoorId, setSavingDoorId] = useState<string | null>(null);
 
     // Selection State
     // Column Management State
@@ -1290,6 +1291,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             const isInvalidRef = providedLower && !validSetNames.has(providedLower);
                             const isManualEntry = door.isManualEntry === true;
                             const isValidationFailure = !isManualEntry && (isMissingSet || isInvalidRef);
+                            const isSaving = savingDoorId === door.id;
 
                             // Per-section exclude flags — each only dims that section's cells.
                             const isDoorSecExcluded  = door.doorIncludeExclude?.toUpperCase()     === 'EXCLUDE';
@@ -1301,18 +1303,26 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             return (
                                 <tr
                                     key={door.id}
-                                    className={`transition-colors group cursor-pointer ${isValidationFailure
-                                        ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-l-2 border-red-400 dark:border-red-800'
+                                    className={`transition-colors group cursor-pointer ${isSaving ? 'opacity-50 pointer-events-none' : ''} ${isValidationFailure
+                                        ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
                                         : isManualEntry
-                                            ? 'bg-amber-50/80 dark:bg-amber-900/10 hover:bg-amber-100 dark:hover:bg-amber-900/20 border-l-2 border-amber-300 dark:border-amber-700'
+                                            ? 'bg-amber-50/80 dark:bg-amber-900/10 hover:bg-amber-100 dark:hover:bg-amber-900/20'
                                             : selectedRows.has(door.id)
-                                                ? 'bg-[var(--primary-bg)] border-l-2 border-[var(--primary-ring)]'
-                                                : 'hover:bg-[var(--bg-subtle)] border-l-2 border-transparent'
+                                                ? 'bg-[var(--primary-bg)]'
+                                                : 'hover:bg-[var(--bg-subtle)]'
                                         }`}
                                     onClick={() => setEditModalDoor(door)}
                                     title="Click to edit door"
                                 >
-                                    <td className="px-3 py-2.5">
+                                    <td className={`px-3 py-2.5 border-l-2 ${
+                                        isValidationFailure
+                                            ? 'border-l-red-400 dark:border-l-red-800'
+                                            : isManualEntry
+                                                ? 'border-l-amber-300 dark:border-l-amber-700'
+                                                : selectedRows.has(door.id)
+                                                    ? 'border-l-[var(--primary-ring)]'
+                                                    : 'border-l-transparent'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={selectedRows.has(door.id)}
@@ -1417,30 +1427,36 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
 
                                     {/* Action column */}
                                     <td className="px-2 py-2 text-center">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteRow(door.id); }}
-                                                className="p-1.5 text-[var(--text-faint)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                title="Delete Door"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <Button
-                                                onClick={(e) => { e.stopPropagation(); handleAssignHardware(door.id); }}
-                                                disabled={door.status === 'loading' || isLoading || isAssigningBatch || isValidationFailure}
-                                                loading={door.status === 'loading'}
-                                                title={isValidationFailure ? "Fix Provided Set first" : "Run AI to assign hardware set"}
-                                                size="sm"
-                                                className={`h-auto px-2 py-1 text-[10px] font-semibold text-white rounded transition-all ${door.status === 'loading' ? 'bg-[var(--primary-action)]/60 cursor-not-allowed' :
-                                                    isValidationFailure ? 'bg-[var(--bg-emphasis)] cursor-not-allowed text-[var(--text-muted)]' :
-                                                        door.status === 'complete' ? 'bg-green-500 hover:bg-green-600' :
-                                                            door.status === 'error' ? 'bg-red-500 hover:bg-red-600' :
-                                                                'bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)]'
-                                                    } disabled:opacity-50`}
-                                            >
-                                                {door.status === 'complete' ? 'Retry' : 'Assign'}
-                                            </Button>
-                                        </div>
+                                        {isSaving ? (
+                                            <div className="flex items-center justify-center">
+                                                <Loader2 className="w-4 h-4 text-[var(--primary-text-muted)] animate-spin" />
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteRow(door.id); }}
+                                                    className="p-1.5 text-[var(--text-faint)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                    title="Delete Door"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <Button
+                                                    onClick={(e) => { e.stopPropagation(); handleAssignHardware(door.id); }}
+                                                    disabled={door.status === 'loading' || isLoading || isAssigningBatch || isValidationFailure}
+                                                    loading={door.status === 'loading'}
+                                                    title={isValidationFailure ? "Fix Provided Set first" : "Run AI to assign hardware set"}
+                                                    size="sm"
+                                                    className={`h-auto px-2 py-1 text-[10px] font-semibold text-white rounded transition-all ${door.status === 'loading' ? 'bg-[var(--primary-action)]/60 cursor-not-allowed' :
+                                                        isValidationFailure ? 'bg-[var(--bg-emphasis)] cursor-not-allowed text-[var(--text-muted)]' :
+                                                            door.status === 'complete' ? 'bg-green-500 hover:bg-green-600' :
+                                                                door.status === 'error' ? 'bg-red-500 hover:bg-red-600' :
+                                                                    'bg-[var(--primary-action)] hover:bg-[var(--primary-action-hover)]'
+                                                        } disabled:opacity-50`}
+                                                >
+                                                    {door.status === 'complete' ? 'Retry' : 'Assign'}
+                                                </Button>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             );
@@ -1502,53 +1518,64 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         const newHwSet  = (migratedDoor.providedHardwareSet  ?? '').trim();
                         const hwSetChanged = prevHwSet !== newHwSet;
 
-                        // Update in-memory state immediately
-                        onDoorsUpdate(prev => prev.map(d => d.doorTag === migratedDoor.doorTag ? migratedDoor : d));
+                        // Match by stable id — doorTag may have changed in the form.
+                        const originalId = editModalDoor.id;
+                        onDoorsUpdate(prev => prev.map(d => d.id === originalId ? migratedDoor : d));
                         setEditModalDoor(null);
+                        setSavingDoorId(originalId);
 
-                        // Persist to Excel JSON (scheduleJson is source of truth)
-                        if (migratedDoor.sections) {
-                            try {
-                                const body: Record<string, unknown> = {
-                                    doorTag:  migratedDoor.doorTag,
-                                    sections: migratedDoor.sections,
-                                };
-                                // Only send hwSet when it actually changed to avoid
-                                // accidentally overwriting a value with an empty string.
-                                if (hwSetChanged) {
-                                    body.hwSet = newHwSet;
-                                }
+                        try {
+                            // Manual-entry doors are not in the Excel scheduleJson — persist them
+                            // exclusively via saveToFinalJson (triggered by onDoorSaved).
+                            if (migratedDoor.isManualEntry) {
+                                onDoorSaved?.();
+                            } else if (migratedDoor.sections) {
+                                // Persist edits back to the Excel JSON (scheduleJson is source of truth
+                                // for imported doors).
+                                try {
+                                    const body: Record<string, unknown> = {
+                                        doorTag:  migratedDoor.doorTag,
+                                        sections: migratedDoor.sections,
+                                    };
+                                    // Only send hwSet when it actually changed to avoid
+                                    // accidentally overwriting a value with an empty string.
+                                    if (hwSetChanged) {
+                                        body.hwSet = newHwSet;
+                                    }
 
-                                const res = await fetch(`/api/projects/${projectId}/door-schedule`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(body),
-                                });
-                                if (!res.ok) {
-                                    const err = await res.json().catch(() => ({}));
-                                    console.error('[DoorScheduleManager] Persist failed:', err);
-                                } else {
-                                    // Refresh the door list from the DB to confirm the save.
-                                    onDoorSaved?.();
+                                    const res = await fetch(`/api/projects/${projectId}/door-schedule`, {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(body),
+                                    });
+                                    if (!res.ok) {
+                                        const err = await res.json().catch(() => ({}));
+                                        console.error('[DoorScheduleManager] Persist failed:', err);
+                                    } else {
+                                        // Refresh the door list from the DB to confirm the save.
+                                        onDoorSaved?.();
+                                    }
+                                    if (res.ok && hwSetChanged) {
+                                        // Hardware set changed — re-run the merge so the final
+                                        // JSON (used for reports) reflects the new assignment.
+                                        fetch(`/api/projects/${projectId}/hardware-merge`, {
+                                            method: 'POST',
+                                            credentials: 'include',
+                                        }).catch(err =>
+                                            console.error('[DoorScheduleManager] Re-merge failed:', err)
+                                        );
+                                    }
+                                } catch (err) {
+                                    console.error('[DoorScheduleManager] Persist fetch error:', err);
                                 }
-                                if (res.ok && hwSetChanged) {
-                                    // Hardware set changed — re-run the merge so the final
-                                    // JSON (used for reports) reflects the new assignment.
-                                    fetch(`/api/projects/${projectId}/hardware-merge`, {
-                                        method: 'POST',
-                                        credentials: 'include',
-                                    }).catch(err =>
-                                        console.error('[DoorScheduleManager] Re-merge failed:', err)
-                                    );
-                                }
-                            } catch (err) {
-                                console.error('[DoorScheduleManager] Persist fetch error:', err);
                             }
+                            addToast({
+                                type: 'success',
+                                message: `Door ${migratedDoor.doorTag} updated successfully`
+                            });
+                        } finally {
+                            setSavingDoorId(null);
                         }
-                        addToast({
-                            type: 'success',
-                            message: `Door ${migratedDoor.doorTag} updated successfully`
-                        });
                     }}
                     onCancel={() => setEditModalDoor(null)}
                     hardwareSets={hardwareSets}
