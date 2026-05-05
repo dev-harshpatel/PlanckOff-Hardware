@@ -90,3 +90,6 @@ coverage/
 .cache/
 .temp/
 tmp/
+
+.planning/
+.planning
