@@ -18,6 +18,7 @@ import {
 import type { RoleName } from '@/types/auth';
 import type { MasterHardwareItem, MasterHardwarePending } from '@/lib/db/masterHardware';
 import { MasterItemFormModal } from '../components/MasterItemFormModal';
+import { DatabaseSkeleton } from '@/components/skeletons/DatabaseSkeleton';
 import { PendingReviewModal } from '../components/PendingReviewModal';
 
 type SortKey = keyof Pick<MasterHardwareItem, 'name' | 'manufacturer' | 'description' | 'finish'>;
@@ -324,12 +325,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       <div className="flex-grow overflow-hidden flex flex-col mx-6 my-5 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
 
         {/* Loading / error states */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20 gap-2 text-[var(--text-faint)]">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm">Loading database…</span>
-          </div>
-        )}
+        {isLoading && <DatabaseSkeleton />}
 
         {!isLoading && loadError && (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">

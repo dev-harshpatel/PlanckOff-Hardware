@@ -1025,14 +1025,14 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                             <Button
                                 onClick={canReupload ? onUploadClick : undefined}
                                 disabled={isLoading || isAssigningBatch || !canReupload}
-                                loading={isLoading}
+                                loading={!!activeTask}
                                 loadingText="Processing..."
                                 variant="outline"
                                 size="sm"
                                 className="gap-1.5 text-xs font-medium"
                             >
                                 <Upload className="w-3.5 h-3.5" />
-                                {isLoading ? 'Processing…' : 'Upload'}
+                                Upload
                             </Button>
                         </Tooltip>
                         <Button

@@ -1796,8 +1796,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             onClick={() => setIsCombinedUploadOpen(true)}
                             className="gap-1.5"
                         >
-                            <Upload className="h-4 w-4" />
-                            <span className="hidden md:inline">Process Files</span>
+                            {(isCombinedProcessing || isPollingForResult)
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <Upload className="h-4 w-4" />
+                            }
+                            <span className="hidden md:inline">
+                                {(isCombinedProcessing || isPollingForResult) ? 'Processing…' : 'Process Files'}
+                            </span>
                         </Button>
                         <SaveStatusIndicator status={saveStatus} onRetry={performSave} />
                     </div>

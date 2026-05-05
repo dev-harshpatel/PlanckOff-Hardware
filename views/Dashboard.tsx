@@ -46,6 +46,7 @@ interface DashboardProps {
     userRole: RoleName;
     addToast: (toast: Omit<Toast, 'id'>) => void;
     teamMembers: TeamMember[];
+    isLoadingTeamMembers?: boolean;
 }
 
 const formatDate = (isoDate?: string): string => {
@@ -363,7 +364,7 @@ const ProjectCard: React.FC<{
 };
 
 
-const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers }) => {
+const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers, isLoadingTeamMembers = false }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<Project | null>(null);
     const [isSavingProject, setIsSavingProject] = useState(false);
@@ -636,8 +637,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                             value={selectedMemberFilter}
                             onChange={setSelectedMemberFilter}
                             options={memberFilterOptions}
+                            disabled={isLoadingTeamMembers}
                             className="w-full"
-                            triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm"
+                            triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             contentClassName="mt-1"
                         />
                     </div>
