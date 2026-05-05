@@ -447,6 +447,14 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [] });
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
+  const [hiddenProposalTables, setHiddenProposalTables] = useState<Set<'doors' | 'frames' | 'hardware'>>(new Set());
+
+  const toggleProposalTable = (key: 'doors' | 'frames' | 'hardware') =>
+    setHiddenProposalTables(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   const [variants, setVariants]     = useState<PricingVariant[]>([]);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -1162,6 +1170,82 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     });
     y = (d.lastAutoTable?.finalY ?? y) + 20;
 
+    // ── Doors detail table ────────────────────────────────────────────────────
+    if (!hiddenProposalTables.has('doors') && doorGroups.length > 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 35, 45);
+      doc.text('Doors', margin, y);
+      y += 8;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [['Description', 'Total Qty']],
+        body: [
+          ...doorGroups.map(g => [g.description, g.totalQty]),
+          ['Total', doorGroups.reduce((s, g) => s + g.totalQty, 0)],
+        ],
+        styles:       { fontSize: 8, cellPadding: 5 },
+        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 1: { halign: 'right' } },
+        didParseCell: (data) => {
+          if (data.row.index === doorGroups.length) {
+            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
+          }
+        },
+      });
+      y = (d.lastAutoTable?.finalY ?? y) + 20;
+    }
+
+    // ── Frames detail table ───────────────────────────────────────────────────
+    if (!hiddenProposalTables.has('frames') && frameGroups.length > 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 35, 45);
+      doc.text('Frames', margin, y);
+      y += 8;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [['Description', 'Total Qty']],
+        body: [
+          ...frameGroups.map(g => [g.description, g.totalQty]),
+          ['Total', frameGroups.reduce((s, g) => s + g.totalQty, 0)],
+        ],
+        styles:       { fontSize: 8, cellPadding: 5 },
+        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 1: { halign: 'right' } },
+        didParseCell: (data) => {
+          if (data.row.index === frameGroups.length) {
+            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
+          }
+        },
+      });
+      y = (d.lastAutoTable?.finalY ?? y) + 20;
+    }
+
+    // ── Hardware sets table ───────────────────────────────────────────────────
+    if (!hiddenProposalTables.has('hardware') && hwSetList.length > 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 35, 45);
+      doc.text('Hardware', margin, y);
+      y += 8;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [['Hardware Set', 'Doors Used In']],
+        body: hwSetList.map(s => [s.name, s.doorCount]),
+        styles:       { fontSize: 8, cellPadding: 5 },
+        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 1: { halign: 'right' } },
+      });
+      y = (d.lastAutoTable?.finalY ?? y) + 20;
+    }
+
     // ── Extra expenses ────────────────────────────────────────────────────────
     if (extraExpenses.length > 0) {
       doc.setFontSize(9);
@@ -1263,6 +1347,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     extraExpenses, extraExpensesTotal,
     taxRows, totalTaxAmount, taxSubtotal, totalAfterTax,
     remarks,
+    hiddenProposalTables, doorGroups, frameGroups, hwSetList,
   ]);
 
   // ── Tab data ───────────────────────────────────────────────────────────────
@@ -1478,85 +1563,133 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
             </div>
 
             {/* Door detail table */}
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Doors</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doorGroups.length === 0 ? (
-                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No door groups</td></tr>
-                  ) : doorGroups.map((g, i) => (
-                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+            {hiddenProposalTables.has('doors') ? (
+              <div className="flex items-center gap-2 border border-dashed border-[var(--border)] rounded px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] flex-1">Doors — hidden</span>
+                <button onClick={() => toggleProposalTable('doors')} className="text-xs text-[var(--primary-text-muted)] hover:text-[var(--primary-text)] transition-colors">Restore</button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)]">Doors</p>
+                  <button
+                    onClick={() => toggleProposalTable('doors')}
+                    title="Remove from proposal"
+                    className="p-0.5 rounded text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 hover:bg-[var(--error-bg)] transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[var(--bg-subtle)]">
+                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                      <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
                     </tr>
-                  ))}
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
-                    <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
-                      {doorGroups.reduce((s, g) => s + g.totalQty, 0)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {doorGroups.length === 0 ? (
+                      <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No door groups</td></tr>
+                    ) : doorGroups.map((g, i) => (
+                      <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                        <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[var(--bg-subtle)]">
+                      <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
+                        {doorGroups.reduce((s, g) => s + g.totalQty, 0)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Frame detail table */}
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Frames</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {frameGroups.length === 0 ? (
-                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No frame groups</td></tr>
-                  ) : frameGroups.map((g, i) => (
-                    <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+            {hiddenProposalTables.has('frames') ? (
+              <div className="flex items-center gap-2 border border-dashed border-[var(--border)] rounded px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] flex-1">Frames — hidden</span>
+                <button onClick={() => toggleProposalTable('frames')} className="text-xs text-[var(--primary-text-muted)] hover:text-[var(--primary-text)] transition-colors">Restore</button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)]">Frames</p>
+                  <button
+                    onClick={() => toggleProposalTable('frames')}
+                    title="Remove from proposal"
+                    className="p-0.5 rounded text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 hover:bg-[var(--error-bg)] transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[var(--bg-subtle)]">
+                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Description</th>
+                      <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-24">Total Qty</th>
                     </tr>
-                  ))}
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
-                    <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
-                      {frameGroups.reduce((s, g) => s + g.totalQty, 0)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {frameGroups.length === 0 ? (
+                      <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No frame groups</td></tr>
+                    ) : frameGroups.map((g, i) => (
+                      <tr key={g.key} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                        <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{g.description}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{g.totalQty}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[var(--bg-subtle)]">
+                      <td className="px-4 py-2.5 font-bold text-[var(--text)] border border-[var(--border)]">Total</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-[var(--text)] border border-[var(--border)]">
+                        {frameGroups.reduce((s, g) => s + g.totalQty, 0)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Hardware detail table */}
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] mb-2">Hardware</p>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)]">
-                    <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Hardware Set</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-32">Doors Used In</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {hwSetList.length === 0 ? (
-                    <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No hardware sets</td></tr>
-                  ) : hwSetList.map((s, i) => (
-                    <tr key={s.name} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
-                      <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{s.name}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{s.doorCount}</td>
+            {hiddenProposalTables.has('hardware') ? (
+              <div className="flex items-center gap-2 border border-dashed border-[var(--border)] rounded px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] flex-1">Hardware — hidden</span>
+                <button onClick={() => toggleProposalTable('hardware')} className="text-xs text-[var(--primary-text-muted)] hover:text-[var(--primary-text)] transition-colors">Restore</button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)]">Hardware</p>
+                  <button
+                    onClick={() => toggleProposalTable('hardware')}
+                    title="Remove from proposal"
+                    className="p-0.5 rounded text-[var(--text-faint)] hover:text-red-500 dark:hover:text-red-400 hover:bg-[var(--error-bg)] transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[var(--bg-subtle)]">
+                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)]">Hardware Set</th>
+                      <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-faint)] border border-[var(--border)] w-32">Doors Used In</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {hwSetList.length === 0 ? (
+                      <tr><td colSpan={2} className="px-4 py-3 text-center text-[var(--text-faint)] border border-[var(--border)]">No hardware sets</td></tr>
+                    ) : hwSetList.map((s, i) => (
+                      <tr key={s.name} className={i % 2 === 0 ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
+                        <td className="px-4 py-2 text-[var(--text)] border border-[var(--border)]">{s.name}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-[var(--text)] border border-[var(--border)]">{s.doorCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Extra Expenses */}
             <div>

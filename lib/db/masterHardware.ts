@@ -220,11 +220,14 @@ export async function queueItemsForApproval(
     console.log('[master-hw:queue] Supabase admin client created.');
 
     // Fetch existing keys from both tables in parallel.
-    // master_hardware_pending is checked across ALL statuses (not just 'pending') so
-    // approved and rejected items from previous runs are also treated as duplicates.
+    // master_hardware_pending is checked with status='pending' ONLY — matching the
+    // partial unique index design (010_fix_master_hardware_uniqueness.sql).
+    // Approved/rejected rows free their slot so re-uploads can re-queue those items.
+    // .range(0, 9999) prevents PostgREST's default 1000-row cap from silently truncating
+    // the dedup set on large tables.
     const [masterRes, pendingRes] = await Promise.all([
-      db.from('master_hardware_items').select('name,manufacturer,description,finish'),
-      db.from('master_hardware_pending').select('name,manufacturer,description,finish'),
+      db.from('master_hardware_items').select('name,manufacturer,description,finish').range(0, 9999),
+      db.from('master_hardware_pending').select('name,manufacturer,description,finish').eq('status', 'pending').range(0, 9999),
     ]);
 
     if (masterRes.error) {
@@ -251,10 +254,22 @@ export async function queueItemsForApproval(
       return { data: { queued: 0, skipped: items.length }, error: null };
     }
 
-    // Log first 3 items so we can verify the shape
-    console.log('[master-hw:queue] Sample items to insert:', JSON.stringify(newItems.slice(0, 3)));
+    // Deduplicate within the batch — the same hardware item can appear in multiple
+    // sets (e.g. a standard hinge in SE01, SE02, SE03). Without this, the bulk insert
+    // would conflict with itself on the partial unique index and fail entirely.
+    const seenBatchKeys = new Set<string>();
+    const uniqueNewItems = newItems.filter(item => {
+      const k = itemKey(item);
+      if (seenBatchKeys.has(k)) return false;
+      seenBatchKeys.add(k);
+      return true;
+    });
+    console.log(`[master-hw:queue] After within-batch dedup — unique=${uniqueNewItems.length}  intra-batch-dupes=${newItems.length - uniqueNewItems.length}`);
 
-    const insertPayload = newItems.map(item => ({
+    // Log first 3 items so we can verify the shape
+    console.log('[master-hw:queue] Sample items to insert:', JSON.stringify(uniqueNewItems.slice(0, 3)));
+
+    const insertPayload = uniqueNewItems.map(item => ({
       name: item.name,
       manufacturer: item.manufacturer ?? '',
       description: item.description ?? '',
@@ -266,20 +281,27 @@ export async function queueItemsForApproval(
       submitted_by: submittedBy,
     }));
 
-    // Use upsert with ignoreDuplicates so concurrent uploads don't race-insert
-    // duplicates that slip past the application-level dedup above.
-    // The DB partial unique index (status='pending') is the final safety net.
-    const { error: insertError } = await db
+    // upsert with ignoreDuplicates=true → ON CONFLICT DO NOTHING. .select('id') returns
+    // only rows actually written so the queued count is truthful.
+    // 23505 can still occur in a concurrent-upload race (two requests pass app-level dedup
+    // simultaneously). Treat it as non-fatal — those items are already queued.
+    const { data: insertedRows, error: insertError } = await db
       .from('master_hardware_pending')
-      .upsert(insertPayload, { ignoreDuplicates: true });
+      .upsert(insertPayload, { ignoreDuplicates: true })
+      .select('id');
 
     if (insertError) {
+      if (insertError.code === '23505') {
+        console.warn('[master-hw:queue] 23505 on insert — concurrent upload race; items already queued by another request. Treating as success.');
+        return { data: { queued: 0, skipped: items.length }, error: null };
+      }
       console.error('[master-hw:queue] INSERT ERROR:', insertError.message, '| code:', insertError.code, '| details:', insertError.details, '| hint:', insertError.hint);
       return { data: null, error: { message: insertError.message } };
     }
 
-    console.log(`[master-hw:queue] SUCCESS — inserted ${newItems.length} rows into master_hardware_pending.`);
-    return { data: { queued: newItems.length, skipped: items.length - newItems.length }, error: null };
+    const actuallyInserted = insertedRows?.length ?? 0;
+    console.log(`[master-hw:queue] SUCCESS — inserted ${actuallyInserted} rows into master_hardware_pending (unique-new=${uniqueNewItems.length}, DB-level skipped=${uniqueNewItems.length - actuallyInserted}).`);
+    return { data: { queued: actuallyInserted, skipped: items.length - actuallyInserted }, error: null };
   } catch (err) {
     console.error('[master-hw:queue] UNEXPECTED EXCEPTION:', err);
     return { data: null, error: { message: String(err) } };
