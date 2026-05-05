@@ -8,17 +8,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useToast } from '@/contexts/ToastContext';
 import type { TeamMember } from '@/types';
+import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 // ssr: false — Dashboard imports components that use browser-only APIs (jsPDF, etc.)
-const Dashboard = dynamic(() => import('@/views/Dashboard'), { ssr: false });
+// loading keeps DashboardSkeleton visible while the bundle resolves, preventing a white flash.
+const Dashboard = dynamic(() => import('@/views/Dashboard'), {
+  ssr: false,
+  loading: () => <DashboardSkeleton />,
+});
 
 export default function HomePage() {
   const router = useRouter();
-  const { projects, trash, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
+  const { projects, trash, projectsHydrated, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
   const { user } = useAuth();
   const { startNavigation } = useNavigationLoading();
   const { addToast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(true);
 
   useEffect(() => {
     // Fire immediately — runs in parallel with AuthContext's /api/auth/me check.
@@ -34,8 +40,13 @@ export default function HomePage() {
           status: (m.status === 'Active' ? 'Active' : 'Pending') as TeamMember['status'],
         })));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setIsLoadingTeamMembers(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!projectsHydrated) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <Dashboard
@@ -54,6 +65,7 @@ export default function HomePage() {
       userRole={(user?.role ?? 'Estimator') as never}
       addToast={addToast}
       teamMembers={teamMembers}
+      isLoadingTeamMembers={isLoadingTeamMembers}
     />
   );
 }

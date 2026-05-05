@@ -397,7 +397,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                             variant="outline"
                             onClick={() => canReupload && fileInputRef.current?.click()}
                             disabled={isLoading || !canReupload}
-                            loading={isLoading}
+                            loading={!!activeTask}
                             loadingText="Processing..."
                             title={!canReupload ? 'Use "Process Files" to upload your first PDF and Excel together' : undefined}
                             className="gap-1.5"
