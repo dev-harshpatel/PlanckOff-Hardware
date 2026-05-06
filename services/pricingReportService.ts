@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { applySheetTheme } from './excelTheme';
 import {
     Door,
     HardwareSet,
@@ -38,8 +39,12 @@ export function exportPricingReportToExcel(
         terms?: string;
     }
 ): void {
+    // ORD-04: explicit spread preserves call-site array order (UI display order)
+    const orderedDoors = [...doors];
+    const orderedHardwareSets = [...hardwareSets];
+
     // Generate pricing report
-    const report = generatePricingReport(doors, hardwareSets, priceBook, settings, metadata);
+    const report = generatePricingReport(orderedDoors, orderedHardwareSets, priceBook, settings, metadata);
 
     // Create workbook
     const wb = XLSX.utils.book_new();
@@ -63,7 +68,7 @@ export function exportPricingReportToExcel(
 
     // Export
     const fileName = `${metadata.projectName.replace(/[^a-z0-9]/gi, '_')}_Pricing_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    XLSX.writeFile(wb, fileName, { cellStyles: true });
 }
 
 /**
@@ -160,19 +165,8 @@ function addDoorLineItemsSheet(
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
 
-    // Column widths
-    ws['!cols'] = [
-        { wch: 12 }, // Door Tag
-        { wch: 30 }, // Description
-        { wch: 10 }, // Quantity
-        { wch: 12 }, // Door Price
-        { wch: 12 }, // Frame Price
-        { wch: 12 }, // Prep Price
-        { wch: 12 }, // Finish Price
-        { wch: 18 }, // Fire Rating
-        { wch: 12 }, // Unit Price
-        { wch: 15 }  // Extended Price
-    ];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(ws, headers, data);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Door Line Items');
 }
@@ -224,18 +218,8 @@ function addHardwareLineItemsSheet(
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
 
-    // Column widths
-    ws['!cols'] = [
-        { wch: 20 }, // Hardware Set
-        { wch: 30 }, // Description
-        { wch: 15 }, // Doors Using
-        { wch: 14 }, // Material Cost
-        { wch: 12 }, // Labor Cost
-        { wch: 12 }, // Total Cost
-        { wch: 10 }, // Markup
-        { wch: 15 }, // Unit Price
-        { wch: 15 }  // Extended Price
-    ];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(ws, headers, data);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Hardware Line Items');
 }
@@ -276,8 +260,9 @@ function addCostSummarySheet(
 
     const ws = XLSX.utils.aoa_to_sheet(data);
 
-    // Column widths
-    ws['!cols'] = [{ wch: 25 }, { wch: 20 }];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    // Cost Summary is a label/value sheet; use the first row as the "header" for styling purposes.
+    applySheetTheme(ws, data[0] as string[], data.slice(1) as unknown[][]);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Cost Summary');
 }
@@ -319,20 +304,8 @@ function addPriceBookSheet(
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
 
-    // Column widths
-    ws['!cols'] = [
-        { wch: 12 }, // Category
-        { wch: 20 }, // Item Type
-        { wch: 18 }, // Manufacturer
-        { wch: 15 }, // Model
-        { wch: 35 }, // Description
-        { wch: 12 }, // Price
-        { wch: 8 },  // UOM
-        { wch: 12 }, // Labor Hours
-        { wch: 12 }, // Labor Rate
-        { wch: 18 }, // Supplier
-        { wch: 12 }  // Lead Time
-    ];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(ws, headers, data);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Price Book');
 }

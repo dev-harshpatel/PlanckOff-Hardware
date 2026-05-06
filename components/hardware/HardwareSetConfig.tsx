@@ -465,7 +465,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             }));
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
-            XLSX.writeFile(wb, `${safeProjectName}.xlsx`);
+            XLSX.writeFile(wb, `${safeProjectName}.xlsx`, { cellStyles: true });
             return;
         }
 
