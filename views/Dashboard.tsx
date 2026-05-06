@@ -1,38 +1,27 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Project, ProjectStatus, NewProjectData, Toast } from '../types';
-import NewProjectModal from '../components/NewProjectModal';
-import TrashBin from '../components/TrashBin';
+import NewProjectModal from '../components/projects/NewProjectModal';
+import TrashBin from '../components/shared/TrashBin';
 import { TeamMember } from '../types';
-import SelectDropdown from '@/components/ui/select-dropdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { RoleName } from '@/types/auth';
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Calendar, FolderOpen, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useModalState } from '../hooks/useModalState';
+import { useDashboardState } from '../hooks/useDashboardState';
+import { ProjectCard } from '../components/dashboard/ProjectCard';
+import { DashboardFilters } from '../components/dashboard/DashboardFilters';
+import { KanbanColumn } from '../components/dashboard/KanbanColumn';
 import {
-    Search,
-    Filter,
-    Plus,
-    Pencil,
-    Trash2,
-    UserPlus,
-    Calendar,
-    Hash,
-    LayoutGrid,
-    List,
-    FolderOpen,
-} from 'lucide-react';
+    KANBAN_COLUMNS, buildProjectStats, filterProjectsByDashboardState,
+} from '../utils/dashboardUtils';
 
 interface DashboardProps {
     projects: Project[];
@@ -55,19 +44,6 @@ const formatDate = (isoDate?: string): string => {
     return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const KANBAN_COLUMNS: {
-    id: ProjectStatus;
-    label: string;
-    dot: string;
-    countBg: string;
-    countText: string;
-}[] = [
-    { id: 'Active',       label: 'Active',        dot: 'bg-[var(--success-dot)]',    countBg: 'bg-[var(--success-bg)]',  countText: 'text-[var(--success-text)]' },
-    { id: 'Under Review', label: 'Under Review',  dot: 'bg-[var(--warning-dot)]',    countBg: 'bg-[var(--warning-bg)]',  countText: 'text-[var(--warning-text)]' },
-    { id: 'Submitted',    label: 'Submitted',     dot: 'bg-[var(--primary-action)]', countBg: 'bg-[var(--primary-bg)]',  countText: 'text-[var(--primary-text)]' },
-    { id: 'On Hold',      label: 'On Hold',       dot: 'bg-[var(--text-faint)]',     countBg: 'bg-[var(--bg-muted)]',    countText: 'text-[var(--text-muted)]' },
-    { id: 'Archived',     label: 'Archived',      dot: 'bg-purple-400',              countBg: 'bg-purple-50',            countText: 'text-purple-700' },
-];
 
 const STATUS_FILTERS: Array<{
     id: ProjectStatus | 'All';
@@ -94,320 +70,23 @@ const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
 };
 
-type ProjectStatusOverrides = Record<string, ProjectStatus>;
-
-const getProjectStatus = (project: Project, overrides?: ProjectStatusOverrides): ProjectStatus => {
-    return overrides?.[project.id] ?? project.status ?? 'Active';
-};
-
-const applyProjectStatusOverrides = (projects: Project[], overrides: ProjectStatusOverrides): Project[] => {
-    return projects.map(project => {
-        const optimisticStatus = overrides[project.id];
-        return optimisticStatus ? { ...project, status: optimisticStatus } : project;
-    });
-};
-
-const buildProjectStats = (projects: Project[]): Record<string, number> => {
-    const counts: Record<string, number> = {};
-    KANBAN_COLUMNS.forEach(col => { counts[col.id] = 0; });
-
-    projects.forEach(project => {
-        const status = getProjectStatus(project);
-        if (counts[status] !== undefined) counts[status]++;
-        else counts['Active']++;
-    });
-
-    return counts;
-};
-
-const filterProjectsByDashboardState = (
-    projects: Project[],
-    searchQuery: string,
-    selectedMemberFilter: string,
-    selectedStatusFilter: ProjectStatus | 'All',
-): Project[] => {
-    return projects.filter(project => {
-        const matchesSearch =
-            project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (project.client && project.client.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesMember = selectedMemberFilter === 'All Members' || project.assignedTo === selectedMemberFilter;
-        const currentStatus = getProjectStatus(project);
-        const matchesStatus = selectedStatusFilter === 'All' || currentStatus === selectedStatusFilter;
-        return matchesSearch && matchesMember && matchesStatus;
-    });
-};
-
-const ProjectCard: React.FC<{
-    project: Project;
-    onSelect: () => void;
-    onSave: (p: Project) => Promise<void> | void;
-    onEdit: (project: Project) => void;
-    onDelete: (id: string) => void;
-    userRole: RoleName;
-    teamMembers: TeamMember[];
-    draggable?: boolean;
-    isDragging?: boolean;
-    onDragStart?: (project: Project) => void;
-    onDragEnd?: () => void;
-}> = ({
-    project,
-    onSelect,
-    onSave,
-    onEdit,
-    onDelete,
-    userRole,
-    teamMembers,
-    draggable = false,
-    isDragging = false,
-    onDragStart,
-    onDragEnd,
-}) => {
-    const [showAssignMenu, setShowAssignMenu] = useState(false);
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [deleteConfirmation, setDeleteConfirmation] = useState('');
-    const [isAssigning, setIsAssigning] = useState(false);
-    const assignMenuRef = useRef<HTMLDivElement | null>(null);
-    const suppressClickRef = useRef(false);
-
-    const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
-    const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
-    const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
-
-    const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
-
-    useEffect(() => {
-        const handlePointerDown = (event: MouseEvent) => {
-            if (!assignMenuRef.current?.contains(event.target as Node)) {
-                setShowAssignMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handlePointerDown);
-        return () => document.removeEventListener('mousedown', handlePointerDown);
-    }, []);
-
-    const handleAssign = async (memberId: string) => {
-        try {
-            setIsAssigning(true);
-            await onSave({ ...project, assignedTo: memberId || undefined });
-            setShowAssignMenu(false);
-        } finally {
-            setIsAssigning(false);
-        }
-    };
-
-    const handleDeleteClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setDeleteConfirmation('');
-        setIsDeleteDialogOpen(true);
-    };
-
-    const handleDeleteConfirm = () => {
-        onDelete(project.id);
-        setIsDeleteDialogOpen(false);
-        setDeleteConfirmation('');
-    };
-
-    const statusStyle = STAT_COLORS[project.status || 'Active'] ?? STAT_COLORS['Active'];
-
-    const handleCardClick = () => {
-        if (suppressClickRef.current) {
-            suppressClickRef.current = false;
-            return;
-        }
-        onSelect();
-    };
-
-    return (
-        <>
-            <div
-                className={`bg-[var(--bg)] rounded-md border hover:border-[var(--primary-border)] hover:shadow-sm transition-all p-4 group relative cursor-pointer ${isDragging ? 'opacity-50 border-[var(--primary-ring)] shadow-sm' : 'border-[var(--border)]'}`}
-                onClick={handleCardClick}
-                draggable={draggable}
-                onDragStart={(e) => {
-                    if (!draggable) return;
-                    suppressClickRef.current = true;
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', project.id);
-                    onDragStart?.(project);
-                }}
-                onDragEnd={() => {
-                    suppressClickRef.current = false;
-                    onDragEnd?.();
-                }}
-            >
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="min-w-0 flex-1">
-                        <h4 className="font-semibold text-[var(--text)] text-sm leading-tight truncate">{project.name}</h4>
-                        {project.client && (
-                            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{project.client}</p>
-                        )}
-                    </div>
-                    {/* Hover actions */}
-                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        {canEdit && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onEdit(project); }}
-                                className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)] transition-colors"
-                                title="Edit"
-                            >
-                                <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                        {canDelete && (
-                            <button onClick={handleDeleteClick} className="p-1 rounded text-[var(--text-faint)] hover:text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Meta row */}
-                <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mb-3">
-                    <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-[var(--text-faint)]" />
-                        {formatDate(project.dueDate)}
-                    </span>
-                    {project.projectNumber && (
-                        <span className="flex items-center gap-1">
-                            <Hash className="w-3 h-3 text-[var(--text-faint)]" />
-                            <span className="font-mono">{project.projectNumber}</span>
-                        </span>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2 min-w-0" ref={assignMenuRef}>
-                        {assignedMember ? (
-                            <div className="flex items-center gap-1.5 min-w-0">
-                                <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                    {assignedMember.name.charAt(0)}
-                                </div>
-                                <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
-                            </div>
-                        ) : (
-                            <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
-                        )}
-                        {canAssign && (
-                            <div className="relative">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
-                                    disabled={isAssigning}
-                                    title="Assign"
-                                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
-                                >
-                                    <UserPlus className="w-3 h-3" />
-                                    Assign
-                                </button>
-                                {showAssignMenu && (
-                                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[var(--bg)] rounded-md shadow-lg z-50 border border-[var(--border)] py-1" onClick={(e) => e.stopPropagation()}>
-                                        <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">Assign To</div>
-                                        {teamMembers.map(m => (
-                                            <button
-                                                key={m.id}
-                                                onClick={() => handleAssign(m.id)}
-                                                disabled={isAssigning}
-                                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${project.assignedTo === m.id ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] font-medium' : 'text-[var(--text-secondary)]'}`}
-                                            >
-                                                {m.name}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => handleAssign('')}
-                                            disabled={isAssigning}
-                                            className="block w-full text-left px-3 py-2 text-sm text-[var(--error-text)] hover:bg-[var(--error-bg)] border-t border-[var(--border-subtle)] disabled:opacity-50 transition-colors"
-                                        >
-                                            Unassign
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
-                        {project.status || 'Active'}
-                    </span>
-                </div>
-            </div>
-
-            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Move project to trash</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            <span className="font-medium text-[var(--text)]">{project.name}</span> will be moved to trash and <strong>automatically deleted after 30 days</strong>. You can restore it from the Trash before then.
-                            <br /><br />
-                            Type <span className="font-medium text-[var(--text)]">confirm</span> to proceed.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor={`delete-confirm-${project.id}`}>Confirmation</Label>
-                        <Input
-                            id={`delete-confirm-${project.id}`}
-                            value={deleteConfirmation}
-                            onChange={(e) => setDeleteConfirmation(e.target.value)}
-                            placeholder='Type "confirm"'
-                        />
-                    </div>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleteConfirmation.trim().toLowerCase() !== 'confirm'}>
-                            Move to Trash
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
-    );
-};
-
-
 const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers, isLoadingTeamMembers = false }) => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProject, setEditingProject] = useState<Project | null>(null);
+    const { isOpen: isModalOpen, item: editingProject, open: openProjectModal, close: closeProjectModal } = useModalState<Project>();
     const [isSavingProject, setIsSavingProject] = useState(false);
-    const [isTrashOpen, setIsTrashOpen] = useState(false);
+    const { isOpen: isTrashOpen, open: openTrash, close: closeTrash } = useModalState();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('All Members');
     const [selectedStatusFilter, setSelectedStatusFilter] = useState<ProjectStatus | 'All'>('All');
-    const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
-    const [dropTargetStatus, setDropTargetStatus] = useState<ProjectStatus | null>(null);
-    const [optimisticStatuses, setOptimisticStatuses] = useState<ProjectStatusOverrides>({});
-    const [updatingProjectIds, setUpdatingProjectIds] = useState<Set<string>>(new Set());
+    const {
+        draggedProjectId, setDraggedProjectId,
+        dropTargetStatus, setDropTargetStatus,
+        updatingProjectIds,
+        effectiveProjects,
+        handleProjectDropToStatus,
+    } = useDashboardState({ projects, onProjectUpdate, addToast });
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [listDeleteTarget, setListDeleteTarget] = useState<Project | null>(null);
     const [listDeleteConfirmation, setListDeleteConfirmation] = useState('');
-
-    const effectiveProjects = useMemo(
-        () => applyProjectStatusOverrides(projects, optimisticStatuses),
-        [projects, optimisticStatuses],
-    );
-
-    useEffect(() => {
-        setOptimisticStatuses(current => {
-            let changed = false;
-            const next: ProjectStatusOverrides = {};
-
-            Object.entries(current).forEach(([projectId, status]) => {
-                const persistedProject = projects.find(project => project.id === projectId);
-                if (!persistedProject) {
-                    changed = true;
-                    return;
-                }
-
-                const persistedStatus = persistedProject.status ?? 'Active';
-                if (persistedStatus !== status) {
-                    next[projectId] = status;
-                } else {
-                    changed = true;
-                }
-            });
-
-            return changed ? next : current;
-        });
-    }, [projects]);
 
     const stats = useMemo(() => buildProjectStats(effectiveProjects), [effectiveProjects]);
 
@@ -458,8 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
             } else {
                 await onAddNewProject(projectData, doorScheduleFile, hardwareSetFile);
             }
-            setIsModalOpen(false);
-            setEditingProject(null);
+            closeProjectModal();
         } catch (error) {
             const message = error instanceof Error ? error.message : 'An unknown error occurred.';
             addToast({ type: 'error', message: editingProject ? 'Project update failed' : 'Project creation failed', details: message });
@@ -469,84 +147,15 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
     };
 
     const handleOpenCreate = () => {
-        setEditingProject(null);
-        setIsModalOpen(true);
+        openProjectModal();
     };
 
     const handleOpenEdit = (project: Project) => {
-        setEditingProject(project);
-        setIsModalOpen(true);
+        openProjectModal(project);
     };
 
     const canCreate = userRole === 'Administrator' || userRole === 'Team Lead';
     const canDragProjects = userRole === 'Administrator' || userRole === 'Team Lead';
-
-    const handleProjectDropToStatus = async (targetStatus: ProjectStatus) => {
-        if (!draggedProjectId) return;
-
-        const project = effectiveProjects.find(p => p.id === draggedProjectId);
-        if (!project) {
-            setDraggedProjectId(null);
-            setDropTargetStatus(null);
-            return;
-        }
-
-        if (updatingProjectIds.has(project.id)) return;
-
-        const currentStatus = getProjectStatus(project);
-        if (currentStatus === targetStatus) {
-            setDraggedProjectId(null);
-            setDropTargetStatus(null);
-            return;
-        }
-
-        const previousStatus = currentStatus;
-
-        setOptimisticStatuses(current => ({
-            ...current,
-            [project.id]: targetStatus,
-        }));
-        setUpdatingProjectIds(current => {
-            const next = new Set(current);
-            next.add(project.id);
-            return next;
-        });
-        setDraggedProjectId(null);
-        setDropTargetStatus(null);
-
-        try {
-            await onProjectUpdate({
-                ...project,
-                status: targetStatus,
-            });
-            addToast({
-                type: 'success',
-                message: `Project "${project.name}" moved to ${targetStatus}.`,
-            });
-        } catch (error) {
-            const details = error instanceof Error ? error.message : 'Could not update project status.';
-            addToast({
-                type: 'error',
-                message: `Failed to move "${project.name}"`,
-                details,
-            });
-            setOptimisticStatuses(current => {
-                const next = { ...current };
-                if (previousStatus === (projects.find(p => p.id === project.id)?.status ?? 'Active')) {
-                    delete next[project.id];
-                } else {
-                    next[project.id] = previousStatus;
-                }
-                return next;
-            });
-        } finally {
-            setUpdatingProjectIds(current => {
-                const next = new Set(current);
-                next.delete(project.id);
-                return next;
-            });
-        }
-    };
 
     return (
         <>
@@ -566,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                         </div>
                         <div className="flex items-center gap-2">
                             <button
-                                onClick={() => setIsTrashOpen(true)}
+                                onClick={() => openTrash()}
                                 className="relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
                                 title="Trash"
                             >
@@ -619,47 +228,16 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     </div>
                 </div>
 
-                {/* Filter bar */}
-                <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-3 flex items-center gap-3 flex-shrink-0">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-faint)] pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search projects or clients…"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)]"
-                        />
-                    </div>
-                    <div className="relative min-w-[200px]">
-                        <Filter className="absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" />
-                        <SelectDropdown
-                            value={selectedMemberFilter}
-                            onChange={setSelectedMemberFilter}
-                            options={memberFilterOptions}
-                            disabled={isLoadingTeamMembers}
-                            className="w-full"
-                            triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            contentClassName="mt-1"
-                        />
-                    </div>
-                    <div className="ml-auto flex items-center gap-1">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-md border transition-colors ${viewMode === 'grid' ? 'bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border-[var(--primary-border)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] border-transparent'}`}
-                            title="Grid view"
-                        >
-                            <LayoutGrid className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-md border transition-colors ${viewMode === 'list' ? 'bg-[var(--primary-bg)] text-[var(--primary-text-muted)] border-[var(--primary-border)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] border-transparent'}`}
-                            title="List view"
-                        >
-                            <List className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
+                <DashboardFilters
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    selectedMemberFilter={selectedMemberFilter}
+                    onMemberFilterChange={setSelectedMemberFilter}
+                    memberFilterOptions={memberFilterOptions}
+                    isLoadingTeamMembers={isLoadingTeamMembers}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                />
 
                 {/* Projects content */}
                 <div className="flex-grow overflow-x-auto overflow-y-hidden px-6 py-5">
@@ -760,73 +338,28 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     ) : selectedStatusFilter === 'All' ? (
                         /* ── Kanban view (All statuses) ── */
                         <div className="flex gap-4 h-full min-w-[1200px]">
-                            {KANBAN_COLUMNS.map(col => {
-                                const colProjects = filteredProjects.filter(p => (p.status || 'Active') === col.id);
-                                const isDropTarget = dropTargetStatus === col.id;
-                                return (
-                                    <div key={col.id} className="flex-1 min-w-[240px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
-                                        <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />
-                                                <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{col.label}</span>
-                                            </div>
-                                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${col.countBg} ${col.countText}`}>
-                                                {colProjects.length}
-                                            </span>
-                                        </div>
-
-                                        <div
-                                            className={`flex-grow overflow-y-auto bg-[var(--bg-subtle)] p-2.5 space-y-2 transition-colors ${isDropTarget ? 'bg-[var(--primary-bg)]/70' : ''}`}
-                                            onDragOver={(e) => {
-                                                if (!canDragProjects || !draggedProjectId) return;
-                                                e.preventDefault();
-                                                e.dataTransfer.dropEffect = 'move';
-                                                if (dropTargetStatus !== col.id) {
-                                                    setDropTargetStatus(col.id);
-                                                }
-                                            }}
-                                            onDragLeave={(e) => {
-                                                if (!canDragProjects) return;
-                                                const nextTarget = e.relatedTarget as Node | null;
-                                                if (!e.currentTarget.contains(nextTarget)) {
-                                                    setDropTargetStatus(current => current === col.id ? null : current);
-                                                }
-                                            }}
-                                            onDrop={(e) => {
-                                                if (!canDragProjects) return;
-                                                e.preventDefault();
-                                                void handleProjectDropToStatus(col.id);
-                                            }}
-                                        >
-                                            {colProjects.length > 0 ? (
-                                                colProjects.map(project => (
-                                                    <ProjectCard
-                                                        key={project.id}
-                                                        project={project}
-                                                        onSelect={() => onSelectProject(project.id)}
-                                                        onSave={onProjectUpdate}
-                                                        onEdit={handleOpenEdit}
-                                                        onDelete={onDeleteProject}
-                                                        userRole={userRole}
-                                                        teamMembers={teamMembers}
-                                                        draggable={canDragProjects && !updatingProjectIds.has(project.id)}
-                                                        isDragging={draggedProjectId === project.id || updatingProjectIds.has(project.id)}
-                                                        onDragStart={(dragProject) => setDraggedProjectId(dragProject.id)}
-                                                        onDragEnd={() => {
-                                                            setDraggedProjectId(null);
-                                                            setDropTargetStatus(null);
-                                                        }}
-                                                    />
-                                                ))
-                                            ) : (
-                                                <div className={`flex flex-col items-center justify-center h-24 border border-dashed rounded-md text-center transition-colors ${isDropTarget ? 'border-[var(--primary-border)] bg-[var(--bg)]' : 'border-[var(--border)] bg-[var(--bg)]/60'}`}>
-                                                    <span className="text-xs text-[var(--text-faint)]">No projects</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {KANBAN_COLUMNS.map(col => (
+                                <KanbanColumn
+                                    key={col.id}
+                                    col={col}
+                                    colProjects={filteredProjects.filter(p => (p.status || 'Active') === col.id)}
+                                    isDropTarget={dropTargetStatus === col.id}
+                                    canDragProjects={canDragProjects}
+                                    draggedProjectId={draggedProjectId}
+                                    updatingProjectIds={updatingProjectIds}
+                                    dropTargetStatus={dropTargetStatus}
+                                    onSetDropTarget={setDropTargetStatus}
+                                    onDropToStatus={handleProjectDropToStatus}
+                                    onSelectProject={onSelectProject}
+                                    onProjectUpdate={onProjectUpdate}
+                                    onEditProject={handleOpenEdit}
+                                    onDeleteProject={onDeleteProject}
+                                    onDragStart={(p) => setDraggedProjectId(p.id)}
+                                    onDragEnd={() => { setDraggedProjectId(null); setDropTargetStatus(null); }}
+                                    userRole={userRole}
+                                    teamMembers={teamMembers}
+                                />
+                            ))}
                         </div>
                     ) : (
                         /* ── Grid view (single status filter) ── */
@@ -880,7 +413,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
             <NewProjectModal
                 isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setEditingProject(null); }}
+                onClose={closeProjectModal}
                 onSave={handleSaveProject}
                 isLoading={isSavingProject}
                 addToast={addToast}
@@ -891,7 +424,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
             <TrashBin
                 isOpen={isTrashOpen}
                 trash={trash}
-                onClose={() => setIsTrashOpen(false)}
+                onClose={closeTrash}
                 onRestore={onRestoreProject}
                 onPermDelete={onPermDeleteProject}
             />

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { RouteLoadingState } from '@/components/RouteLoadingState';
+import { RouteLoadingState } from '@/components/layout/RouteLoadingState';
 import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useToast } from '@/contexts/ToastContext';

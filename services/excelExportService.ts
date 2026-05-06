@@ -1,8 +1,8 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
-import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
-import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
+import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
+import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {

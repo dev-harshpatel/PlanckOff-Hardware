@@ -1,7 +1,7 @@
 import { Door, HardwareSet, ElevationType } from '../types';
-import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
-import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
-import { SubmittalExportConfig } from '../components/SubmittalPackageConfig';
+import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
+import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import { SubmittalExportConfig } from '../components/submittals/SubmittalPackageConfig';
 import { exportDoorScheduleToCSV, exportHardwareSetToCSV } from './csvExportService';
 import { exportDoorScheduleToExcel, exportHardwareSetToExcel } from './excelExportService';
 import { exportDoorScheduleToPDF, exportHardwareSetToPDF, exportSubmittalPackageToPDF } from './pdfExportService';

@@ -10,7 +10,7 @@ import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransform
 import { Package } from 'lucide-react';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
-const SubmittalGenerator = dynamic(() => import('@/components/SubmittalGenerator'), { ssr: false });
+const SubmittalGenerator = dynamic(() => import('@/components/submittals/SubmittalGenerator'), { ssr: false });
 
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
   return hardwareSets

@@ -38,7 +38,15 @@
       "Bash(cat tailwind.config.ts)",
       "Bash(cat tailwind.config.js)",
       "Bash(grep -E \"\\\\.tsx$\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
+      "Bash(xargs -I {} sh -c 'echo \"$\\(basename {}\\):\" && grep -c \"fetch\\(\" {}')",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(npx --prefix d:/Projects/learning-projects/PlanckOff-Hardware tsc --noEmit --skipLibCheck)",
+      "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\DoorHandingSelector.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\doors\\\\DoorHandingSelector.tsx\")",
+      "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\DoorMaterialSelector.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\doors\\\\DoorMaterialSelector.tsx\")",
+      "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\EnhancedDoorEditModal.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\doors\\\\EnhancedDoorEditModal.tsx\")",
+      "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\PriceBookManager.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\pricing\\\\PriceBookManager.tsx\")",
+      "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\PricingReportConfig.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\pricing\\\\PricingReportConfig.tsx\")"
     ]
   }
 }
