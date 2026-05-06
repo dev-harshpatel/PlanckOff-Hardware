@@ -17,7 +17,7 @@ function totalDoorQuantity(doors: Door[]): number {
   }, 0);
 }
 
-const DoorScheduleConfig = dynamic(() => import('@/components/DoorScheduleConfig'), { ssr: false });
+const DoorScheduleConfig = dynamic(() => import('@/components/doorSchedule/DoorScheduleConfig'), { ssr: false });
 
 export default function DoorScheduleReportPage() {
   const { id } = useParams<{ id: string }>();

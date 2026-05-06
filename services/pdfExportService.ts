@@ -1,6 +1,6 @@
 import { Door, HardwareSet, ElevationType } from '../types';
-import { DoorScheduleExportConfig } from '../components/DoorScheduleConfig';
-import { HardwareSetExportConfig } from '../components/HardwareSetConfig';
+import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
+import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
   if (!door.elevationTypeId) return '';
@@ -447,7 +447,7 @@ export const exportHardwareSetToPDF = async (
 // SUBMITTAL PACKAGE EXPORT
 // ----------------------------------------------------------------------
 
-import { SubmittalExportConfig } from '../components/SubmittalPackageConfig';
+import { SubmittalExportConfig } from '../components/submittals/SubmittalPackageConfig';
 
 // Standard columns for Submittal Door Schedule
 const SUBMITTAL_DOOR_COLUMNS: DoorScheduleExportConfig['columns'] = {

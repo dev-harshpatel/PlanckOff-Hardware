@@ -9,7 +9,7 @@ import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
-const PricingReportConfig = dynamic(() => import('@/components/PricingReportConfig'), { ssr: false });
+const PricingReportConfig = dynamic(() => import('@/components/pricing/PricingReportConfig'), { ssr: false });
 
 export default function PricingReportPage() {
   const { id } = useParams<{ id: string }>();

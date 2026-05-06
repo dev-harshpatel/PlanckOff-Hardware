@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { TeamMember, Role, TeamMemberStatus } from '../types';
-import InviteUserPanel from '../components/InviteUserPanel';
+import InviteUserPanel from '../components/team/InviteUserPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TeamManagementProps {

@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import { Suspense, useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
-import { useAuth } from '@/contexts/AuthContext';
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import { useAuth } from "@/contexts/AuthContext";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const redirectTo = searchParams.get('redirectTo') ?? '/';
+  const redirectTo = searchParams.get("redirectTo") ?? "/";
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -58,15 +58,22 @@ function LoginForm() {
             height={48}
             priority
           />
-          <p className="mt-3 text-sm text-[var(--text-muted)]">Hardware Estimating Platform</p>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            Hardware Estimating Platform
+          </p>
         </div>
 
         <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-[var(--border)] p-8">
-          <h2 className="text-xl font-semibold text-[var(--text-secondary)] mb-6">Sign in to your account</h2>
+          <h2 className="text-xl font-semibold text-[var(--text-secondary)] mb-6">
+            Sign in to your account
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+              >
                 Email address
               </label>
               <input
@@ -82,7 +89,10 @@ function LoginForm() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-[var(--text-secondary)] mb-1"
+              >
                 Password
               </label>
               <input
@@ -99,7 +109,9 @@ function LoginForm() {
 
             {error && (
               <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {error}
+                </p>
               </div>
             )}
 
@@ -108,7 +120,7 @@ function LoginForm() {
               disabled={isSubmitting}
               className="w-full flex justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
+              {isSubmitting ? "Signing in…" : "Sign in"}
             </button>
           </form>
         </div>
@@ -119,11 +131,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

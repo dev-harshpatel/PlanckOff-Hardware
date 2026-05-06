@@ -3,10 +3,10 @@
 import React, { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Door, HardwareSet, ElevationType } from '../types';
-import DoorScheduleConfig from '../components/DoorScheduleConfig';
-import HardwareSetConfig, { HardwareSetExportConfig } from '../components/HardwareSetConfig';
+import DoorScheduleConfig from '../components/doorSchedule/DoorScheduleConfig';
+import HardwareSetConfig, { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
 // SubmittalGenerator now uses finalJson — routing handled by /reports/submittal-package page
-import ValidationModal from '../components/ValidationModal';
+import ValidationModal from '../components/shared/ValidationModal';
 import { exportHardwareSet } from '../services/reportExportService';
 import { validateProject, ProjectValidationReport } from '../utils/doorValidation';
 import { ArrowLeft, FileSpreadsheet, Settings2, Package, FileText } from 'lucide-react';
