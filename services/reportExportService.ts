@@ -66,15 +66,17 @@ export const exportDoorSchedule = async (
   elevationTypes: ElevationType[] = [],
 ): Promise<void> => {
   try {
+    // ORD-04: explicit spread preserves call-site array order (UI display order)
+    const orderedDoors = [...doors];
     switch (config.format) {
       case 'xlsx':
-        await exportDoorScheduleToExcel(doors, config, projectName, elevationTypes);
+        await exportDoorScheduleToExcel(orderedDoors, config, projectName, elevationTypes);
         break;
       case 'pdf':
-        await exportDoorScheduleToPDF(doors, config, projectName, elevationTypes);
+        await exportDoorScheduleToPDF(orderedDoors, config, projectName, elevationTypes);
         break;
       case 'csv':
-        exportDoorScheduleToCSV(doors, config, projectName, elevationTypes);
+        exportDoorScheduleToCSV(orderedDoors, config, projectName, elevationTypes);
         break;
       default:
         throw new Error(`Unsupported format: ${config.format}`);
@@ -93,8 +95,11 @@ export const exportHardwareSet = async (
   projectName: string
 ): Promise<void> => {
   try {
+    // ORD-04: explicit spreads preserve call-site array order
+    const orderedDoors        = [...doors];
+    const orderedHardwareSets = [...hardwareSets];
     // Calculate usage statistics
-    const usageStats = calculateHardwareUsage(doors, hardwareSets);
+    const usageStats = calculateHardwareUsage(orderedDoors, orderedHardwareSets);
 
     switch (config.format) {
       case 'xlsx':

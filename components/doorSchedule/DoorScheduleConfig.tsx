@@ -18,6 +18,15 @@ import { DoorGroupingControls } from './DoorGroupingControls';
 import {
     type SectionKey, type ExportFormat, type DynamicColumnGroup, type DoorGroup, type AggregatedDoorRow,
 } from './doorScheduleTypes';
+import {
+    buildAutoTableOptions,
+    addPageNumbers,
+    drawPageHeader,
+    DEFAULT_THEME,
+    PDF_MARGIN,
+    HEADER_BAR_HEIGHT,
+} from '@/services/pdfTheme';
+import { applySheetTheme } from '../../services/excelTheme';
 
 
 // ─── Exported types (kept for downstream services) ───────────────────────────
@@ -340,7 +349,10 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
         // Respect the same hidden-group filter as the preview panel
         const visibleGroups = groups.filter(g => !hiddenGroupKeys.has(g.breadcrumb.join('||') || 'all'));
-        const groupsToExport = visibleGroups.length > 0 ? visibleGroups : [{ breadcrumb: [], doors: includedDoors }];
+        // ORD-04: explicit spread preserves call-site array order — no implicit reordering
+        const orderedDoors = [...includedDoors];
+        // ORD-01/03: visibleGroups preserves UI display order from useDoorAggregation
+        const groupsToExport = visibleGroups.length > 0 ? visibleGroups : [{ breadcrumb: [], doors: orderedDoors }];
         const rowsByGroup = groupsToExport.map(group =>
             uniqueData
                 ? aggregateDoorsBySelectedColumns(group.doors, selectedColumns)
@@ -386,12 +398,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 );
                 const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-                // Bold header row
-                const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
-                for (let c = range.s.c; c <= range.e.c; c++) {
-                    const cell = ws[XLSX.utils.encode_cell({ r: 0, c })];
-                    if (cell) cell.s = { font: { bold: true } };
-                }
+                // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+                applySheetTheme(ws, headers, rows);
 
                 XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
@@ -422,7 +430,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             }
 
             // Write base xlsx (data only)
-            const xlsxBytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as Uint8Array;
+            const xlsxBytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as Uint8Array;
 
             const hasImages = sheetImageData.some(imgs => imgs.length > 0);
             let finalBlob: Blob;
@@ -606,37 +614,27 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             for (const [i, group] of groupsToExport.entries()) {
                 if (i > 0) doc.addPage();
 
-                const title    = projectName || 'Door-Frame Reports';
-                const subtitle = group.breadcrumb.length > 0 ? group.breadcrumb.join(' › ') : 'All Doors';
+                const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                const subtitle    = group.breadcrumb.length > 0 ? group.breadcrumb.join(' › ') : 'All Doors';
+                const reportTitle = `Door Schedule — ${subtitle} (${sumDoorQuantities(group.doors)} door${sumDoorQuantities(group.doors) !== 1 ? 's' : ''})`;
 
-                doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-                doc.text(title, MARGIN, 14);
-                doc.setFontSize(8);  doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-                doc.text(`${subtitle}  —  ${sumDoorQuantities(group.doors)} door${sumDoorQuantities(group.doors) !== 1 ? 's' : ''}`, MARGIN, 20);
-                doc.setTextColor(0);
+                // Build a custom theme to preserve the dynamic fontSize/cellPadding for this column density
+                const groupTheme = {
+                    ...DEFAULT_THEME,
+                    fontSize,
+                    cellPadding,
+                };
 
                 autoTable(doc, {
-                    startY: 25,
-                    head: [pdfHeaders],
-                    body: rowsByGroup[i].map(row =>
+                    ...buildAutoTableOptions(groupTheme, reportTitle, exportDate, PAGE_W, PDF_MARGIN),
+                    startY:       HEADER_BAR_HEIGHT + 2,  // leave room for branded header (replaces hardcoded 25)
+                    head:         [pdfHeaders],
+                    body:         rowsByGroup[i].map(row =>
                         selectedColumns.map(col => getRowValue(row, col) || '—'),
                     ),
-                    tableWidth: USABLE_W,
+                    tableWidth:   USABLE_W,
                     columnStyles: pdfColumnStyles,
-                    styles: {
-                        fontSize,
-                        cellPadding,
-                        overflow: 'linebreak',
-                    },
-                    headStyles: {
-                        fillColor: [30, 41, 59],
-                        textColor: 255,
-                        fontStyle: 'bold',
-                        fontSize,
-                        halign: 'center',
-                    },
-                    alternateRowStyles: { fillColor: [248, 250, 252] },
-                    margin: { left: MARGIN, right: MARGIN },
+                    // fontSize/cellPadding already in groupTheme via buildAutoTableOptions → styles
                 });
 
                 // ── Elevation images for this group (new page per group) ───────
@@ -661,11 +659,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                         const MAX_IMG_H = Math.max(20, cardH - CARD_LABEL_SPACE - INNER_PAD * 2);
 
                         const addElevPageHeader = (sub: string) => {
-                            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
-                            doc.text(title, MARGIN, 14);
-                            doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-                            doc.text(`${sub}  —  Elevation Types`, MARGIN, 20);
-                            doc.setTextColor(0);
+                            const elevExportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                            drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN);
                         };
 
                         doc.addPage();
@@ -714,6 +709,9 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                     }
                 }
             }
+
+            // Add page numbers to all pages (two-pass: autoTable is fully rendered now)
+            addPageNumbers(doc, projectName || 'Door Schedule', PAGE_W, PAGE_H, PDF_MARGIN);
 
             doc.save(`${fileName}.pdf`);
         }

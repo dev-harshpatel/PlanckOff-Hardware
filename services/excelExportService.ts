@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { applySheetTheme } from './excelTheme';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
@@ -144,10 +145,6 @@ export const exportDoorScheduleToExcel = (
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Set column widths
-  const colWidths = headers.map(() => ({ wch: 15 }));
-  worksheet['!cols'] = colWidths;
-
   // Add to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Door Schedule');
 
@@ -186,7 +183,7 @@ export const exportDoorScheduleToExcel = (
   const filename = `DoorSchedule_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.xlsx`;
 
   // Download
-  XLSX.writeFile(workbook, filename);
+  XLSX.writeFile(workbook, filename, { cellStyles: true });
 };
 
 // Format usage for Hardware Set reports
@@ -324,15 +321,6 @@ export const exportHardwareSetToExcel = (
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Set column widths
-  const colWidths = headers.map((_, idx) => {
-    if (idx === 0) return { wch: 30 }; // Item Name
-    if (idx === 1) return { wch: 40 }; // Description
-    if (idx === 4) return { wch: 50 }; // Usage/Location
-    return { wch: 15 };
-  });
-  worksheet['!cols'] = colWidths;
-
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Hardware Items');
 
   // Add cost summary sheet if requested
@@ -358,7 +346,7 @@ export const exportHardwareSetToExcel = (
   const filename = `HardwareSet_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.xlsx`;
 
   // Download
-  XLSX.writeFile(workbook, filename);
+  XLSX.writeFile(workbook, filename, { cellStyles: true });
 };
 
 // ============================================================================
@@ -401,7 +389,7 @@ export function exportMultiSheetWorkbook(
     }
 
     // Generate Excel file
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', cellStyles: true });
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     
     const fileName = `${options.projectName.replace(/[^a-z0-9]/gi, '_')}_Complete_Schedule.xlsx`;
@@ -454,9 +442,8 @@ function createComprehensiveDoorScheduleSheet(
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
-    // Set column widths
-    const colWidths = headers.map(h => ({ wch: Math.max(h.length + 2, 12) }));
-    worksheet['!cols'] = colWidths;
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(worksheet, headers, data.slice(1));
 
     // Add auto-filter
     worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }) };
@@ -537,21 +524,8 @@ function createComprehensiveHardwareScheduleSheet(
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
-    // Set column widths
-    worksheet['!cols'] = [
-        { wch: 20 }, // Hardware Set
-        { wch: 25 }, // Item Name
-        { wch: 30 }, // Description
-        { wch: 15 }, // Manufacturer
-        { wch: 15 }, // Model Number
-        { wch: 10 }, // Finish
-        { wch: 12 }, // Qty per Set
-        { wch: 15 }, // Doors Using Set
-        { wch: 10 }, // Total Qty
-        { wch: 12 }, // ANSI Grade
-        { wch: 12 }, // Lead Time
-        { wch: 12 }  // CSI Section
-    ];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(worksheet, headers, data.slice(1));
 
     // Add auto-filter
     worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }) };
@@ -595,9 +569,8 @@ function createFrameDetailsSheet(
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
-    // Set column widths
-    const colWidths = headers.map(h => ({ wch: Math.max(h.length + 2, 15) }));
-    worksheet['!cols'] = colWidths;
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    applySheetTheme(worksheet, headers, data.slice(1));
 
     // Add auto-filter
     worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }) };
@@ -696,17 +669,10 @@ function createProcurementSummarySheet(
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
-    // Set column widths
-    worksheet['!cols'] = [
-        { wch: 20 }, // Manufacturer
-        { wch: 30 }, // Product Name
-        { wch: 20 }, // Model Number
-        { wch: 10 }, // Total Qty
-        { wch: 15 }, // Lead Time
-        { wch: 12 }, // ANSI Grade
-        { wch: 12 }, // CSI Section
-        { wch: 20 }  // Hardware Sets
-    ];
+    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
+    // Note: data[0] is the 'PROCUREMENT SUMMARY' title, data[1] is empty, data[2] is headers.
+    // applySheetTheme styles row 0 (the title) and calculates widths from headers + body data.
+    applySheetTheme(worksheet, headers, data.slice(3));
 
     // Merge title cell
     worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
