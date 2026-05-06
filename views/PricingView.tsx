@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Door, HardwareSet, PriceBookEntry, ProjectPricing, PricingSettings } from '../types';
 import { calculateProjectPricing, DEFAULT_PRICING_SETTINGS } from '../services/pricingService';
-import PriceBookManager from '../components/PriceBookManager';
+import PriceBookManager from '../components/pricing/PriceBookManager';
 
 interface PricingViewProps {
     doors: Door[];

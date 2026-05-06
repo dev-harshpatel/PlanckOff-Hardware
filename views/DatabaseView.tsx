@@ -17,9 +17,9 @@ import {
 } from 'lucide-react';
 import type { RoleName } from '@/types/auth';
 import type { MasterHardwareItem, MasterHardwarePending } from '@/lib/db/masterHardware';
-import { MasterItemFormModal } from '../components/MasterItemFormModal';
+import { MasterItemFormModal } from '../components/settings/MasterItemFormModal';
 import { DatabaseSkeleton } from '@/components/skeletons/DatabaseSkeleton';
-import { PendingReviewModal } from '../components/PendingReviewModal';
+import { PendingReviewModal } from '../components/projects/PendingReviewModal';
 
 type SortKey = keyof Pick<MasterHardwareItem, 'name' | 'manufacturer' | 'description' | 'finish'>;
 type SortDir = 'asc' | 'desc';

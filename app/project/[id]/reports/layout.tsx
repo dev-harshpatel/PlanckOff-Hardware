@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
-import { RouteLoadingState } from '@/components/RouteLoadingState';
+import { RouteLoadingState } from '@/components/layout/RouteLoadingState';
 import { FileText, NotebookPen } from 'lucide-react';
 import {
   Breadcrumb,
@@ -15,7 +15,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import { ProjectNotesPanel } from '@/components/ProjectNotesPanel';
+import { ProjectNotesPanel } from '@/components/projects/ProjectNotesPanel';
 
 const ROUTE_TITLES: Record<string, string> = {
   'door-schedule': 'Door-Frame Reports',

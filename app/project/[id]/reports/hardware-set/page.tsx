@@ -9,10 +9,10 @@ import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { exportHardwareSet } from '@/services/reportExportService';
-import type { HardwareSetExportConfig } from '@/components/HardwareSetConfig';
+import type { HardwareSetExportConfig } from '@/components/hardware/HardwareSetConfig';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
-const HardwareSetConfig = dynamic(() => import('@/components/HardwareSetConfig'), { ssr: false });
+const HardwareSetConfig = dynamic(() => import('@/components/hardware/HardwareSetConfig'), { ssr: false });
 
 export default function HardwareSetReportPage() {
   const { id } = useParams<{ id: string }>();

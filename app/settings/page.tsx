@@ -1,7 +1,7 @@
 'use client';
 
 import { Settings } from 'lucide-react';
-import { CompanySettingsForm } from '@/components/CompanySettingsForm';
+import { CompanySettingsForm } from '@/components/settings/CompanySettingsForm';
 
 export default function SettingsPage() {
   return (
