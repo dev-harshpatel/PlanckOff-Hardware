@@ -1,3 +1,5 @@
+'use client';
+
 import { Component, ErrorInfo, ReactNode } from 'react';
 
 import { GENERAL_ERRORS } from '@/constants/errors';
