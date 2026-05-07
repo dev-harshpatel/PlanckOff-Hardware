@@ -6,6 +6,8 @@ import { getInvitableRoles } from '@/constants/roles';
 import type { RoleName } from '@/types/auth';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ERRORS } from '@/constants/errors';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
 
 interface InviteTeamMemberModalProps {
   isOpen: boolean;
@@ -65,7 +67,7 @@ export function InviteTeamMemberModal({
       };
 
       if (!res.ok) {
-        setError(json.error ?? 'Something went wrong.');
+        setError(json.error ?? ERRORS.GENERAL.UNEXPECTED.message);
         return;
       }
 
@@ -79,7 +81,7 @@ export function InviteTeamMemberModal({
         }, 1500);
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError(ERRORS.AUTH.NETWORK_ERROR.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -153,11 +155,7 @@ export function InviteTeamMemberModal({
             If this email already has a pending invitation, sending again will resend it and refresh the expiry.
           </p>
 
-          {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
+          {error && <ErrorDisplay error={error} />}
 
           {successMsg && (
             <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
