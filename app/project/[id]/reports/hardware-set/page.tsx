@@ -10,6 +10,8 @@ import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { exportHardwareSet } from '@/services/reportExportService';
 import type { HardwareSetExportConfig } from '@/components/hardware/HardwareSetConfig';
+import { useToast } from '@/contexts/ToastContext';
+import { PDF_ERRORS } from '@/constants/errors';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 const HardwareSetConfig = dynamic(() => import('@/components/hardware/HardwareSetConfig'), { ssr: false });
@@ -18,6 +20,7 @@ export default function HardwareSetReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { startNavigation } = useNavigationLoading();
+  const { addToast } = useToast();
 
   const [doors, setDoors] = useState<Door[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
@@ -81,7 +84,7 @@ export default function HardwareSetReportPage() {
       exportHardwareSet(doors, hardwareSets, config, projectName);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      addToast({ type: 'error', message: PDF_ERRORS.EXPORT_FAILED.message, details: PDF_ERRORS.EXPORT_FAILED.action });
     }
   };
 

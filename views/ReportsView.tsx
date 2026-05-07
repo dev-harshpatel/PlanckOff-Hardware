@@ -10,6 +10,8 @@ import ValidationModal from '../components/shared/ValidationModal';
 import { exportHardwareSet } from '../services/reportExportService';
 import { validateProject, ProjectValidationReport } from '../utils/doorValidation';
 import { ArrowLeft, FileSpreadsheet, Settings2, Package, FileText } from 'lucide-react';
+import { useToast } from '@/contexts/ToastContext';
+import { PDF_ERRORS } from '@/constants/errors';
 
 interface ReportsViewProps {
     doors: Door[];
@@ -69,6 +71,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({
     const router = useRouter();
     const params = useParams();
     const id = params.id as string;
+    const { addToast } = useToast();
     const [currentView, setCurrentView] = useState<ReportView>('selector');
 
     const [validationReport, setValidationReport] = useState<ProjectValidationReport | null>(null);
@@ -85,7 +88,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({
             exportHardwareSet(doors, hardwareSets, config, projectName);
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Export failed. Please try again.');
+            addToast({ type: 'error', message: PDF_ERRORS.HARDWARE_SET_EXPORT_FAILED.message, details: PDF_ERRORS.HARDWARE_SET_EXPORT_FAILED.action });
         }
     };
 

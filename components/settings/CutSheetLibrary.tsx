@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { ManufacturerCutSheet } from '../../types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/contexts/ToastContext';
+import { GENERAL_ERRORS } from '@/constants/errors';
 
 interface CutSheetLibraryProps {
     cutSheets: ManufacturerCutSheet[];
@@ -15,6 +17,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
     onDeleteCutSheet,
     onUpdateCutSheet
 }) => {
+    const { addToast } = useToast();
     const [filterManufacturer, setFilterManufacturer] = useState<string>('');
     const [filterCategory, setFilterCategory] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState<string>('');
@@ -84,7 +87,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
 
     const handleUploadSubmit = () => {
         if (!newCutSheet.file || !newCutSheet.manufacturer || !newCutSheet.productName) {
-            alert('Please fill in all required fields');
+            addToast({ type: 'error', message: GENERAL_ERRORS.REQUIRED_FIELD.message });
             return;
         }
 
