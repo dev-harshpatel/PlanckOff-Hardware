@@ -19,21 +19,25 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
     const { clearWidget } = useProcessingWidget();
 
     const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
-    const [doors, setDoors] = useState<Door[]>([]);
-    const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+    const [doors, setDoors]               = useState<Door[]>([]);
+    const [trashItems, setTrashItems]     = useState<TrashItem[]>([]);
     const hardwareSetsRef = useSyncRef(hardwareSets);
-    const trashItemsRef = useRef<TrashItem[]>([]);
-    const doorsRef = useSyncRef(doors);
-    const [isDataLoading, setIsDataLoading] = useState(true);
+    const trashItemsRef   = useRef<TrashItem[]>([]);
+    const doorsRef        = useSyncRef(doors);
+    const [isDataLoading, setIsDataLoading]       = useState(true);
     const [isPollingForResult, setIsPollingForResult] = useState(false);
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const isInitialMount = useRef(true);
+    const isInitialMount     = useRef(true);
+
+    // Tracks whether final_json was successfully loaded — when true, realtime
+    // reloads of door_schedule_imports are ignored (final_json is the source).
+    const hasFinalJsonRef = useRef(false);
 
     useEffect(() => {
-        isInitialMount.current = true;
+        isInitialMount.current  = true;
+        hasFinalJsonRef.current = false;
     }, [projectId]);
 
-    // Keep trashItemsRef in sync
     useEffect(() => { trashItemsRef.current = trashItems; }, [trashItems]);
 
     const startPollingForResult = useCallback(() => {
@@ -53,7 +57,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
             }
             try {
                 const [hwRes, dsRes] = await Promise.all([
-                    fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
+                    fetch(`/api/projects/${projectId}/hardware-pdf`,  { credentials: 'include' }),
                     fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
                 ]);
                 if (hwRes.ok && dsRes.ok) {
@@ -90,7 +94,8 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
 
                 setHardwareSets(prev => prev.length > 0 ? [] : prev);
                 setDoors(prev => prev.length > 0 ? [] : prev);
-                isInitialMount.current = true;
+                isInitialMount.current  = true;
+                hasFinalJsonRef.current = false;
 
                 if (sessionStorage.getItem(processingKey)) {
                     if (!cancelled) startPollingForResult();
@@ -98,20 +103,34 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 }
 
                 const [hwRes, dsRes, mergeRes] = await Promise.all([
-                    fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
-                    fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
-                    fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+                    fetch(`/api/projects/${projectId}/hardware-pdf`,    { credentials: 'include' }),
+                    fetch(`/api/projects/${projectId}/door-schedule`,   { credentials: 'include' }),
+                    fetch(`/api/projects/${projectId}/hardware-merge`,  { credentials: 'include' }),
                 ]);
 
                 if (cancelled) return;
 
-                const hwJson = hwRes.ok ? await hwRes.json() : null;
-                const dsJson = dsRes.ok ? await dsRes.json() : null;
+                const hwJson    = hwRes.ok    ? await hwRes.json()    : null;
+                const dsJson    = dsRes.ok    ? await dsRes.json()    : null;
                 const mergeJson = mergeRes.ok ? await mergeRes.json() : null;
 
                 if (Array.isArray(mergeJson?.data?.trashJson)) {
                     setTrashItems(mergeJson.data.trashJson);
                 }
+
+                // Pre-compute trashed sets and doors once — used in both branches.
+                const trashedSetNames = new Set<string>(
+                    (mergeJson?.data?.trashJson ?? [])
+                        .filter((t: TrashItem) => t.type === 'set')
+                        .map((t: TrashItem) => t.setName?.toLowerCase())
+                        .filter(Boolean) as string[],
+                );
+                const trashedDoorTags = new Set<string>(
+                    (mergeJson?.data?.trashJson ?? [])
+                        .filter((t: TrashItem) => t.type === 'door')
+                        .map((t: TrashItem) => t.doorData?.doorTag)
+                        .filter(Boolean) as string[],
+                );
 
                 const pdfSets = hwJson?.data?.extractedJson
                     ? transformHardwareSets(hwJson.data.extractedJson)
@@ -123,104 +142,58 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 const finalData = finalRaw ? transformFromFinalJson(finalRaw) : null;
 
                 let sets: typeof pdfSets;
-                if (finalData && finalData.hardwareSets.length > 0) {
-                    const pdfSetsByName = new Map(pdfSets.map(s => [s.name.toLowerCase(), s]));
-                    const setsFromFinal = finalData.hardwareSets
-                        .filter(s => s.name !== '__unassigned__')
-                        .map(s => {
-                            const pdfVersion = pdfSetsByName.get(s.name.toLowerCase());
-                            if (pdfVersion) {
-                                return {
-                                    ...pdfVersion,
-                                    isManualEntry: s.isManualEntry,
-                                    prep: s.prep ?? pdfVersion.prep,
-                                    description: s.description || pdfVersion.description,
-                                    doorTags: s.doorTags ?? pdfVersion.doorTags,
-                                };
-                            }
-                            return s;
-                        });
+                let loadedDoors: Door[];
+
+                if (finalRaw && finalData && finalData.hardwareSets.length > 0) {
+                    // ── Phase C: final_json is the single source of truth ─────────────
+                    // Mark this so reloadDoorSchedule becomes a no-op.
+                    hasFinalJsonRef.current = true;
+
+                    // Sets: use final_json sets directly. Append any brand-new PDF sets
+                    // that appeared after the last save (e.g. from a re-upload) so they
+                    // show up without requiring a manual refresh.
                     const finalSetNames = new Set(finalData.hardwareSets.map(s => s.name.toLowerCase()));
-
-                    const trashedSetNames = new Set<string>(
-                        (mergeJson?.data?.trashJson ?? [])
-                            .filter((t: TrashItem) => t.type === 'set')
-                            .map((t: TrashItem) => t.setName?.toLowerCase())
-                            .filter(Boolean) as string[],
-                    );
-
-                    const newPdfOnlySets = pdfSets.filter(s =>
+                    const newPdfSets = pdfSets.filter(s =>
                         !finalSetNames.has(s.name.toLowerCase()) &&
                         !trashedSetNames.has(s.name.toLowerCase()),
                     );
-                    const merged = [...setsFromFinal, ...newPdfOnlySets];
+                    const mergedSets = [
+                        ...finalData.hardwareSets.filter(s => s.name !== '__unassigned__'),
+                        ...newPdfSets,
+                    ];
                     const seenIds = new Set<string>();
-                    sets = merged.filter(s => {
+                    sets = mergedSets.filter(s => {
                         if (seenIds.has(s.id)) return false;
                         seenIds.add(s.id);
                         return true;
                     });
-                } else {
-                    sets = pdfSets;
-                }
 
-                const trashedDoorTags = new Set<string>(
-                    (mergeJson?.data?.trashJson ?? [])
-                        .filter((t: TrashItem) => t.type === 'door')
-                        .map((t: TrashItem) => t.doorData?.doorTag)
-                        .filter(Boolean) as string[],
-                );
-
-                const rawDoors = dsJson?.data?.scheduleJson
-                    ? transformDoors(dsJson.data.scheduleJson, sets).filter(
-                          d => !trashedDoorTags.has(d.doorTag),
-                      )
-                    : [];
-
-                let loadedDoors: typeof rawDoors;
-                if (finalData && finalData.doors.length > 0) {
+                    // Doors: read directly from final_json — no merge with door_schedule_imports.
+                    // transformFromFinalJson already resolves all field values from sections,
+                    // so user-edited fields are preserved exactly as saved.
                     const setsById = new Map(sets.map(s => [s.id, s]));
-                    // Use the last occurrence per tag so multi-set duplicates from finalJson collapse to one.
-                    const finalDoorMap = new Map(finalData.doors.map(d => [d.doorTag, d]));
-
-                    loadedDoors = rawDoors.map(raw => {
-                        const fromFinal = finalDoorMap.get(raw.doorTag);
-                        if (!fromFinal) return raw;
-                        return {
-                            ...raw,
-                            ...fromFinal,
-                            // Keep the raw door's unique ID — spreading fromFinal would give every
-                            // raw row with the same doorTag an identical door-final-* key.
-                            id: raw.id,
-                            assignedHardwareSet: fromFinal.assignedHardwareSet
-                                ? (setsById.get(fromFinal.assignedHardwareSet.id) ?? fromFinal.assignedHardwareSet)
-                                : raw.assignedHardwareSet,
-                            sections: raw.sections ?? fromFinal.sections,
-                        };
-                    });
-
-                    const rawDoorTags = new Set(rawDoors.map(d => d.doorTag));
-                    // Deduplicate manual doors by tag — the same door can appear in multiple sets
-                    // inside finalJson, which would otherwise add it to the list multiple times.
-                    const seenManualTags = new Set<string>();
-                    const manualDoors = finalData.doors
-                        .filter(d => {
-                            if (rawDoorTags.has(d.doorTag) || trashedDoorTags.has(d.doorTag)) return false;
-                            const tag = d.doorTag.toLowerCase();
-                            if (seenManualTags.has(tag)) return false;
-                            seenManualTags.add(tag);
-                            return true;
-                        })
+                    loadedDoors = finalData.doors
+                        .filter(d => !trashedDoorTags.has(d.doorTag))
                         .map(d => ({
                             ...d,
-                            assignedHardwareSet:
-                                d.assignedHardwareSet && d.assignedHardwareSet.name !== '__unassigned__'
-                                    ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
-                                    : undefined,
-                        }));
+                            // Resolve assignedHardwareSet against the final set list so IDs align.
+                            assignedHardwareSet: d.assignedHardwareSet && d.assignedHardwareSet.name !== '__unassigned__'
+                                ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
+                                : undefined,
+                        }))
+                        .sort((a, b) => a.doorTag.localeCompare(b.doorTag, undefined, { numeric: true, sensitivity: 'base' }));
 
-                    loadedDoors = [...loadedDoors, ...manualDoors];
                 } else {
+                    // ── No final_json yet: build from extraction tables ────────────────
+                    // This path only runs on first load (before final_json is seeded).
+                    sets = pdfSets;
+
+                    const rawDoors = dsJson?.data?.scheduleJson
+                        ? transformDoors(
+                              dsJson.data.scheduleJson as Parameters<typeof transformDoors>[0],
+                              sets,
+                          ).filter(d => !trashedDoorTags.has(d.doorTag))
+                        : [];
                     loadedDoors = rawDoors;
                 }
 
@@ -235,12 +208,12 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                     isInitialMount.current = true;
                 }
 
-                const hasFinalJson = Boolean(finalRaw);
-                if (!hasFinalJson && sets.length > 0 && !cancelled) {
+                // Seed final_json on the very first load (when it doesn't exist yet).
+                if (!finalRaw && sets.length > 0 && !cancelled) {
                     saveToFinalJsonRef.current?.(sets, loadedDoors).catch(() => {});
                 }
             } catch {
-                // Non-critical — UI just shows empty state
+                // Non-critical — UI shows empty state
             } finally {
                 if (!cancelled && !sessionStorage.getItem(`planckoff_proc_${projectId}`)) {
                     setIsDataLoading(false);
@@ -259,6 +232,10 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
     }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const reloadDoorSchedule = useCallback(async () => {
+        // When final_json is the source of truth, realtime changes to
+        // door_schedule_imports should not overwrite state.
+        if (hasFinalJsonRef.current) return;
+
         try {
             const res = await fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' });
             if (!res.ok) return;
@@ -281,15 +258,11 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
             const overlaid = fromSheet.map(d => {
                 const current = currentDoorMap.get(d.doorTag);
                 if (!current) return d;
-                return {
-                    ...d,
-                    ...current,
-                    sections: d.sections ?? current.sections,
-                };
+                return { ...d, ...current, sections: d.sections ?? current.sections };
             });
 
-            const sheetTags = new Set(fromSheet.map(d => d.doorTag));
-            const manualDoors = doorsRef.current.filter(
+            const sheetTags    = new Set(fromSheet.map(d => d.doorTag));
+            const manualDoors  = doorsRef.current.filter(
                 d => !sheetTags.has(d.doorTag) && !trashedDoorTags.has(d.doorTag),
             );
 

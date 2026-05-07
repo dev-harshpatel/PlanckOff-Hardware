@@ -32,6 +32,7 @@ export const GET = withAuth(
       role: m.role,
       status: m.status,
       source: 'team_member' as const,
+      inviteExpiresAt: m.inviteExpiresAt ?? null,
     }));
 
     return NextResponse.json({ data: [...admins, ...members] });

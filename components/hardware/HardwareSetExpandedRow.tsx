@@ -203,9 +203,9 @@ export function HardwareSetExpandedRow({
                                                             {conflicts.leafCount && renderConflictIcon(conflicts.leafCount, false)}
                                                         </td>
                                                         <td className={`px-3 py-2 ${getCellClass(conflicts.dimensions)}`} title={conflicts.dimensions}>
-                                                            {`${formatDimension(door.width)} × ${formatDimension(door.height)}`}{conflicts.dimensions && renderConflictIcon(conflicts.dimensions, conflicts.dimensions.includes('CRITICAL') || conflicts.dimensions.includes('CONFLICT'))}
+                                                            {`${door.widthDisplay ?? formatDimension(door.width)} × ${door.heightDisplay ?? formatDimension(door.height)}`}{conflicts.dimensions && renderConflictIcon(conflicts.dimensions, conflicts.dimensions.includes('CRITICAL') || conflicts.dimensions.includes('CONFLICT'))}
                                                         </td>
-                                                        <td className="px-3 py-2 text-[var(--text-muted)]">{`${door.thickness}"`}</td>
+                                                        <td className="px-3 py-2 text-[var(--text-muted)]">{door.thicknessDisplay ?? (door.thickness != null ? `${door.thickness}"` : '—')}</td>
                                                         <td className={`px-3 py-2 ${getCellClass(conflicts.doorMaterial)}`} title={conflicts.doorMaterial}>
                                                             {door.doorMaterial}{conflicts.doorMaterial && renderConflictIcon(conflicts.doorMaterial, true)}
                                                         </td>

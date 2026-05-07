@@ -96,7 +96,7 @@ tmp/
 
 CLAUDE.md
 
-settings.local.json
 
 .claude/worktress/
+.claude/settings.local.json
 

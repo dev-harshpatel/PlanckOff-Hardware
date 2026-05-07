@@ -130,7 +130,6 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     currentMaterials,
     currentFloors,
     currentBuildings,
-    currentPreps,
     setFilter,
     setProposalFilter,
     handleCreateVariant,
@@ -172,7 +171,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     companySettings,
     doorGroups,
     frameGroups,
-    hardwareGroups,
+    hardwareGroups: visibleHardware,
     doorTotal,
     frameTotal,
     hwTotal,
@@ -341,16 +340,9 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
 
         {activeTab !== 'proposal' && (
           <div className="flex flex-wrap items-center gap-3 ml-auto">
-            <MultiFilterSelect label="Material" selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
-            {activeTab !== 'hardware' && (
-              <>
-                <MultiFilterSelect label="Floor"    selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
-                <MultiFilterSelect label="Building" selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
-                {currentPreps.length > 0 && (
-                  <MultiFilterSelect label="Prep" selected={filters.prep} options={currentPreps} onChange={v => setFilter('prep', v)} />
-                )}
-              </>
-            )}
+            <MultiFilterSelect label="Material"          selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
+            <MultiFilterSelect label="Building Location" selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
+            <MultiFilterSelect label="Building"          selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
           </div>
         )}
       </div>

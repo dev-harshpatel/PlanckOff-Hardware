@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   Download,
@@ -21,8 +21,9 @@ import { ERRORS } from '@/constants/errors';
 import { MasterItemFormModal } from '../components/settings/MasterItemFormModal';
 import { DatabaseSkeleton } from '@/components/skeletons/DatabaseSkeleton';
 import { PendingReviewModal } from '../components/projects/PendingReviewModal';
+import { Pagination } from '@/components/ui/Pagination';
 
-type SortKey = keyof Pick<MasterHardwareItem, 'name' | 'manufacturer' | 'description' | 'finish'>;
+type SortKey = 'name' | 'manufacturer' | 'description' | 'finish';
 type SortDir = 'asc' | 'desc';
 
 interface DatabaseViewProps {
@@ -30,11 +31,14 @@ interface DatabaseViewProps {
   addToast: (toast: { type: string; message: string; details?: string }) => void;
 }
 
+const DEFAULT_PAGE_SIZE = 25;
+
 const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
   const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
 
   // --- data state ---
   const [items, setItems] = useState<MasterHardwareItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [pending, setPending] = useState<MasterHardwarePending[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -42,28 +46,51 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
 
   // --- ui state ---
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDir }>({ key: 'name', direction: 'asc' });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [editingItem, setEditingItem] = useState<MasterHardwareItem | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // --- load data ---
+  // Debounce search input — also resets page to 1
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // --- load paginated items ---
   const loadItems = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/master-hardware', { credentials: 'include' });
-      const json = await res.json() as { data?: MasterHardwareItem[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.LOAD_FAILED.message);
+      const params = new URLSearchParams({
+        page:     String(page),
+        pageSize: String(pageSize),
+        search:   debouncedSearch,
+        sortKey:  sortConfig.key,
+        sortDir:  sortConfig.direction,
+      });
+      const res  = await fetch(`/api/master-hardware?${params.toString()}`, { credentials: 'include' });
+      const json = await res.json() as { data?: MasterHardwareItem[]; total?: number; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load database.');
       setItems(json.data ?? []);
+      setTotal(json.total ?? 0);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load.');
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [page, pageSize, debouncedSearch, sortConfig]);
 
   const loadPending = useCallback(async () => {
     try {
-      const res = await fetch('/api/master-hardware/pending', { credentials: 'include' });
+      const res  = await fetch('/api/master-hardware/pending', { credentials: 'include' });
       const json = await res.json() as { data?: MasterHardwarePending[]; error?: string };
       if (res.ok) {
         setPending(json.data ?? []);
@@ -90,56 +117,49 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
     }
   }, [pendingLoadError, addToast]);
 
+  // Load pending once on mount
   useEffect(() => {
-    setIsLoading(true);
-    Promise.all([loadItems(), loadPending()]).finally(() => setIsLoading(false));
-  }, [loadItems, loadPending]);
+    loadPending();
+  }, [loadPending]);
 
-  // --- sort + filter ---
-  const filtered = useMemo(() => {
-    let result = [...items];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(i =>
-        i.name.toLowerCase().includes(q) ||
-        i.manufacturer.toLowerCase().includes(q) ||
-        i.description.toLowerCase().includes(q) ||
-        i.finish.toLowerCase().includes(q),
-      );
-    }
-    result.sort((a, b) => {
-      const va = (a[sortConfig.key] ?? '').toString().toLowerCase();
-      const vb = (b[sortConfig.key] ?? '').toString().toLowerCase();
-      if (va < vb) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (va > vb) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return result;
-  }, [items, searchQuery, sortConfig]);
+  // Reload items whenever page/pageSize/search/sort changes
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
 
+  // --- sort ---
   const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
+    setPage(1);
   };
 
-  // --- CSV export ---
-  const handleExportCSV = () => {
-    const cols: (keyof MasterHardwareItem)[] = ['name', 'manufacturer', 'description', 'finish'];
-    const header = cols.join(',');
-    const rows = items.map(i =>
-      cols.map(c => `"${String(i[c] ?? '').replace(/"/g, '""')}"`).join(','),
-    );
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `master-hardware-database-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    addToast({ type: 'success', message: 'Database exported to CSV.' });
+  // --- CSV export (fetches all records regardless of pagination) ---
+  const handleExportCSV = async () => {
+    try {
+      const res  = await fetch('/api/master-hardware?export=true', { credentials: 'include' });
+      const json = await res.json() as { data?: MasterHardwareItem[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Export failed.');
+
+      const cols: (keyof MasterHardwareItem)[] = ['name', 'manufacturer', 'description', 'finish'];
+      const header = cols.join(',');
+      const rows   = (json.data ?? []).map(i =>
+        cols.map(c => `"${String(i[c] ?? '').replace(/"/g, '""')}"`).join(','),
+      );
+      const csv  = [header, ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `master-hardware-database-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast({ type: 'success', message: 'Database exported to CSV.' });
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Export failed.' });
+    }
   };
 
   // --- Create ---
@@ -158,8 +178,8 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
     name: string; manufacturer: string; description: string; finish: string; modelNumber: string;
   }) => {
     if (editingItem) {
-      const res = await fetch(`/api/master-hardware/${editingItem.id}`, {
-        method: 'PUT',
+      const res  = await fetch(`/api/master-hardware/${editingItem.id}`, {
+        method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(payload),
@@ -169,8 +189,8 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       setItems(prev => prev.map(i => i.id === editingItem.id ? json.data! : i));
       addToast({ type: 'success', message: 'Item updated.' });
     } else {
-      const res = await fetch('/api/master-hardware', {
-        method: 'POST',
+      const res  = await fetch('/api/master-hardware', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(payload),
@@ -182,6 +202,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
     }
     setIsFormOpen(false);
     setEditingItem(null);
+    await loadItems();
   };
 
   // --- Delete ---
@@ -197,8 +218,8 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
         const json = await res.json() as { error?: string };
         throw new Error(json.error ?? ERRORS.DOORS.DELETE_FAILED.message);
       }
-      setItems(prev => prev.filter(i => i.id !== id));
       addToast({ type: 'success', message: 'Item deleted.' });
+      await loadItems();
     } catch (err) {
       addToast({ type: 'error', message: ERRORS.DOORS.DELETE_FAILED.message });
     } finally {
@@ -208,8 +229,8 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
 
   // --- Approval ---
   const handleReview = async (ids: string[], action: 'approve' | 'reject') => {
-    const res = await fetch('/api/master-hardware/pending/review', {
-      method: 'POST',
+    const res  = await fetch('/api/master-hardware/pending/review', {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ ids, action }),
@@ -217,19 +238,23 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
     const json = await res.json() as { data?: { processed: number }; error?: string };
     if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.REVIEW_FAILED.message);
 
-    // Remove processed items from pending list
     setPending(prev => prev.filter(p => !ids.includes(p.id)));
 
     if (action === 'approve') {
-      // Reload approved items into master list
       await loadItems();
       addToast({ type: 'success', message: `${json.data?.processed ?? ids.length} item(s) approved and added to database.` });
     } else {
       addToast({ type: 'info', message: `${json.data?.processed ?? ids.length} item(s) rejected.` } as never);
     }
 
-    // Close modal if no more pending
     if (pending.length - ids.length <= 0) setIsReviewOpen(false);
+  };
+
+  // --- Pagination handlers ---
+  const handlePageChange = (newPage: number) => setPage(newPage);
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
   };
 
   // --- Sort icon ---
@@ -280,7 +305,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
             )}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--primary-border)] bg-[var(--bg)]">
               <span className="text-xs text-[var(--text-muted)] font-medium">Items</span>
-              <span className="text-xs font-bold text-[var(--primary-text)]">{items.length}</span>
+              <span className="text-xs font-bold text-[var(--primary-text)]">{total}</span>
             </div>
             {!canEdit && (
               <span className="text-[10px] font-medium text-[var(--text-faint)] italic px-2 py-1 bg-[var(--bg)] border border-[var(--border)] rounded-md">Read-only</span>
@@ -333,7 +358,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
             <AlertTriangle className="w-8 h-8 text-amber-500" />
             <p className="text-sm text-[var(--text-muted)]">{loadError}</p>
             <button
-              onClick={() => { setIsLoading(true); Promise.all([loadItems(), loadPending()]).finally(() => setIsLoading(false)); }}
+              onClick={loadItems}
               className="text-xs text-[var(--primary-text-muted)] hover:underline"
             >
               Retry
@@ -359,7 +384,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {filtered.map(item => (
+                  {items.map(item => (
                     <tr key={item.id} className="hover:bg-[var(--bg-subtle)] transition-colors group">
                       <td className="px-4 py-2.5 font-medium text-[var(--text)] align-middle max-w-[200px]">
                         <span className="truncate block" title={item.name}>{item.name || <span className="text-[var(--text-faint)] italic text-xs">—</span>}</span>
@@ -403,7 +428,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
                     </tr>
                   ))}
 
-                  {filtered.length === 0 && (
+                  {items.length === 0 && (
                     <tr>
                       <td colSpan={canEdit ? 5 : 4} className="text-center py-16 text-[var(--text-faint)]">
                         <Database className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -424,16 +449,15 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
               </table>
             </div>
 
-            {/* Footer */}
-            <div className="bg-[var(--bg-subtle)] border-t border-[var(--border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0 rounded-b-xl">
-              <span className="text-xs text-[var(--text-muted)]">
-                Showing <span className="font-medium text-[var(--text-secondary)]">{filtered.length}</span> of <span className="font-medium text-[var(--text-secondary)]">{items.length}</span> items
-              </span>
-              {searchQuery && filtered.length !== items.length && (
-                <button onClick={() => setSearchQuery('')} className="text-xs text-[var(--primary-text-muted)] hover:underline">
-                  Clear filter
-                </button>
-              )}
+            {/* Footer — pagination */}
+            <div className="bg-[var(--bg-subtle)] border-t border-[var(--border)] px-4 py-2.5 flex-shrink-0 rounded-b-xl">
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+              />
             </div>
           </>
         )}

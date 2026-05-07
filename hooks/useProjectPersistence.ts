@@ -34,14 +34,28 @@ export function useProjectPersistence({
     }, [projectId]);
 
     const saveToFinalJson = useCallback(async (currentSets: HardwareSet[], currentDoors: Door[], currentTrash?: TrashItem[]): Promise<void> => {
+        // Sync flat display fields back into sections.basic_information so that
+        // transformFromFinalJson (which reads sections first) always sees the
+        // user-edited values rather than the stale raw Excel strings.
+        const syncedSections = (d: Door): MergedDoor['sections'] => ({
+            ...(d.sections ?? {}),
+            basic_information: {
+                ...(d.sections?.basic_information ?? {}),
+                ...(d.widthDisplay     !== undefined ? { 'WIDTH':     d.widthDisplay }     : {}),
+                ...(d.heightDisplay    !== undefined ? { 'HEIGHT':    d.heightDisplay }    : {}),
+                ...(d.thicknessDisplay !== undefined ? { 'THICKNESS': d.thicknessDisplay } : {}),
+                ...(d.quantity         !== undefined ? { 'QUANTITY':  String(d.quantity) } : {}),
+                ...(d.fireRating       !== undefined ? { 'FIRE RATING': d.fireRating }     : {}),
+                ...(d.buildingTag      !== undefined ? { 'BUILDING TAG': d.buildingTag }   : {}),
+                ...(d.buildingLocation !== undefined ? { 'BUILDING LOCATION': d.buildingLocation } : {}),
+            },
+        }) as unknown as MergedDoor['sections'];
+
         try {
             const finalJson: MergedHardwareSet[] = currentSets.map((set): MergedHardwareSet => {
-                const matchedDoors = currentDoors.filter((d) => {
-                    if (d.assignedHardwareSet) {
-                        return d.assignedHardwareSet.id === set.id;
-                    }
-                    return d.providedHardwareSet?.toLowerCase() === set.name.toLowerCase();
-                });
+                const matchedDoors = currentDoors.filter((d) =>
+                    (d.providedHardwareSet ?? '').trim().toLowerCase() === set.name.trim().toLowerCase()
+                );
 
                 const mergedDoors: MergedDoor[] = matchedDoors.map((d): MergedDoor => ({
                     doorTag: d.doorTag,
@@ -63,7 +77,7 @@ export function useProjectPersistence({
                     frameMaterial: d.frameMaterial as string | undefined,
                     hardwarePrep: d.hardwarePrep,
                     excludeReason: d.excludeReason,
-                    sections: d.sections as unknown as MergedDoor['sections'],
+                    sections: syncedSections(d),
                 }));
 
                 const doorCount = mergedDoors.reduce((sum, d) => {
@@ -117,7 +131,7 @@ export function useProjectPersistence({
                         frameMaterial: d.frameMaterial as string | undefined,
                         hardwarePrep: d.hardwarePrep,
                         excludeReason: d.excludeReason,
-                        sections: d.sections as unknown as MergedDoor['sections'],
+                        sections: syncedSections(d),
                     })),
                 });
             }
