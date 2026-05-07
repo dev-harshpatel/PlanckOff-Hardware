@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../../types';
+import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT } from '@/services/excelTheme';
+import { buildAutoTableOptions, addPageNumbers, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
 
 
 // ─── Exported types ───────────────────────────────────────────────────────────
@@ -515,14 +517,30 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 wsData.push([]);
             }
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-            ws['!cols'] = colDefs.map(c => ({
-                wch: c.id === 'description' ? 45
-                   : c.id === 'name'         ? 35
-                   : c.id === 'usage'        ? 40
-                   : c.id === 'door_material'? 30
-                   : c.id === 'hw_set_name'  ? 20
-                   : 14,
-            }));
+            // Content-aware column widths (XLS-02) — replaces hardcoded fixed widths
+            const colLabels = colDefs.map(c => c.label);
+            const allItemRows = groups.flatMap(g => g.items.map(u => colDefs.map(c => String(getExcelCellValue(u, c.id)))));
+            ws['!cols'] = contentAwareColWidths(colLabels, allItemRows);
+            // Style every column-header row in the sheet (one per group) (XLS-01)
+            const wsRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+            let rowCursor = 3; // skip: projectName(0), generated(1), empty(2)
+            for (const group of groups) {
+                rowCursor++; // group separator label row
+                // Style this row as a column header
+                for (let c = wsRange.s.c; c <= wsRange.e.c; c++) {
+                    const addr = XLSX.utils.encode_cell({ r: rowCursor, c });
+                    if (ws[addr]) {
+                        ws[addr].s = {
+                            font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
+                            fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
+                            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                        };
+                    }
+                }
+                rowCursor += group.items.length + 2; // header row + data rows + empty row
+            }
+            // Freeze the top metadata rows so first group header stays visible (XLS-03)
+            (ws as any)['!freeze'] = { xSplit: 0, ySplit: 3, topLeftCell: 'A4', activePane: 'bottomLeft', state: 'frozen' };
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
             XLSX.writeFile(wb, `${safeProjectName}.xlsx`, { cellStyles: true });
@@ -534,13 +552,12 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 import('jspdf'),
                 import('jspdf-autotable'),
             ]);
-            const doc       = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-            const headers   = colDefs.map(c => c.label);
-            const marginL   = 14;
-            const marginR   = 14;
-            const pageW     = doc.internal.pageSize.getWidth();
-            const maxTextW  = pageW - marginL - marginR;
-            let isFirst     = true;
+            const doc        = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const headers    = colDefs.map(c => c.label);
+            const pageW      = doc.internal.pageSize.getWidth();
+            const pageH      = doc.internal.pageSize.getHeight();
+            const exportDate = new Date().toLocaleDateString();
+            let isFirst      = true;
 
             for (const group of groups) {
                 if (!isFirst) doc.addPage();
@@ -549,49 +566,32 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 const doorTagText = group.groupDoorTags
                     ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
                     : '';
+                const groupTitle = `${group.label}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`;
 
-                // Project name header
-                doc.setFontSize(11);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0);
-                doc.text(projectName || 'Hardware Set Report', marginL, 14);
-
-                // Group label + item count on one line
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(30);
-                doc.text(
-                    `${group.label}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`,
-                    marginL, 21,
-                );
-
-                let startY = 27;
-
-                // Door tags — wrap to fit page width
+                // Draw door-tag subtitle below the branded header bar (which didDrawPage handles)
+                let startY = HEADER_BAR_HEIGHT + 4;
                 if (doorTagText) {
                     doc.setFontSize(7);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(100);
-                    const wrappedLines = doc.splitTextToSize(doorTagText, maxTextW) as string[];
-                    doc.text(wrappedLines, marginL, startY);
-                    // Each wrapped line is ~3.5 mm tall at 7pt; add 2 mm gap before table
+                    const wrappedLines = doc.splitTextToSize(doorTagText, pageW - PDF_MARGIN * 2) as string[];
+                    doc.text(wrappedLines, PDF_MARGIN, startY);
                     startY += wrappedLines.length * 3.5 + 2;
                 }
-
                 doc.setTextColor(0);
 
                 autoTable(doc, {
+                    ...buildAutoTableOptions(DEFAULT_THEME, groupTitle, exportDate, pageW, PDF_MARGIN),
                     startY,
                     head: [headers],
                     body: group.items.map(usage =>
                         colDefs.map(c => getCellValue(usage, c.id) || '—'),
                     ),
-                    styles:      { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
-                    headStyles:  { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 6.5 },
-                    alternateRowStyles: { fillColor: [248, 250, 252] },
-                    margin: { left: marginL, right: marginR },
+                    styles: { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
                 });
             }
+            // Two-pass page numbers — called after all autoTable() calls complete (PDF-03)
+            addPageNumbers(doc, projectName || 'Hardware Set Report', pageW, pageH, PDF_MARGIN);
             doc.save(`${safeProjectName}.pdf`);
         }
     }, [groups, requiredColumns, usageDisplay, format, projectName]);

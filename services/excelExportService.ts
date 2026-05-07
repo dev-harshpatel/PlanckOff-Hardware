@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { applySheetTheme } from './excelTheme';
+import { applySheetTheme, contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT } from './excelTheme';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
@@ -144,6 +144,26 @@ export const exportDoorScheduleToExcel = (
 
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Apply theme: content-aware widths (XLS-02) + styled header row + freeze (XLS-01, XLS-03)
+  const headerRowIdx = config.includeHeader ? 4 : 0;
+  worksheet['!cols'] = contentAwareColWidths(headers, dataRows);
+  const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+  for (let c = wsRange.s.c; c <= wsRange.e.c; c++) {
+    const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
+    if (worksheet[addr]) {
+      worksheet[addr].s = {
+        font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
+        fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      };
+    }
+  }
+  (worksheet as any)['!freeze'] = {
+    xSplit: 0, ySplit: headerRowIdx + 1,
+    topLeftCell: XLSX.utils.encode_cell({ r: headerRowIdx + 1, c: 0 }),
+    activePane: 'bottomLeft', state: 'frozen',
+  };
 
   // Add to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Door Schedule');
@@ -320,6 +340,27 @@ export const exportHardwareSetToExcel = (
 
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Apply theme: content-aware widths (XLS-02) + styled header row + freeze (XLS-01, XLS-03)
+  // Header row is at index 5 (4 metadata rows + 1 empty) for flat layout; grouped adds group labels
+  const hwHeaderRowIdx = 5;
+  worksheet['!cols'] = contentAwareColWidths(headers, wsData.slice(hwHeaderRowIdx + 1).filter(r => r.length > 1));
+  const hwRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+  for (let c = hwRange.s.c; c <= hwRange.e.c; c++) {
+    const addr = XLSX.utils.encode_cell({ r: hwHeaderRowIdx, c });
+    if (worksheet[addr]) {
+      worksheet[addr].s = {
+        font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
+        fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      };
+    }
+  }
+  (worksheet as any)['!freeze'] = {
+    xSplit: 0, ySplit: hwHeaderRowIdx + 1,
+    topLeftCell: XLSX.utils.encode_cell({ r: hwHeaderRowIdx + 1, c: 0 }),
+    activePane: 'bottomLeft', state: 'frozen',
+  };
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Hardware Items');
 
@@ -817,7 +858,7 @@ export const exportDoorScheduleToPDF = async (
             halign: 'left'
         },
         headStyles: {
-            fillColor: [59, 130, 246], // Blue
+            fillColor: [30, 41, 59], // BRAND_NAVY — matches pdfTheme
             textColor: 255,
             fontStyle: 'bold',
             halign: 'center'
