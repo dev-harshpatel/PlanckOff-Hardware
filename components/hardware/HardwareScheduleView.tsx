@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { HardwareSet, Door } from '../../types';
 import { getCSISectionDescription } from '../../utils/csiMasterFormat';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/contexts/ToastContext';
 
 interface HardwareScheduleViewProps {
     hardwareSets: HardwareSet[];
@@ -16,6 +17,7 @@ interface MaterialGroup {
 }
 
 const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSets, doors }) => {
+    const { addToast } = useToast();
     const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
     const [filterManufacturer, setFilterManufacturer] = useState<string>('');
     const [sortBy, setSortBy] = useState<'name' | 'leadTime' | 'quantity'>('name');
@@ -106,7 +108,7 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
     }, [groupBy, doors, filteredSets]);
 
     const exportToExcel = () => {
-        alert('Excel export functionality coming soon!');
+        addToast({ type: 'info', message: 'Excel export is coming soon.' });
     };
 
     const renderSetCard = (set: HardwareSet, doorCount: number, expandKey: string) => {
