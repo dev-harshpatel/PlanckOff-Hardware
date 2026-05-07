@@ -1,10 +1,10 @@
 /**
  * pdfTheme.ts
  * Single source of truth for PlanckOff PDF visual identity.
- * Imported by: DoorScheduleConfig.tsx, pdfExportService.ts
+ * Imported by: DoorScheduleConfig.tsx, pdfExportService.ts, HardwareSetConfig.tsx
  *
  * IMPORTANT: Keep this file free of React imports and browser globals at module scope.
- * All jsPDF usage is inside function bodies (called only in browser context).
+ * All jsPDF / browser API usage is inside function bodies (called only in browser context).
  */
 
 // ---------------------------------------------------------------------------
@@ -19,57 +19,58 @@ export const BRAND_TEXT_ON_DARK: [number, number, number] = [255, 255, 255];
 /** Alternating row fill — Tailwind slate-50, #F8FAFC */
 export const ROW_ALT_FILL: [number, number, number] = [248, 250, 252];
 
-/** Separator line color */
-export const SEPARATOR_COLOR: [number, number, number] = [200, 200, 200];
+/** Separator / border color — Tailwind slate-200, #E2E8F0 */
+export const SEPARATOR_COLOR: [number, number, number] = [226, 232, 240];
+
+/** Muted text — Tailwind slate-400 */
+export const TEXT_MUTED: [number, number, number] = [148, 163, 184];
 
 // ---------------------------------------------------------------------------
 // Layout constants
 // ---------------------------------------------------------------------------
-/** Default page margin in mm — matches existing code in DoorScheduleConfig */
+/** Default page margin in mm */
 export const PDF_MARGIN = 14;
 
-/** Height reserved at the top of every page for the branded header bar, in mm */
-export const HEADER_BAR_HEIGHT = 22;
+/**
+ * Height reserved at the top of every page for the branded header bar, in mm.
+ * Table margin.top is set to this value so the table never overlaps the header.
+ * startY for the first page should be HEADER_BAR_HEIGHT + 2.
+ */
+export const HEADER_BAR_HEIGHT = 24;
 
-/** Distance from page bottom for footer text, in mm */
-export const FOOTER_OFFSET = 5;
+/** Distance from page bottom edge for footer baseline, in mm */
+export const FOOTER_OFFSET = 6;
 
 // ---------------------------------------------------------------------------
-// Logo — 1×1 transparent PNG fallback used when the real logo hasn't loaded yet.
-// The real logo is loaded at runtime via loadLogoDataUrl() below.
+// Logo — 1×1 transparent PNG fallback used before the real asset loads.
 // ---------------------------------------------------------------------------
 export const LOGO_BASE64_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 // ---------------------------------------------------------------------------
-// loadLogoDataUrl — converts public/images/logo.svg → base64 PNG via canvas.
-// Call ONCE at the start of each export function (browser-only context).
-// Falls back to the transparent placeholder if conversion fails.
+// loadLogoDataUrl
+// Fetches public/images/logo.png and converts it to a base64 data URL so
+// jsPDF's addImage() can use it.  Call ONCE at the start of each export
+// function (browser-only context).  Falls back silently if loading fails.
 //
 // Usage:
 //   const logoDataUrl = await loadLogoDataUrl();
-//   // then pass logoDataUrl into buildAutoTableOptions / drawPageHeader
+//   buildAutoTableOptions(..., { projectName, logoDataUrl })
 // ---------------------------------------------------------------------------
-export async function loadLogoDataUrl(logoPath = '/images/logo.svg'): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width  = 80;
-        canvas.height = 80;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(LOGO_BASE64_PNG); return; }
-        ctx.drawImage(img, 0, 0, 80, 80);
-        resolve(canvas.toDataURL('image/png'));
-      } catch {
-        resolve(LOGO_BASE64_PNG);
-      }
-    };
-    img.onerror = () => resolve(LOGO_BASE64_PNG);
-    img.crossOrigin = 'anonymous';
-    img.src = logoPath;
-  });
+export async function loadLogoDataUrl(logoPath = '/images/logo.png'): Promise<string> {
+  try {
+    const response = await fetch(logoPath);
+    if (!response.ok) return LOGO_BASE64_PNG;
+    const blob = await response.blob();
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(LOGO_BASE64_PNG);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return LOGO_BASE64_PNG;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -90,23 +91,25 @@ export const DEFAULT_THEME: PdfTheme = {
   altRowFill:  ROW_ALT_FILL,
   margin:      PDF_MARGIN,
   fontSize:    8,
-  cellPadding: 2,
+  cellPadding: 2.2,
 };
 
 // ---------------------------------------------------------------------------
-// drawPageHeader — called inside autoTable's didDrawPage callback.
-// Draws the branded bar at the top of the current page.
-// Does NOT write page numbers (those require a second pass after autoTable).
+// drawPageHeader
+// Draws the branded header at the top of the current jsPDF page.
+// Called inside autoTable's didDrawPage — fires on every page including 2+.
+// Do NOT write page numbers here; use addPageNumbers() after autoTable().
+//
+// Visual layout (landscape A4, 297mm wide):
+//
+//   ┌──────────────────────────────────────────────────────────────────┐
+//   █ navy accent bar (2.5mm)                                          █  ← y 0–2.5
+//   ├──────────────────────────────────────────────────────────────────┤
+//   │ [Logo]   │   Project Name (bold)             │  Exported: date   │  ← y ≈9
+//   │          │   Report Type (muted)              │                   │  ← y ≈15
+//   ├──────────────────────────────────────────────────────────────────┤  ← y ≈21
+//   │                    table content                                  │
 // ---------------------------------------------------------------------------
-/**
- * @param doc          jsPDF instance
- * @param reportTitle  Document type label, e.g. "Door Schedule"
- * @param exportDate   Formatted date string, e.g. "2026-05-07"
- * @param pageWidth    doc.internal.pageSize.getWidth()
- * @param margin       Horizontal margin in mm (use PDF_MARGIN)
- * @param projectName  Project name shown prominently in the center (optional)
- * @param logoDataUrl  Base64 PNG data URL from loadLogoDataUrl() (optional, falls back to placeholder)
- */
 export function drawPageHeader(
   doc: any,
   reportTitle: string,
@@ -116,63 +119,61 @@ export function drawPageHeader(
   projectName?: string,
   logoDataUrl?: string,
 ): void {
+  // ── Navy accent stripe at the very top ───────────────────────────────────
+  doc.setFillColor(...BRAND_NAVY);
+  doc.rect(0, 0, pageWidth, 2.5, 'F');
+
+  // ── Logo (logo only — no brand text next to it) ──────────────────────────
   const logoSrc = logoDataUrl || LOGO_BASE64_PNG;
-
-  // ── Logo (top-left, 14×14mm) ──────────────────────────────────────────────
   try {
-    doc.addImage(logoSrc, 'PNG', margin, 2, 14, 14);
+    // 17×17mm, starting just below the accent bar
+    doc.addImage(logoSrc, 'PNG', margin, 3.5, 17, 17);
   } catch {
-    // Logo render failure must never break the export
+    // Logo failure must never abort the export
   }
 
-  // ── Brand name next to logo ───────────────────────────────────────────────
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59); // BRAND_NAVY
-  doc.text('PlanckOff', margin + 16, 8);
-
-  // ── Row 1 center: Project name (bold, prominent) ─────────────────────────
+  // ── Project name — bold, prominent, center ────────────────────────────────
   if (projectName) {
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text(projectName, pageWidth / 2, 7, { align: 'center' });
+    doc.setTextColor(...BRAND_NAVY);
+    doc.text(projectName, pageWidth / 2, 9.5, { align: 'center' });
   }
 
-  // ── Row 2 center: Report type (smaller, muted) ───────────────────────────
-  doc.setFontSize(7.5);
+  // ── Report type — smaller, muted, center ─────────────────────────────────
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(reportTitle, pageWidth / 2, 13, { align: 'center' });
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text(reportTitle, pageWidth / 2, 16, { align: 'center' });
 
-  // ── Right column: Export date ─────────────────────────────────────────────
+  // ── Export date — top-right, muted ───────────────────────────────────────
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(120, 120, 120);
-  doc.text(`Exported: ${exportDate}`, pageWidth - margin, 7, { align: 'right' });
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text(`Exported: ${exportDate}`, pageWidth - margin, 9.5, { align: 'right' });
 
   // ── Separator line ────────────────────────────────────────────────────────
   doc.setDrawColor(...SEPARATOR_COLOR);
-  doc.setLineWidth(0.4);
-  doc.line(margin, 18, pageWidth - margin, 18);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 21, pageWidth - margin, 21);
 
-  // Reset
+  // Reset state for table rendering
   doc.setTextColor(0, 0, 0);
+  doc.setDrawColor(0, 0, 0);
 }
 
 // ---------------------------------------------------------------------------
-// addPageNumbers — call this AFTER autoTable() returns, not inside didDrawPage.
-// At that point doc.internal.getNumberOfPages() is the true final total.
-// The projectName is shown left-aligned in the footer as context.
+// addPageNumbers
+// Call AFTER autoTable() returns — at that point getNumberOfPages() is final.
+// Draws a separator line + footer text on every page.
+//
+// @param doc          jsPDF instance
+// @param projectName  Shown left-aligned in footer
+// @param pageWidth    doc.internal.pageSize.getWidth()
+// @param pageHeight   doc.internal.pageSize.getHeight()
+// @param margin       Horizontal margin in mm
+// @param startPage    First page to number (default 1)
 // ---------------------------------------------------------------------------
-/**
- * @param doc          jsPDF instance
- * @param projectName  Shown in footer left side
- * @param pageWidth    doc.internal.pageSize.getWidth()
- * @param pageHeight   doc.internal.pageSize.getHeight()
- * @param margin       Horizontal margin in mm
- * @param startPage    First page to number (default 1; pass higher if cover page precedes)
- */
 export function addPageNumbers(
   doc: any,
   projectName: string,
@@ -182,38 +183,51 @@ export function addPageNumbers(
   startPage = 1,
 ): void {
   const totalPages = doc.internal.getNumberOfPages();
+  const footerY    = pageHeight - FOOTER_OFFSET;
+
   for (let p = startPage; p <= totalPages; p++) {
     doc.setPage(p);
+
+    // Thin separator line above footer
+    doc.setDrawColor(...SEPARATOR_COLOR);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
+
+    // Footer text
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120, 120, 120);
+    doc.setTextColor(...TEXT_MUTED);
 
     // Project name — left
-    doc.text(projectName, margin, pageHeight - FOOTER_OFFSET);
+    doc.text(projectName, margin, footerY);
 
     // "Page X of Y" — center
     doc.text(
       `Page ${p} of ${totalPages}`,
       pageWidth / 2,
-      pageHeight - FOOTER_OFFSET,
+      footerY,
       { align: 'center' },
     );
 
+    // PlanckOff brand — right
+    doc.text('PlanckOff', pageWidth - margin, footerY, { align: 'right' });
+
+    // Reset
     doc.setTextColor(0, 0, 0);
+    doc.setDrawColor(0, 0, 0);
   }
 }
 
 // ---------------------------------------------------------------------------
-// buildAutoTableOptions — returns a partial AutoTable options object that
-// callers spread into their autoTable() call.
+// buildAutoTableOptions
+// Returns a partial AutoTable options object ready to spread into autoTable().
 //
 // Usage:
 //   autoTable(doc, {
-//     ...buildAutoTableOptions(theme, reportTitle, exportDate, pageW, margin),
+//     ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageW, margin, { projectName, logoDataUrl }),
 //     head: [headers],
 //     body: rows,
-//     startY: 20,
-//     columnStyles: { ... },   // caller-specific overrides are fine
+//     startY: HEADER_BAR_HEIGHT + 2,
 //   });
 //   addPageNumbers(doc, projectName, pageW, pageH, margin);
 // ---------------------------------------------------------------------------
@@ -226,19 +240,23 @@ export function buildAutoTableOptions(
   headerMeta?: { projectName?: string; logoDataUrl?: string },
 ): Record<string, unknown> {
   return {
-    // Table body styles
+    // Body cell styles
     styles: {
       fontSize:    theme.fontSize,
       cellPadding: theme.cellPadding,
       overflow:    'linebreak',
+      lineColor:   SEPARATOR_COLOR,
+      lineWidth:   0.1,
     },
 
-    // Column header row styles
+    // Column header row
     headStyles: {
-      fillColor: theme.headFill,
-      textColor: theme.headText,
-      fontStyle: 'bold',
-      halign:    'center',
+      fillColor:  theme.headFill,
+      textColor:  theme.headText,
+      fontStyle:  'bold',
+      halign:     'center',
+      fontSize:   theme.fontSize + 0.5,
+      cellPadding: theme.cellPadding + 0.5,
     },
 
     // Alternating row shading
@@ -246,21 +264,25 @@ export function buildAutoTableOptions(
       fillColor: theme.altRowFill,
     },
 
-    // Horizontal margin + top margin reserves space for branded header bar
+    // Subtle outer table border
+    tableLineColor: SEPARATOR_COLOR,
+    tableLineWidth: 0.3,
+
+    // Page margins — top reserves space for the branded header bar
     margin: {
-      left:  margin,
-      right: margin,
-      top:   HEADER_BAR_HEIGHT,
+      left:   margin,
+      right:  margin,
+      top:    HEADER_BAR_HEIGHT,
+      bottom: FOOTER_OFFSET + 5,
     },
 
-    // Prevent any row from being split mid-record at a page boundary (PDF-07)
+    // No row split mid-record at page boundaries (PDF-07)
     rowPageBreak: 'avoid',
 
-    // repeatHeaders defaults to true in autotable v5.x (PDF-06) — explicit for clarity
+    // Column headers repeat on every page (PDF-06)
     repeatHeaders: true,
 
-    // Per-page branded header — fires on every page including page 2+
-    // NOTE: page numbers are NOT written here; call addPageNumbers() after autoTable().
+    // Per-page header — fires on page 1 and every subsequent page
     didDrawPage: (data: any) => {
       drawPageHeader(
         data.doc,
