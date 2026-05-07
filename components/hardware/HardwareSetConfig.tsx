@@ -6,7 +6,7 @@ import {
 import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../../types';
 import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT } from '@/services/excelTheme';
-import { buildAutoTableOptions, addPageNumbers, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
+import { buildAutoTableOptions, addPageNumbers, loadLogoDataUrl, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
 
 
 // ─── Exported types ───────────────────────────────────────────────────────────
@@ -557,6 +557,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             const pageW      = doc.internal.pageSize.getWidth();
             const pageH      = doc.internal.pageSize.getHeight();
             const exportDate = new Date().toLocaleDateString();
+            const logoDataUrl = await loadLogoDataUrl();
             let isFirst      = true;
 
             for (const group of groups) {
@@ -581,7 +582,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 doc.setTextColor(0);
 
                 autoTable(doc, {
-                    ...buildAutoTableOptions(DEFAULT_THEME, groupTitle, exportDate, pageW, PDF_MARGIN),
+                    ...buildAutoTableOptions(DEFAULT_THEME, groupTitle, exportDate, pageW, PDF_MARGIN, { projectName, logoDataUrl }),
                     startY,
                     head: [headers],
                     body: group.items.map(usage =>

@@ -22,6 +22,7 @@ import {
     buildAutoTableOptions,
     addPageNumbers,
     drawPageHeader,
+    loadLogoDataUrl,
     DEFAULT_THEME,
     PDF_MARGIN,
     HEADER_BAR_HEIGHT,
@@ -563,6 +564,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             const cellPadding = colCount > 25 ? 1 : colCount > 15 ? 1.4 : 1.8;
 
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: useA3 ? 'a3' : 'a4' });
+            const logoDataUrl = await loadLogoDataUrl();
 
             // Abbreviated headers so common long names don't blow up column widths
             const PDF_ABBREV: Record<string, string> = {
@@ -629,7 +631,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 };
 
                 autoTable(doc, {
-                    ...buildAutoTableOptions(groupTheme, reportTitle, exportDate, PAGE_W, PDF_MARGIN),
+                    ...buildAutoTableOptions(groupTheme, reportTitle, exportDate, PAGE_W, PDF_MARGIN, { projectName, logoDataUrl }),
                     startY:       HEADER_BAR_HEIGHT + 2,  // leave room for branded header (replaces hardcoded 25)
                     head:         [pdfHeaders],
                     body:         rowsByGroup[i].map(row =>
@@ -663,7 +665,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
                         const addElevPageHeader = (sub: string) => {
                             const elevExportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                            drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN);
+                            drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN, projectName, logoDataUrl);
                         };
 
                         doc.addPage();

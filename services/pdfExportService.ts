@@ -4,6 +4,7 @@ import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfi
 import {
   buildAutoTableOptions,
   addPageNumbers,
+  loadLogoDataUrl,
   DEFAULT_THEME,
   PDF_MARGIN,
   HEADER_BAR_HEIGHT,
@@ -132,9 +133,10 @@ export const exportDoorScheduleToPDF = async (
     format: 'a4'
   });
 
-  const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const pageWidth  = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+  const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const pageWidth   = doc.internal.pageSize.getWidth();
+  const pageHeight  = doc.internal.pageSize.getHeight();
+  const logoDataUrl = await loadLogoDataUrl();
 
   // Build table data
   const headers = buildDoorScheduleHeaders(config.columns);
@@ -142,7 +144,7 @@ export const exportDoorScheduleToPDF = async (
 
   // Create table using shared theme
   autoTable(doc, {
-    ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageWidth, PDF_MARGIN),
+    ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl }),
     head: [headers],
     body: rows,
     startY: HEADER_BAR_HEIGHT + 2,
@@ -270,7 +272,8 @@ export const exportHardwareSetToPDF = async (
   const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const pageWidth   = doc.internal.pageSize.getWidth();
   const pageHeight  = doc.internal.pageSize.getHeight();
-  const themeOpts   = buildAutoTableOptions(DEFAULT_THEME, 'Hardware Set Report', exportDate, pageWidth, PDF_MARGIN);
+  const logoDataUrl = await loadLogoDataUrl();
+  const themeOpts   = buildAutoTableOptions(DEFAULT_THEME, 'Hardware Set Report', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl });
 
   const headers = buildHardwareSetHeaders(config);
 
@@ -408,6 +411,7 @@ export const exportSubmittalPackageToPDF = async (
   const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const pageWidth   = doc.internal.pageSize.getWidth();
   const pageHeight  = doc.internal.pageSize.getHeight();
+  const logoDataUrl = await loadLogoDataUrl();
 
   const { coverPageDetails, sections } = config;
 
@@ -503,7 +507,7 @@ export const exportSubmittalPackageToPDF = async (
     const rows = doors.map(door => buildDoorScheduleRow(door, SUBMITTAL_DOOR_COLUMNS));
 
     autoTable(doc, {
-      ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN),
+      ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN, { projectName: coverPageDetails.projectName, logoDataUrl }),
       head: [headers],
       body: rows,
       startY: HEADER_BAR_HEIGHT + 2,
@@ -562,7 +566,7 @@ export const exportSubmittalPackageToPDF = async (
       ]);
 
       autoTable(doc, {
-        ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN),
+        ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN, { projectName: coverPageDetails.projectName, logoDataUrl }),
         head: [setHeaders],
         body: setRows,
         startY: currentY,

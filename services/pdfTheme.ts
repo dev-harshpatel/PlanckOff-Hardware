@@ -29,20 +29,48 @@ export const SEPARATOR_COLOR: [number, number, number] = [200, 200, 200];
 export const PDF_MARGIN = 14;
 
 /** Height reserved at the top of every page for the branded header bar, in mm */
-export const HEADER_BAR_HEIGHT = 18;
+export const HEADER_BAR_HEIGHT = 22;
 
 /** Distance from page bottom for footer text, in mm */
 export const FOOTER_OFFSET = 5;
 
 // ---------------------------------------------------------------------------
-// Logo — embed as a tiny base64 PNG so no async fetch is required at export time.
-// To update: open public/images/logo.svg in a browser, screenshot at 40x40px,
-// save as PNG, run `btoa(binaryString)` and paste the result here.
-//
-// Placeholder: a 1x1 transparent PNG — replace with real logo before shipping.
+// Logo — 1×1 transparent PNG fallback used when the real logo hasn't loaded yet.
+// The real logo is loaded at runtime via loadLogoDataUrl() below.
 // ---------------------------------------------------------------------------
 export const LOGO_BASE64_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+// ---------------------------------------------------------------------------
+// loadLogoDataUrl — converts public/images/logo.svg → base64 PNG via canvas.
+// Call ONCE at the start of each export function (browser-only context).
+// Falls back to the transparent placeholder if conversion fails.
+//
+// Usage:
+//   const logoDataUrl = await loadLogoDataUrl();
+//   // then pass logoDataUrl into buildAutoTableOptions / drawPageHeader
+// ---------------------------------------------------------------------------
+export async function loadLogoDataUrl(logoPath = '/images/logo.svg'): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = 80;
+        canvas.height = 80;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(LOGO_BASE64_PNG); return; }
+        ctx.drawImage(img, 0, 0, 80, 80);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(LOGO_BASE64_PNG);
+      }
+    };
+    img.onerror = () => resolve(LOGO_BASE64_PNG);
+    img.crossOrigin = 'anonymous';
+    img.src = logoPath;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Theme interface
@@ -71,11 +99,13 @@ export const DEFAULT_THEME: PdfTheme = {
 // Does NOT write page numbers (those require a second pass after autoTable).
 // ---------------------------------------------------------------------------
 /**
- * @param doc        jsPDF instance (typed as `any` because jsPDF type differs across versions)
- * @param reportTitle Short label centered in the header, e.g. "Door Schedule"
- * @param exportDate  Formatted date string, right-aligned, e.g. "2026-05-07"
- * @param pageWidth   doc.internal.pageSize.getWidth()
- * @param margin      Horizontal margin in mm (use PDF_MARGIN)
+ * @param doc          jsPDF instance
+ * @param reportTitle  Document type label, e.g. "Door Schedule"
+ * @param exportDate   Formatted date string, e.g. "2026-05-07"
+ * @param pageWidth    doc.internal.pageSize.getWidth()
+ * @param margin       Horizontal margin in mm (use PDF_MARGIN)
+ * @param projectName  Project name shown prominently in the center (optional)
+ * @param logoDataUrl  Base64 PNG data URL from loadLogoDataUrl() (optional, falls back to placeholder)
  */
 export function drawPageHeader(
   doc: any,
@@ -83,35 +113,50 @@ export function drawPageHeader(
   exportDate: string,
   pageWidth: number,
   margin: number,
+  projectName?: string,
+  logoDataUrl?: string,
 ): void {
-  // Logo (top-left)
+  const logoSrc = logoDataUrl || LOGO_BASE64_PNG;
+
+  // ── Logo (top-left, 14×14mm) ──────────────────────────────────────────────
   try {
-    doc.addImage(LOGO_BASE64_PNG, 'PNG', margin, 3, 8, 8);
+    doc.addImage(logoSrc, 'PNG', margin, 2, 14, 14);
   } catch {
     // Logo render failure must never break the export
   }
 
-  // "PlanckOff" brand name next to logo
-  doc.setFontSize(9);
+  // ── Brand name next to logo ───────────────────────────────────────────────
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('PlanckOff', margin + 10, 8.5);
+  doc.setTextColor(30, 41, 59); // BRAND_NAVY
+  doc.text('PlanckOff', margin + 16, 8);
 
-  // Report title — centered
-  doc.setFontSize(8);
+  // ── Row 1 center: Project name (bold, prominent) ─────────────────────────
+  if (projectName) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(projectName, pageWidth / 2, 7, { align: 'center' });
+  }
+
+  // ── Row 2 center: Report type (smaller, muted) ───────────────────────────
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text(reportTitle, pageWidth / 2, 8.5, { align: 'center' });
+  doc.setTextColor(100, 100, 100);
+  doc.text(reportTitle, pageWidth / 2, 13, { align: 'center' });
 
-  // Export date — right-aligned
-  doc.text(exportDate, pageWidth - margin, 8.5, { align: 'right' });
+  // ── Right column: Export date ─────────────────────────────────────────────
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Exported: ${exportDate}`, pageWidth - margin, 7, { align: 'right' });
 
-  // Separator line below header bar
+  // ── Separator line ────────────────────────────────────────────────────────
   doc.setDrawColor(...SEPARATOR_COLOR);
-  doc.setLineWidth(0.3);
-  doc.line(margin, 13, pageWidth - margin, 13);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 18, pageWidth - margin, 18);
 
-  // Reset text color so table content is unaffected
+  // Reset
   doc.setTextColor(0, 0, 0);
 }
 
@@ -178,6 +223,7 @@ export function buildAutoTableOptions(
   exportDate: string,
   pageWidth: number,
   margin: number,
+  headerMeta?: { projectName?: string; logoDataUrl?: string },
 ): Record<string, unknown> {
   return {
     // Table body styles
@@ -216,7 +262,15 @@ export function buildAutoTableOptions(
     // Per-page branded header — fires on every page including page 2+
     // NOTE: page numbers are NOT written here; call addPageNumbers() after autoTable().
     didDrawPage: (data: any) => {
-      drawPageHeader(data.doc, reportTitle, exportDate, pageWidth, margin);
+      drawPageHeader(
+        data.doc,
+        reportTitle,
+        exportDate,
+        pageWidth,
+        margin,
+        headerMeta?.projectName,
+        headerMeta?.logoDataUrl,
+      );
     },
   };
 }
