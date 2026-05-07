@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuthUser, RoleName } from '@/types/auth';
+import { ERRORS } from '@/constants/errors';
 
 // ---------------------------------------------------------------------------
 // Context shape
@@ -63,13 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const json = (await res.json()) as { user?: AuthUser; error?: string };
 
       if (!res.ok) {
-        return { error: json.error ?? 'Login failed.' };
+        return { error: json.error ?? ERRORS.AUTH.LOGIN_FAILED.message };
       }
 
       if (json.user) setUser(json.user);
       return { error: null };
     } catch {
-      return { error: 'Network error. Please try again.' };
+      return { error: ERRORS.AUTH.NETWORK_ERROR.message };
     }
   };
 

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Project, HardwareItem, AppSettings, NewProjectData } from '../types';
 import { initialMasterInventory } from '@/constants/inventory';
+import { ERRORS } from '@/constants/errors';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 
@@ -102,13 +103,12 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       });
 
       const json = (await res.json()) as { data?: Project; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Failed to create project.');
+      if (!res.ok) throw new Error(json.error ?? ERRORS.GENERAL.SAVE_FAILED.message);
 
       await fetchProjects();
       addToast({ type: 'success', message: `Project "${json.data!.name}" created.` });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      addToast({ type: 'error', message: `Failed to create project: ${message}` });
+      addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
       throw error;
     }
   };
@@ -126,7 +126,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         body: JSON.stringify(metaPayload),
       });
       const json = (await res.json()) as { data?: Project; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Failed to update project.');
+      if (!res.ok) throw new Error(json.error ?? ERRORS.GENERAL.SAVE_FAILED.message);
 
       // The DB layer (lib/db/projects.ts) only persists metadata columns — it does not
       // read/write doors, hardwareSets, or elevationTypes. Merging json.data directly
@@ -139,9 +139,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       };
 
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? merged : p));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      addToast({ type: 'error', message: `Failed to update project: ${message}` });
+    } catch {
+      addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
     }
   };
 
@@ -151,7 +150,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         method: 'DELETE',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Failed to delete project.');
+      if (!res.ok) throw new Error(ERRORS.GENERAL.SAVE_FAILED.message);
       // Move the project from active list to trash optimistically
       const trashed = projects.find(p => p.id === id);
       setProjects(prev => prev.filter(p => p.id !== id));
@@ -171,7 +170,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         method: 'DELETE',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Failed to restore project.');
+      if (!res.ok) throw new Error(ERRORS.GENERAL.SAVE_FAILED.message);
       setTrash(prev => prev.filter(p => p.id !== id));
       await fetchProjects();
       addToast({ type: 'success', message: 'Project restored successfully.' });
@@ -187,7 +186,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         method: 'DELETE',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Failed to permanently delete project.');
+      if (!res.ok) throw new Error(ERRORS.GENERAL.SAVE_FAILED.message);
       setTrash(prev => prev.filter(p => p.id !== id));
       addToast({ type: 'success', message: 'Project permanently deleted.' });
     } catch (error: unknown) {
