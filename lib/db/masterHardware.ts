@@ -48,8 +48,24 @@ type DbResult<T> = { data: T | null; error: { message: string } | null };
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Strips characters that PDF renderers inject as font artifacts:
+ *  - C0/C1 control characters (except normal whitespace)
+ *  - Unicode Private Use Area glyphs (U+E000–U+F8FF) — checkboxes, icons, etc.
+ *  - Unicode replacement character (U+FFFD)
+ * Multiple spaces are collapsed to one and the result is trimmed.
+ */
+export function sanitizeText(s: string | null | undefined): string {
+  return (s ?? '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+    .replace(/[-]/g, '')
+    .replace(/�/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
 function norm(s: string | null | undefined): string {
-  return (s ?? '').toLowerCase().trim();
+  return sanitizeText(s).toLowerCase();
 }
 
 function itemKey(item: { name: string; manufacturer: string; description: string; finish: string }): string {
@@ -118,11 +134,11 @@ export async function createMasterHardwareItem(
     const { data, error } = await db
       .from('master_hardware_items')
       .insert({
-        name: payload.name,
-        manufacturer: payload.manufacturer ?? '',
-        description: payload.description ?? '',
-        finish: payload.finish ?? '',
-        model_number: payload.modelNumber ?? '',
+        name: sanitizeText(payload.name),
+        manufacturer: sanitizeText(payload.manufacturer),
+        description: sanitizeText(payload.description),
+        finish: sanitizeText(payload.finish),
+        model_number: sanitizeText(payload.modelNumber),
         source_project_id: payload.sourceProjectId ?? null,
         source_file_name: payload.sourceFileName ?? null,
         created_by: payload.createdBy ?? null,
@@ -143,11 +159,11 @@ export async function updateMasterHardwareItem(
   try {
     const db = createSupabaseAdminClient();
     const update: Record<string, string> = {};
-    if (payload.name !== undefined) update.name = payload.name;
-    if (payload.manufacturer !== undefined) update.manufacturer = payload.manufacturer;
-    if (payload.description !== undefined) update.description = payload.description;
-    if (payload.finish !== undefined) update.finish = payload.finish;
-    if (payload.modelNumber !== undefined) update.model_number = payload.modelNumber;
+    if (payload.name !== undefined) update.name = sanitizeText(payload.name);
+    if (payload.manufacturer !== undefined) update.manufacturer = sanitizeText(payload.manufacturer);
+    if (payload.description !== undefined) update.description = sanitizeText(payload.description);
+    if (payload.finish !== undefined) update.finish = sanitizeText(payload.finish);
+    if (payload.modelNumber !== undefined) update.model_number = sanitizeText(payload.modelNumber);
 
     const { data, error } = await db
       .from('master_hardware_items')
@@ -270,11 +286,11 @@ export async function queueItemsForApproval(
     console.log('[master-hw:queue] Sample items to insert:', JSON.stringify(uniqueNewItems.slice(0, 3)));
 
     const insertPayload = uniqueNewItems.map(item => ({
-      name: item.name,
-      manufacturer: item.manufacturer ?? '',
-      description: item.description ?? '',
-      finish: item.finish ?? '',
-      model_number: item.modelNumber ?? '',
+      name: sanitizeText(item.name),
+      manufacturer: sanitizeText(item.manufacturer),
+      description: sanitizeText(item.description),
+      finish: sanitizeText(item.finish),
+      model_number: sanitizeText(item.modelNumber),
       source_project_id: sourceProjectId,
       source_file_name: sourceFileName,
       status: 'pending',

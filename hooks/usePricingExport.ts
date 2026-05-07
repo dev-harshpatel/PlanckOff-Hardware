@@ -4,6 +4,12 @@ import type { DoorPricingGroup, HardwarePricingGroup } from '@/utils/pricingGrou
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
+export interface ExportSections {
+  doors: boolean;
+  frames: boolean;
+  hardware: boolean;
+}
+
 const withPrep = (g: { description: string; prep: string[] }) =>
   g.prep.length ? `${g.description} | Prep: ${g.prep.join('; ')}` : g.description;
 
@@ -70,7 +76,7 @@ export function usePricingExport({
   totalAfterTax,
   remarks,
 }: UsePricingExportParams) {
-  const handleDownloadExcel = useCallback(async () => {
+  const handleDownloadExcel = useCallback(async (sections: ExportSections) => {
     const { utils, writeFile } = await import('xlsx');
 
     const makeSheet = <T extends { totalPrice: number }>(
@@ -103,41 +109,49 @@ export function usePricingExport({
       utils.book_append_sheet(wb, utils.aoa_to_sheet(coverRows), 'Company');
     }
 
-    utils.book_append_sheet(wb,
-      makeSheet(doorGroups, doorTotal, g => ({
-        'Description': withPrep(g),
-        'Total Qty':   g.totalQty,
-        'Unit Price':  g.unitPrice,
-        'Total Price': g.totalPrice,
-      })),
-      'Doors',
-    );
-    utils.book_append_sheet(wb,
-      makeSheet(frameGroups, frameTotal, g => ({
-        'Description': withPrep(g),
-        'Total Qty':   g.totalQty,
-        'Unit Price':  g.unitPrice,
-        'Total Price': g.totalPrice,
-      })),
-      'Frames',
-    );
-    utils.book_append_sheet(wb,
-      makeSheet(hardwareGroups, hwTotal, g => ({
-        'Item Name':      g.item.name          ?? '',
-        'Description':    g.item.description   ?? '',
-        'Manufacturer':   g.item.manufacturer  ?? '',
-        'Finish':         g.item.finish        ?? '',
-        'Total Qty':      g.totalQty,
-        'Door Materials': g.doorMaterials.join(', '),
-        'Unit Price':     g.unitPrice,
-        'Total Price':    g.totalPrice,
-      })),
-      'Hardware',
-    );
+    if (sections.doors) {
+      utils.book_append_sheet(wb,
+        makeSheet(doorGroups, doorTotal, g => ({
+          'Description': withPrep(g),
+          'Total Qty':   g.totalQty,
+          'Unit Price':  g.unitPrice,
+          'Total Price': g.totalPrice,
+        })),
+        'Doors',
+      );
+    }
+    if (sections.frames) {
+      utils.book_append_sheet(wb,
+        makeSheet(frameGroups, frameTotal, g => ({
+          'Description': withPrep(g),
+          'Total Qty':   g.totalQty,
+          'Unit Price':  g.unitPrice,
+          'Total Price': g.totalPrice,
+        })),
+        'Frames',
+      );
+    }
+    if (sections.hardware) {
+      utils.book_append_sheet(wb,
+        makeSheet(hardwareGroups, hwTotal, g => ({
+          'Item Name':      g.item.name          ?? '',
+          'Description':    g.item.description   ?? '',
+          'Manufacturer':   g.item.manufacturer  ?? '',
+          'Finish':         g.item.finish        ?? '',
+          'Total Qty':      g.totalQty,
+          'Door Materials': g.doorMaterials.join(', '),
+          'Unit Price':     g.unitPrice,
+          'Total Price':    g.totalPrice,
+        })),
+        'Hardware',
+      );
+    }
+
+    if (wb.SheetNames.length === 0) return; // nothing selected
     writeFile(wb, 'pricing-report.xlsx');
   }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
-  const handleDownloadPdf = useCallback(async () => {
+  const handleDownloadPdf = useCallback(async (sections: ExportSections) => {
     const { default: jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
@@ -146,10 +160,10 @@ export function usePricingExport({
     const d = doc as DocWithAutoTable;
 
     const nextY = (offset = 0) => (d.lastAutoTable?.finalY ?? 0) + offset;
-
     const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
 
-    let headerBottomY = 10;
+    let currentY = 10;
+
     if (companySettings?.companyName) {
       const co = companySettings;
       doc.setFontSize(13);
@@ -163,64 +177,81 @@ export function usePricingExport({
       const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
       if (addrParts) lines.push(addrParts);
       lines.forEach((line, i) => doc.text(line, 14, 18 + i * 5));
-      headerBottomY = 18 + lines.length * 5 + 4;
+      currentY = 18 + lines.length * 5 + 4;
       doc.setDrawColor(180, 180, 180);
-      doc.line(14, headerBottomY, doc.internal.pageSize.width - 14, headerBottomY);
-      headerBottomY += 6;
+      doc.line(14, currentY, doc.internal.pageSize.width - 14, currentY);
+      currentY += 6;
     }
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, headerBottomY);
-    autoTable(doc, {
-      startY: headerBottomY + 6,
-      head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
-      body: [
-        ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
-        ['', '', 'Total', fmt.format(doorTotal)],
-      ],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [60, 80, 120] },
-      didParseCell: (data) => {
-        if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-      },
-    });
+    let firstSection = true;
 
-    doc.setFontSize(11);
-    doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, nextY(12));
-    autoTable(doc, {
-      startY: nextY(18),
-      head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
-      body: [
-        ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
-        ['', '', 'Total', fmt.format(frameTotal)],
-      ],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [60, 80, 120] },
-      didParseCell: (data) => {
-        if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-      },
-    });
+    if (sections.doors) {
+      const startY = firstSection ? currentY : nextY(12);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, startY);
+      autoTable(doc, {
+        startY: startY + 6,
+        head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+        body: [
+          ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+          ['', '', 'Total', fmt.format(doorTotal)],
+        ],
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [60, 80, 120] },
+        didParseCell: (data) => {
+          if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        },
+      });
+      firstSection = false;
+    }
 
-    doc.setFontSize(11);
-    doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, nextY(12));
-    autoTable(doc, {
-      startY: nextY(18),
-      head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
-      body: [
-        ...hardwareGroups.map(g => [
-          g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
-          g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
-        ]),
-        ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
-      ],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [60, 80, 120] },
-      didParseCell: (data) => {
-        if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-      },
-    });
+    if (sections.frames) {
+      const startY = firstSection ? currentY : nextY(12);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, startY);
+      autoTable(doc, {
+        startY: (firstSection ? startY : nextY(18)),
+        head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+        body: [
+          ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+          ['', '', 'Total', fmt.format(frameTotal)],
+        ],
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [60, 80, 120] },
+        didParseCell: (data) => {
+          if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        },
+      });
+      firstSection = false;
+    }
 
+    if (sections.hardware) {
+      const startY = firstSection ? currentY : nextY(12);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, startY);
+      autoTable(doc, {
+        startY: (firstSection ? startY : nextY(18)),
+        head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
+        body: [
+          ...hardwareGroups.map(g => [
+            g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
+            g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
+          ]),
+          ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
+        ],
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [60, 80, 120] },
+        didParseCell: (data) => {
+          if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        },
+      });
+      firstSection = false;
+    }
+
+    if (firstSection) return; // nothing selected
     doc.save('pricing-report.pdf');
   }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings]);
 

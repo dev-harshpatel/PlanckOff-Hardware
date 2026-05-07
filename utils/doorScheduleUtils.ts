@@ -1,7 +1,7 @@
 import type { Door } from '@/types';
 import { getDoorQuantity, getSectionValue } from './doorUtils';
 import {
-    SECTION_DEFS, CANONICAL_COLUMN_ORDER,
+    SECTION_DEFS, CANONICAL_COLUMN_ORDER, EXCLUDED_SECTION_COLUMNS,
     type SectionKey, type DynamicColumnGroup, type GroupLevel, type DoorGroup, type AggregatedDoorRow,
 } from '@/components/doorSchedule/doorScheduleTypes';
 
@@ -75,6 +75,7 @@ export function deriveColumnGroups(doors: Door[]): DynamicColumnGroup[] {
         }
 
         const canonical = CANONICAL_COLUMN_ORDER[key] ?? [];
+        const excluded  = EXCLUDED_SECTION_COLUMNS[key] ?? new Set<string>();
 
         // Always include all canonical columns so the picker is complete even when
         // the current dataset has no values for a given template column.
@@ -84,7 +85,8 @@ export function deriveColumnGroups(doors: Door[]): DynamicColumnGroup[] {
 
         // Keys in the canonical list come first (in template order).
         // Keys not in the canonical list are appended in the order first seen in data.
-        const sorted = Array.from(allKeys).sort((a, b) => {
+        // Excluded keys (aliases / removed fields) are filtered out entirely.
+        const sorted = Array.from(allKeys).filter(k => !excluded.has(k)).sort((a, b) => {
             const ai = canonicalIndex.get(a) ?? Infinity;
             const bi = canonicalIndex.get(b) ?? Infinity;
             return ai - bi;

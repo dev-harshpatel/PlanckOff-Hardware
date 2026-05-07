@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { DollarSign, FileSpreadsheet, FileDown, X } from 'lucide-react';
+import { DollarSign, FileSpreadsheet, FileDown, X, Check } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import type { CompanySettings } from '@/lib/db/companySettings';
 import {
@@ -13,7 +13,7 @@ import { PricingDetailModal, type PricingTab } from './PricingDetailModal';
 import { PricingHierarchyView } from './PricingHierarchyView';
 import { DoorRow, HardwareRow, TH } from './PricingTableRows';
 import { usePricingFilters } from '@/hooks/usePricingFilters';
-import { usePricingExport } from '@/hooks/usePricingExport';
+import { usePricingExport, type ExportSections } from '@/hooks/usePricingExport';
 import { usePricingProposal } from '@/hooks/usePricingProposal';
 
 interface Props {
@@ -31,6 +31,11 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
+
+  // Export dialog state
+  const [exportDialog, setExportDialog] = useState<null | 'excel' | 'pdf'>(null);
+  const [exportSections, setExportSections] = useState<ExportSections>({ doors: true, frames: true, hardware: true });
+  const exportDialogRef = useRef<HTMLDivElement>(null);
 
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -56,6 +61,18 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
       .catch(console.error)
       .finally(() => setLoadingPrices(false));
   }, [projectId]);
+
+  // Close export dialog when clicking outside
+  useEffect(() => {
+    if (!exportDialog) return;
+    const handler = (e: MouseEvent) => {
+      if (exportDialogRef.current && !exportDialogRef.current.contains(e.target as Node)) {
+        setExportDialog(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportDialog]);
 
   const handlePriceChange = useCallback((category: PricingTab, key: string, raw: string) => {
     const unitPrice = Math.max(0, parseFloat(raw) || 0);
@@ -113,6 +130,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     currentMaterials,
     currentFloors,
     currentBuildings,
+    currentPreps,
     setFilter,
     setProposalFilter,
     handleCreateVariant,
@@ -180,6 +198,13 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     remarks,
   });
 
+  const handleExportConfirm = useCallback(() => {
+    if (!exportDialog) return;
+    if (exportDialog === 'excel') void handleDownloadExcel(exportSections);
+    else void handleDownloadPdf(exportSections);
+    setExportDialog(null);
+  }, [exportDialog, exportSections, handleDownloadExcel, handleDownloadPdf]);
+
   const TABS: Array<{ id: PricingTab; label: string; count: number; sub: string }> = [
     { id: 'door',     label: 'Doors',    count: totalDoorCount,  sub: `${visibleDoors.length} group${visibleDoors.length !== 1 ? 's' : ''}`     },
     { id: 'frame',    label: 'Frames',   count: totalFrameCount, sub: `${visibleFrames.length} group${visibleFrames.length !== 1 ? 's' : ''}`    },
@@ -216,9 +241,9 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
               Export Proposal
             </button>
           ) : (
-            <>
+            <div ref={exportDialogRef} className="relative flex items-center gap-2">
               <button
-                onClick={handleDownloadExcel}
+                onClick={() => setExportDialog(prev => prev === 'excel' ? null : 'excel')}
                 title="Download Pricing Report Excel"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
               >
@@ -226,14 +251,62 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                 Excel
               </button>
               <button
-                onClick={handleDownloadPdf}
+                onClick={() => setExportDialog(prev => prev === 'pdf' ? null : 'pdf')}
                 title="Download Pricing Report PDF"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
               >
                 <FileDown className="w-3.5 h-3.5" />
                 PDF
               </button>
-            </>
+
+              {/* Export options popover */}
+              {exportDialog && (
+                <div className="absolute right-0 top-full mt-2 z-50 w-52 rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-lg">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
+                    <span className="text-[11px] font-semibold text-[var(--text)]">
+                      Include in {exportDialog === 'excel' ? 'Excel' : 'PDF'}
+                    </span>
+                    <button onClick={() => setExportDialog(null)} className="text-[var(--text-faint)] hover:text-[var(--text)] transition-colors">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="px-3 py-2 space-y-2">
+                    {([ ['doors', 'Doors'], ['frames', 'Frames'], ['hardware', 'Hardware'] ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
+                        <span
+                          className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                            exportSections[key]
+                              ? 'bg-[var(--primary-action)] border-[var(--primary-action)]'
+                              : 'border-[var(--border)] bg-[var(--bg)] group-hover:border-[var(--primary-ring)]'
+                          }`}
+                          onClick={() => setExportSections(prev => ({ ...prev, [key]: !prev[key] }))}
+                        >
+                          {exportSections[key] && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                        </span>
+                        <span
+                          className="text-xs text-[var(--text)] select-none"
+                          onClick={() => setExportSections(prev => ({ ...prev, [key]: !prev[key] }))}
+                        >
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="px-3 pb-3">
+                    <button
+                      onClick={handleExportConfirm}
+                      disabled={!exportSections.doors && !exportSections.frames && !exportSections.hardware}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-[var(--primary-action)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {exportDialog === 'excel' ? <FileSpreadsheet className="w-3.5 h-3.5" /> : <FileDown className="w-3.5 h-3.5" />}
+                      Download {exportDialog === 'excel' ? 'Excel' : 'PDF'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -244,7 +317,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => { setActiveTab(t.id); setFilter('material', []); setFilter('floor', []); setFilter('building', []); }}
+              onClick={() => { setActiveTab(t.id); setFilter('material', []); setFilter('floor', []); setFilter('building', []); setFilter('prep', []); }}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold transition-all border-r border-[var(--border)] last:border-r-0 ${
                 activeTab === t.id
                   ? 'bg-[var(--primary-action)] text-white'
@@ -273,6 +346,9 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
               <>
                 <MultiFilterSelect label="Floor"    selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
                 <MultiFilterSelect label="Building" selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
+                {currentPreps.length > 0 && (
+                  <MultiFilterSelect label="Prep" selected={filters.prep} options={currentPreps} onChange={v => setFilter('prep', v)} />
+                )}
               </>
             )}
           </div>

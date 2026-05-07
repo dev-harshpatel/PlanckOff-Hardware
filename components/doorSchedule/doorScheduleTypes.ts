@@ -83,7 +83,14 @@ export const CANONICAL_COLUMN_ORDER: Partial<Record<SectionKey, string[]>> = {
         'FRAME FINISH', 'PREHUNG', 'FRAME HEAD', 'CASING', 'FRAME INCLUDE/EXCLUDE',
     ],
     hardware: [
-        'HARDWARE SET', 'HW SET', 'HARDWARE PREP', 'HARDWARE ON DOOR',
+        'HARDWARE SET', 'HARDWARE PREP',
         'HARDWARE INCLUDE/EXCLUDE',
     ],
+};
+
+// Columns that should never appear in the picker, even if present in door data.
+// 'HW SET' is an alias for 'HARDWARE SET' (same data, shown once).
+// 'HARDWARE ON DOOR' has been removed from the report.
+export const EXCLUDED_SECTION_COLUMNS: Partial<Record<SectionKey, ReadonlySet<string>>> = {
+    hardware: new Set(['HW SET', 'HARDWARE ON DOOR']),
 };

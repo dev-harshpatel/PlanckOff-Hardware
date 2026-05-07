@@ -70,7 +70,7 @@ export function useHardwareSetsManager({
         const counts = new Map<string, number>();
         if (Array.isArray(doors)) {
             doors.forEach(door => {
-                if (door.assignedHardwareSet?.id && door.hardwareIncludeExclude?.toUpperCase() !== 'EXCLUDE') {
+                if (door.assignedHardwareSet?.id) {
                     counts.set(door.assignedHardwareSet.id, (counts.get(door.assignedHardwareSet.id) || 0) + 1);
                 }
             });

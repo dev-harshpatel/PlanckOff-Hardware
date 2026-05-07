@@ -344,12 +344,13 @@ export function applyPrices<T extends { key: string; unitPrice: number; totalPri
 
 export function filterDoorGroups(
   groups: DoorPricingGroup[],
-  filters: { material: string[]; floor: string[]; building: string[] },
+  filters: { material: string[]; floor: string[]; building: string[]; prep: string[] },
 ): DoorPricingGroup[] {
   return groups.filter(g =>
     (filters.material.length === 0 || filters.material.some(m => g.materials.includes(m))) &&
     (filters.floor.length    === 0 || filters.floor.some(f => g.floors.includes(f)))       &&
-    (filters.building.length === 0 || filters.building.some(b => g.buildings.includes(b))),
+    (filters.building.length === 0 || filters.building.some(b => g.buildings.includes(b))) &&
+    (filters.prep.length     === 0 || filters.prep.some(p => g.prep.includes(p))),
   );
 }
 
@@ -365,5 +366,11 @@ export function filterHardwareGroups(
 export function uniqueValues(groups: DoorPricingGroup[], key: 'materials' | 'floors' | 'buildings'): string[] {
   const seen = new Set<string>();
   groups.forEach(g => g[key].forEach(v => seen.add(v)));
+  return Array.from(seen).sort();
+}
+
+export function uniquePreps(groups: DoorPricingGroup[]): string[] {
+  const seen = new Set<string>();
+  groups.forEach(g => g.prep.forEach(p => seen.add(p)));
   return Array.from(seen).sort();
 }
