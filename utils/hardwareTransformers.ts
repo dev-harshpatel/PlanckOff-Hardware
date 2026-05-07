@@ -357,7 +357,17 @@ export function transformFromFinalJson(
 
   // Restore the original door schedule row order across all sets
   doorsWithOrder.sort((a, b) => a.order - b.order);
-  const doors = doorsWithOrder.map((d) => d.door);
+
+  // A door tag can appear in multiple sets; keep only the first occurrence (lowest order).
+  const seenTags = new Set<string>();
+  const doors = doorsWithOrder
+    .filter(({ door }) => {
+      const tag = String(door.doorTag).toLowerCase();
+      if (seenTags.has(tag)) return false;
+      seenTags.add(tag);
+      return true;
+    })
+    .map((d) => d.door);
 
   return { hardwareSets, doors };
 }

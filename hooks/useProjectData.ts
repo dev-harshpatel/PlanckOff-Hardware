@@ -179,6 +179,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 let loadedDoors: typeof rawDoors;
                 if (finalData && finalData.doors.length > 0) {
                     const setsById = new Map(sets.map(s => [s.id, s]));
+                    // Use the last occurrence per tag so multi-set duplicates from finalJson collapse to one.
                     const finalDoorMap = new Map(finalData.doors.map(d => [d.doorTag, d]));
 
                     loadedDoors = rawDoors.map(raw => {
@@ -187,6 +188,9 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                         return {
                             ...raw,
                             ...fromFinal,
+                            // Keep the raw door's unique ID — spreading fromFinal would give every
+                            // raw row with the same doorTag an identical door-final-* key.
+                            id: raw.id,
                             assignedHardwareSet: fromFinal.assignedHardwareSet
                                 ? (setsById.get(fromFinal.assignedHardwareSet.id) ?? fromFinal.assignedHardwareSet)
                                 : raw.assignedHardwareSet,
@@ -195,8 +199,17 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                     });
 
                     const rawDoorTags = new Set(rawDoors.map(d => d.doorTag));
+                    // Deduplicate manual doors by tag — the same door can appear in multiple sets
+                    // inside finalJson, which would otherwise add it to the list multiple times.
+                    const seenManualTags = new Set<string>();
                     const manualDoors = finalData.doors
-                        .filter(d => !rawDoorTags.has(d.doorTag) && !trashedDoorTags.has(d.doorTag))
+                        .filter(d => {
+                            if (rawDoorTags.has(d.doorTag) || trashedDoorTags.has(d.doorTag)) return false;
+                            const tag = d.doorTag.toLowerCase();
+                            if (seenManualTags.has(tag)) return false;
+                            seenManualTags.add(tag);
+                            return true;
+                        })
                         .map(d => ({
                             ...d,
                             assignedHardwareSet:

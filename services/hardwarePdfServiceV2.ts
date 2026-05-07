@@ -22,6 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import type { ExtractedHardwareSet, HardwareItem } from '@/lib/db/hardware';
 import { extractPdfText, batchPages } from '@/lib/ai/pdfTextExtractor';
+import { sanitizeText } from '@/lib/db/masterHardware';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -155,10 +156,10 @@ function normalizeItem(raw: unknown): HardwareItem {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
     qty: typeof r.qty === 'number' ? Math.round(r.qty) : parseInt(String(r.qty ?? '1'), 10) || 1,
-    item: String(r.item ?? '').trim(),
-    manufacturer: String(r.manufacturer ?? '').trim(),
-    description: String(r.description ?? '').trim(),
-    finish: String(r.finish ?? '').trim(),
+    item: sanitizeText(String(r.item ?? '')),
+    manufacturer: sanitizeText(String(r.manufacturer ?? '')),
+    description: sanitizeText(String(r.description ?? '')),
+    finish: sanitizeText(String(r.finish ?? '')),
   };
 }
 

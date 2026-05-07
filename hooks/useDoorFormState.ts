@@ -214,6 +214,12 @@ export function useDoorFormState({ door, hardwareSets, onSave }: UseDoorFormStat
             hardware: updatedHardwareSec,
         };
 
+        // Parse quantity only if the raw string is a finite number; never coerce non-numeric strings.
+        const rawQty = basicInfoSec['QUANTITY'];
+        const parsedQty = rawQty !== undefined && rawQty !== '' && Number.isFinite(Number(rawQty))
+            ? Number(rawQty)
+            : editedDoor.quantity;
+
         const doorToSave: Door = {
             ...editedDoor,
             hardwarePrep: generateHardwarePrepString(editedDoor.hardwarePrepSpec) || editedDoor.hardwarePrep,
@@ -228,6 +234,12 @@ export function useDoorFormState({ door, hardwareSets, onSave }: UseDoorFormStat
             fireRating:       basicInfoSec['FIRE RATING']       ?? editedDoor.fireRating,
             handing:         (basicInfoSec['HAND OF OPENINGS']  ?? editedDoor.handing) as Door['handing'],
             operation:        basicInfoSec['DOOR OPERATION']    ?? editedDoor.operation,
+            quantity:         parsedQty,
+            // Store dimension and leaf count strings exactly as typed — no formatting applied.
+            widthDisplay:     basicInfoSec['WIDTH']      ?? editedDoor.widthDisplay,
+            heightDisplay:    basicInfoSec['HEIGHT']     ?? editedDoor.heightDisplay,
+            thicknessDisplay: basicInfoSec['THICKNESS']  ?? editedDoor.thicknessDisplay,
+            leafCountDisplay: basicInfoSec['LEAF COUNT'] ?? editedDoor.leafCountDisplay,
             // Sync typed fields from door section
             doorMaterial:     doorSec['DOOR MATERIAL']          ?? editedDoor.doorMaterial,
             doorCore:         doorSec['DOOR CORE']              ?? editedDoor.doorCore,

@@ -12,7 +12,7 @@ import { Door, HardwareSet, HardwareItem } from '../../types';
 export interface HardwareSetExportConfig {
     requiredColumns: string[];
     optionalColumns: string[];
-    groupBy: 'set' | 'type' | 'manufacturer' | 'flat';
+    groupBy: 'set' | 'type' | 'manufacturer' | 'flat' | 'buildingTag' | 'buildingLocation' | 'doorMaterial';
     usageDisplay: string[];
     format: 'xlsx' | 'pdf';
 }
@@ -27,7 +27,7 @@ interface HardwareSetConfigProps {
     onExport?: (config: HardwareSetExportConfig) => void;
 }
 
-type GroupByOption = 'set' | 'type' | 'manufacturer' | 'flat';
+type GroupByOption = 'set' | 'type' | 'manufacturer' | 'flat' | 'buildingTag' | 'buildingLocation' | 'doorMaterial';
 type ExportFormat = 'xlsx' | 'pdf';
 
 interface HardwareItemUsage {
@@ -65,10 +65,13 @@ const REQUIRED_COLUMN_DEFS = [
 ];
 
 const GROUPING_OPTIONS: { id: GroupByOption; label: string; desc: string }[] = [
-    { id: 'set',          label: 'By Hardware Set',  desc: 'One table per hardware set'            },
-    { id: 'type',         label: 'By Item Type',     desc: 'Group by category (Hinges, Locksets…)' },
-    { id: 'manufacturer', label: 'By Manufacturer',  desc: 'Group by brand/supplier'               },
-    { id: 'flat',         label: 'Flat List',        desc: 'No grouping, single table'             },
+    { id: 'set',              label: 'By Hardware Set',      desc: 'One table per hardware set'            },
+    { id: 'type',             label: 'By Item Type',         desc: 'Group by category (Hinges, Locksets…)' },
+    { id: 'manufacturer',     label: 'By Manufacturer',      desc: 'Group by brand/supplier'               },
+    { id: 'buildingTag',      label: 'By Building Tag',      desc: 'Group by building identifier'          },
+    { id: 'buildingLocation', label: 'By Building Location', desc: 'Group by building location/floor'      },
+    { id: 'doorMaterial',     label: 'By Door Material',     desc: 'Group by door material type'           },
+    { id: 'flat',             label: 'Flat List',            desc: 'No grouping, single table'             },
 ];
 
 const USAGE_OPTIONS = [
@@ -184,6 +187,57 @@ function buildSetGroups(hardwareSets: HardwareSet[], doors: Door[]): HardwareGro
         .filter(g => g.items.length > 0);
 }
 
+/**
+ * Groups hardware items by a door-level field (buildingTag, buildingLocation, doorMaterial).
+ * Each unique field value becomes one group; doors with no value fall into "(Unassigned)".
+ * Quantity is computed as item.quantity × door.quantity for each door in the group.
+ */
+function buildDoorFieldGroups(
+    hardwareSets: HardwareSet[],
+    doors: Door[],
+    field: 'buildingTag' | 'buildingLocation' | 'doorMaterial',
+): HardwareGroup[] {
+    const setMap = new Map(hardwareSets.map(s => [s.name.toLowerCase(), s]));
+
+    const doorsByValue = new Map<string, Door[]>();
+    for (const door of doors) {
+        const key = door[field]?.trim() || '(Unassigned)';
+        if (!doorsByValue.has(key)) doorsByValue.set(key, []);
+        doorsByValue.get(key)!.push(door);
+    }
+
+    return Array.from(doorsByValue.entries())
+        .map(([label, groupDoors]) => {
+            const itemMap = new Map<string, HardwareItemUsage>();
+
+            for (const door of groupDoors) {
+                const setName = getDoorHwSetName(door)?.toLowerCase();
+                if (!setName) continue;
+                const set = setMap.get(setName);
+                if (!set) continue;
+
+                for (const item of set.items) {
+                    const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+                    if (!itemMap.has(key)) {
+                        itemMap.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
+                    }
+                    const usage = itemMap.get(key)!;
+                    if (!usage.doorTags.includes(door.doorTag)) {
+                        usage.doorTags.push(door.doorTag);
+                        usage.doorQuantitySum += (door.quantity || 1);
+                        const mat = door.doorMaterial?.trim();
+                        if (mat && !usage.doorMaterials.includes(mat)) usage.doorMaterials.push(mat);
+                    }
+                    usage.totalQuantity += item.quantity * (door.quantity || 1);
+                    if (!usage.sets.includes(set.name)) usage.sets.push(set.name);
+                }
+            }
+
+            return { label, items: Array.from(itemMap.values()) };
+        })
+        .filter(g => g.items.length > 0);
+}
+
 function buildHardwareGroups(
     hardwareSets: HardwareSet[],
     doors: Door[],
@@ -192,6 +246,10 @@ function buildHardwareGroups(
 ): HardwareGroup[] {
     if (groupBy === 'set')  return buildSetGroups(hardwareSets, doors);
     if (groupBy === 'flat') return [{ label: 'All Items', items: usageStats }];
+
+    if (groupBy === 'buildingTag')      return buildDoorFieldGroups(hardwareSets, doors, 'buildingTag');
+    if (groupBy === 'buildingLocation') return buildDoorFieldGroups(hardwareSets, doors, 'buildingLocation');
+    if (groupBy === 'doorMaterial')     return buildDoorFieldGroups(hardwareSets, doors, 'doorMaterial');
 
     if (groupBy === 'manufacturer') {
         const map = new Map<string, HardwareItemUsage[]>();
@@ -265,7 +323,7 @@ const HardwareGroupTable: React.FC<{
                         )}
                     </div>
                 </div>
-                {/* Right: position + item count */}
+                {/* Right: position + item count + total quantity */}
                 <div className="flex items-center gap-2 flex-shrink-0 ml-3 mt-0.5">
                     <span className={`text-[10px] ${isPdf ? 'text-gray-400' : 'text-[var(--text-faint)]'}`}>{index + 1} / {total}</span>
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
@@ -274,6 +332,8 @@ const HardwareGroupTable: React.FC<{
                             : 'bg-[var(--bg)] border border-[var(--primary-border)] text-[var(--primary-text-muted)]'
                     }`}>
                         {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                        {' · '}
+                        Total Qty: {group.items.reduce((sum, u) => sum + (u.totalQuantity || 0), 0)}
                     </span>
                 </div>
             </button>

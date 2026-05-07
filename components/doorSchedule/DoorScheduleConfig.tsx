@@ -265,11 +265,14 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     projectName,
 }) => {
     // ── Filter out excluded doors ─────────────────────────────────────────────
-    // A door is excluded when its DOOR INCLUDE/EXCLUDE section field is 'EXCLUDE'.
+    // A door is only fully excluded from the report when BOTH the door section
+    // AND the frame section are set to 'EXCLUDE'. If only the door leaf is
+    // excluded, the frame data must still be visible.
     const includedDoors = useMemo(() => doors.filter(d => {
         const sec = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined);
-        const val = sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '';
-        return val.toUpperCase() !== 'EXCLUDE';
+        const doorExcluded = (sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
+        const frameExcluded = (sec?.frame?.['FRAME INCLUDE/EXCLUDE'] ?? d.frameIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
+        return !(doorExcluded && frameExcluded);
     }), [doors]);
 
     const excludedCount = sumDoorQuantities(doors) - sumDoorQuantities(includedDoors);

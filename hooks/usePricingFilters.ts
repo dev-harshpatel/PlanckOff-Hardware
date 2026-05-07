@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type { Door, HardwareSet } from '@/types';
 import {
   groupDoors, groupFrames, groupHardwareItems,
-  applyPrices, filterDoorGroups, filterHardwareGroups, uniqueValues,
+  applyPrices, filterDoorGroups, filterHardwareGroups, uniqueValues, uniquePreps,
   type DoorPricingGroup, type HardwarePricingGroup, type PriceMap,
   type VariantOverrideMap,
 } from '@/utils/pricingGrouping';
@@ -18,7 +18,7 @@ export interface FlatNode {
   depth: number;
 }
 
-interface Filters { material: string[]; floor: string[]; building: string[]; }
+interface Filters { material: string[]; floor: string[]; building: string[]; prep: string[]; }
 
 // ── Hierarchy breakdown helpers ───────────────────────────────────────────────
 interface HierarchyNode { label: string; dimType: 'Building' | 'Floor' | 'Material'; count: number; base: number; depth: number; children: HierarchyNode[] }
@@ -112,8 +112,8 @@ interface UsePricingFiltersParams {
 }
 
 export function usePricingFilters({ projectId, doors, hardwareSets, prices, activeTab }: UsePricingFiltersParams) {
-  const [filters, setFilters]                 = useState<Filters>({ material: [], floor: [], building: [] });
-  const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [] });
+  const [filters, setFilters]                 = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
+  const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
   const [variants, setVariants]               = useState<PricingVariant[]>([]);
 
   useEffect(() => {
@@ -145,9 +145,11 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const doorMaterials   = useMemo(() => uniqueValues(doorGroups,  'materials'),  [doorGroups]);
   const doorFloors      = useMemo(() => uniqueValues(doorGroups,  'floors'),     [doorGroups]);
   const doorBuildings   = useMemo(() => uniqueValues(doorGroups,  'buildings'),  [doorGroups]);
+  const doorPreps       = useMemo(() => uniquePreps(doorGroups),                 [doorGroups]);
   const frameMaterials  = useMemo(() => uniqueValues(frameGroups, 'materials'),  [frameGroups]);
   const frameFloors     = useMemo(() => uniqueValues(frameGroups, 'floors'),     [frameGroups]);
   const frameBuildings  = useMemo(() => uniqueValues(frameGroups, 'buildings'),  [frameGroups]);
+  const framePreps      = useMemo(() => uniquePreps(frameGroups),                [frameGroups]);
   const hwMaterials     = useMemo(() => {
     const seen = new Set<string>();
     hardwareGroups.forEach(g => g.doorMaterials.forEach(m => seen.add(m)));
@@ -212,6 +214,7 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const currentMaterials = activeTab === 'door' ? doorMaterials : activeTab === 'frame' ? frameMaterials : hwMaterials;
   const currentFloors    = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorFloors    : frameFloors;
   const currentBuildings = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorBuildings : frameBuildings;
+  const currentPreps     = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorPreps     : framePreps;
 
   const setFilter         = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
   const setProposalFilter = (k: keyof Filters, v: string[]) => setProposalFilters(prev => ({ ...prev, [k]: v }));
@@ -283,6 +286,7 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
     currentMaterials,
     currentFloors,
     currentBuildings,
+    currentPreps,
     setFilter,
     setProposalFilter,
     handleCreateVariant,
