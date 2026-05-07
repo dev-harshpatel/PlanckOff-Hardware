@@ -77,7 +77,7 @@ export function usePricingExport({
   remarks,
 }: UsePricingExportParams) {
   const handleDownloadExcel = useCallback(async (sections: ExportSections) => {
-    const { utils, writeFile } = await import('xlsx');
+    const { utils, writeFile } = await import('xlsx-js-style');
 
     const makeSheet = <T extends { totalPrice: number }>(
       rows: T[],

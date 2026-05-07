@@ -376,7 +376,7 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
             // ExcelJS has bundling issues in Next.js browser context; direct OOXML
             // injection via JSZip is the most reliable cross-environment approach.
             const [XLSX, jszipMod] = await Promise.all([
-                import('xlsx'),
+                import('xlsx-js-style'),
                 import('jszip'),
             ]);
             // jszip ships as CJS (module.exports = JSZip, no .default at runtime).

@@ -4,7 +4,7 @@
  * Never import from client components.
  */
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import Papa from 'papaparse';
 import type { DoorScheduleRow } from '@/lib/db/hardware';
 

@@ -499,7 +499,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
         };
 
         if (format === 'xlsx') {
-            const XLSX = await import('xlsx');
+            const XLSX = await import('xlsx-js-style');
             const wsData: unknown[][] = [
                 [projectName || 'Hardware Set Report'],
                 [`Generated: ${new Date().toLocaleDateString()}`],

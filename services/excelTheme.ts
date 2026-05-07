@@ -11,7 +11,7 @@
  *   const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
  */
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 // ---------------------------------------------------------------------------
 // Brand color constants — hex strings for xlsx cell fill (no leading '#')
