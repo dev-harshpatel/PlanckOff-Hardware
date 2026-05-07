@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { ImageIcon, Upload, RefreshCw, Loader2, AlertTriangle, ZoomIn } from 'lucide-react';
 import { Door, ElevationType } from '../../types';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
 import {
   compressElevationImage,
   deleteElevationImage,
@@ -214,15 +215,7 @@ export const ElevationTab: React.FC<ElevationTabProps> = ({
       )}
 
       {/* Error state */}
-      {uploadState === 'error' && uploadError && (
-        <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-semibold">Upload failed</p>
-            <p className="text-[10px] mt-0.5 text-red-500/80">{uploadError}</p>
-          </div>
-        </div>
-      )}
+      {uploadState === 'error' && <ErrorDisplay error={uploadError} />}
 
       {/* Image display or upload zone */}
       {!isUploading && (

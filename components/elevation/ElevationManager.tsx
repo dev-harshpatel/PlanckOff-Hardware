@@ -1,4 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
 import {
     AlertTriangle, DoorOpen, Frame, ImageIcon, Layers, Loader2,
     Pencil, Plus, RefreshCw, Trash2, Upload, X,
@@ -479,9 +480,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                                 </div>
                             )}
 
-                            {saveError && (
-                                <p className="text-xs text-red-600 dark:text-red-400 px-1">{saveError}</p>
-                            )}
+                            {saveError && <ErrorDisplay error={saveError} compact />}
 
                             {/* Action buttons */}
                             <div className={`flex gap-2 ${isEditMode ? 'flex-row' : ''}`}>

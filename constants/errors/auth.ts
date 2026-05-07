@@ -42,4 +42,14 @@ export const AUTH_ERRORS = {
     message: 'Failed to resend the invitation.',
     action: 'Please try again.',
   },
+  INVITE_INVALID: {
+    code: 'AUTH_INVITE_INVALID',
+    message: 'Invalid or expired invite link.',
+    action: 'Ask your administrator to send a new invitation.',
+  },
+  PASSWORD_MISMATCH: {
+    code: 'AUTH_PASSWORD_MISMATCH',
+    message: 'Passwords do not match.',
+    action: 'Please re-enter your passwords.',
+  },
 } as const satisfies Record<string, AppError>;
