@@ -57,6 +57,8 @@ export interface HardwarePricingGroup {
   item: HardwareItem;
   sets: Array<{ setName: string; setId: string; multipliedQty: number }>;
   doorMaterials: string[];
+  doorBuildings: string[];
+  doorFloors: string[];
   totalQty: number;
   unitPrice: number;
   totalPrice: number;
@@ -303,6 +305,8 @@ export function groupHardwareItems(
           item,
           sets: [],
           doorMaterials: [],
+          doorBuildings: [],
+          doorFloors: [],
           totalQty: 0,
           unitPrice: 0,
           totalPrice: 0,
@@ -318,6 +322,10 @@ export function groupHardwareItems(
       for (const door of setDoors) {
         const mat = door.doorMaterial?.trim();
         if (mat && !group.doorMaterials.includes(mat)) group.doorMaterials.push(mat);
+        const bldg = (door.buildingTag ?? '').trim();
+        if (bldg && !group.doorBuildings.includes(bldg)) group.doorBuildings.push(bldg);
+        const floor = (door.buildingLocation ?? door.location ?? '').trim();
+        if (floor && !group.doorFloors.includes(floor)) group.doorFloors.push(floor);
       }
     }
   }
@@ -356,10 +364,12 @@ export function filterDoorGroups(
 
 export function filterHardwareGroups(
   groups: HardwarePricingGroup[],
-  filters: { material: string[] },
+  filters: { material: string[]; building: string[]; floor: string[] },
 ): HardwarePricingGroup[] {
   return groups.filter(g =>
-    filters.material.length === 0 || filters.material.some(m => g.doorMaterials.includes(m)),
+    (filters.material.length === 0 || filters.material.some(m => g.doorMaterials.includes(m))) &&
+    (filters.building.length === 0 || filters.building.some(b => g.doorBuildings.includes(b))) &&
+    (filters.floor.length    === 0 || filters.floor.some(f => g.doorFloors.includes(f))),
   );
 }
 

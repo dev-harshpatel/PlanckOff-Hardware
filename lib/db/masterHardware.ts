@@ -44,6 +44,21 @@ export interface CandidateItem {
 
 type DbResult<T> = { data: T | null; error: { message: string } | null };
 
+export type MasterHardwareSortKey = 'name' | 'manufacturer' | 'description' | 'finish';
+
+export interface MasterHardwarePageParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sortKey?: MasterHardwareSortKey;
+  sortDir?: 'asc' | 'desc';
+}
+
+export interface MasterHardwarePage {
+  items: MasterHardwareItem[];
+  total: number;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -121,6 +136,39 @@ export async function getMasterHardwareItems(): Promise<DbResult<MasterHardwareI
       .order('name');
     if (error) return { data: null, error: { message: error.message } };
     return { data: (data ?? []).map(toMasterItem), error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function getMasterHardwareItemsPaginated(
+  params: MasterHardwarePageParams,
+): Promise<DbResult<MasterHardwarePage>> {
+  try {
+    const { page, pageSize, search, sortKey = 'name', sortDir = 'asc' } = params;
+    const db = createSupabaseAdminClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = db.from('master_hardware_items').select('*', { count: 'exact' });
+
+    if (search?.trim()) {
+      const s = search.trim();
+      q = q.or(
+        `name.ilike.%${s}%,manufacturer.ilike.%${s}%,description.ilike.%${s}%,finish.ilike.%${s}%`,
+      );
+    }
+
+    q = q.order(sortKey, { ascending: sortDir === 'asc' });
+
+    const from = (page - 1) * pageSize;
+    q = q.range(from, from + pageSize - 1);
+
+    const { data, count, error } = await q;
+    if (error) return { data: null, error: { message: error.message } };
+    return {
+      data: { items: (data ?? []).map(toMasterItem), total: count ?? 0 },
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: { message: String(err) } };
   }

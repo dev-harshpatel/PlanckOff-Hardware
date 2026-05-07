@@ -16,6 +16,11 @@ import {
   Mail,
   Plus,
   Loader2,
+  RotateCcw,
+  Copy,
+  Check,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +49,25 @@ const ROLE_GROUPS: { role: RoleName; label: string; icon: React.ReactNode; iconB
 ];
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface ExpiryInfo {
+  label: string;
+  isExpired: boolean;
+}
+
+function getExpiryInfo(expiresAt: string | null): ExpiryInfo {
+  if (!expiresAt) return { label: '', isExpired: false };
+  const now = Date.now();
+  const exp = new Date(expiresAt).getTime();
+  if (exp <= now) return { label: 'Expired', isExpired: true };
+  const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+  if (diffDays === 1) return { label: 'Expires today', isExpired: false };
+  return { label: `Expires in ${diffDays}d`, isExpired: false };
+}
+
+// ---------------------------------------------------------------------------
 // Avatar
 // ---------------------------------------------------------------------------
 
@@ -64,7 +88,7 @@ function Avatar({ initials, role }: { initials: string; role: RoleName }) {
 // Status badge
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: 'Active' | 'Invited' }) {
+function StatusBadge({ status, expiresAt }: { status: 'Active' | 'Invited'; expiresAt: string | null }) {
   if (status === 'Active') {
     return (
       <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--success-text)] uppercase tracking-wide bg-[var(--success-bg)] border border-[var(--success-border)] px-2 py-0.5 rounded">
@@ -73,12 +97,35 @@ function StatusBadge({ status }: { status: 'Active' | 'Invited' }) {
       </span>
     );
   }
+
+  const { label, isExpired } = getExpiryInfo(expiresAt);
+
   return (
-    <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--warning-text)] uppercase tracking-wide bg-[var(--warning-bg)] border border-[var(--warning-border)] px-2 py-0.5 rounded">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-      Invited
-    </span>
+    <div className="flex items-center gap-1.5">
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--warning-text)] uppercase tracking-wide bg-[var(--warning-bg)] border border-[var(--warning-border)] px-2 py-0.5 rounded">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+        Invited
+      </span>
+      {label && (
+        <span className={`flex items-center gap-0.5 text-[10px] font-medium ${isExpired ? 'text-red-500 dark:text-red-400' : 'text-[var(--text-faint)]'}`}>
+          {isExpired
+            ? <AlertCircle className="w-2.5 h-2.5" />
+            : <Clock className="w-2.5 h-2.5" />
+          }
+          {label}
+        </span>
+      )}
+    </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Resend feedback type
+// ---------------------------------------------------------------------------
+
+interface ResendFeedback {
+  emailSent: boolean;
+  inviteLink?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +140,11 @@ export default function TeamPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDefaultRole, setModalDefaultRole] = useState<RoleName | undefined>();
+
+  // Per-member resend state
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendFeedback, setResendFeedback] = useState<Record<string, ResendFeedback>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -113,6 +165,68 @@ export default function TeamPage() {
   const handleOpenInvite = (role?: RoleName) => {
     setModalDefaultRole(role);
     setModalOpen(true);
+  };
+
+  const handleResendInvite = async (member: UnifiedMember) => {
+    setResendingId(member.id);
+    // Clear any previous feedback for this member
+    setResendFeedback(prev => {
+      const next = { ...prev };
+      delete next[member.id];
+      return next;
+    });
+
+    try {
+      const res  = await fetch(`/api/team/members/${member.id}/resend-invite`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const json = await res.json() as {
+        success?: boolean;
+        emailSent?: boolean;
+        inviteLink?: string;
+        error?: string;
+      };
+
+      if (!res.ok) throw new Error(json.error ?? 'Resend failed.');
+
+      const feedback: ResendFeedback = {
+        emailSent: json.emailSent ?? false,
+        inviteLink: json.inviteLink,
+      };
+      setResendFeedback(prev => ({ ...prev, [member.id]: feedback }));
+
+      // Refresh member list so the new expiry date is reflected
+      await fetchMembers();
+
+      // Auto-clear success feedback after 6 seconds (unless there's a link to copy)
+      if (json.emailSent) {
+        setTimeout(() => {
+          setResendFeedback(prev => {
+            const next = { ...prev };
+            delete next[member.id];
+            return next;
+          });
+        }, 6000);
+      }
+    } catch {
+      setResendFeedback(prev => ({
+        ...prev,
+        [member.id]: { emailSent: false },
+      }));
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleCopyLink = async (memberId: string, link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(memberId);
+      setTimeout(() => setCopiedId(c => (c === memberId ? null : c)), 2500);
+    } catch {
+      // clipboard access denied — do nothing
+    }
   };
 
   return (
@@ -224,22 +338,86 @@ export default function TeamPage() {
                         <ul className="divide-y divide-[var(--border-subtle)]">
                           {groupMembers.map(member => {
                             const isCurrentUser = member.email === user?.email;
+                            const isResending   = resendingId === member.id;
+                            const feedback      = resendFeedback[member.id];
+                            const isCopied      = copiedId === member.id;
+                            const showResend    = canManageTeam && member.status === 'Invited' && member.source === 'team_member';
+
                             return (
-                              <li key={member.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--bg-subtle)] transition-colors">
-                                <Avatar initials={member.initials} role={member.role} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold text-[var(--text)] truncate">{member.name}</span>
-                                    {isCurrentUser && (
-                                      <span className="text-[10px] text-[var(--text-faint)] font-normal">(You)</span>
+                              <li key={member.id} className="px-5 py-3.5 hover:bg-[var(--bg-subtle)] transition-colors">
+                                <div className="flex items-center gap-4">
+                                  <Avatar initials={member.initials} role={member.role} />
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-semibold text-[var(--text)] truncate">{member.name}</span>
+                                      {isCurrentUser && (
+                                        <span className="text-[10px] text-[var(--text-faint)] font-normal">(You)</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <Mail className="w-3 h-3 text-[var(--text-faint)] flex-shrink-0" />
+                                      <span className="text-xs text-[var(--text-muted)] truncate">{member.email}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Status + resend controls */}
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <StatusBadge status={member.status} expiresAt={member.inviteExpiresAt} />
+
+                                    {showResend && (
+                                      <button
+                                        onClick={() => handleResendInvite(member)}
+                                        disabled={isResending}
+                                        title="Resend invitation email"
+                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:border-[var(--primary-border)] hover:bg-[var(--primary-bg-hover)] disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                                      >
+                                        {isResending
+                                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                                          : <RotateCcw className="w-3 h-3" />
+                                        }
+                                        {isResending ? 'Sending…' : 'Resend'}
+                                      </button>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <Mail className="w-3 h-3 text-[var(--text-faint)] flex-shrink-0" />
-                                    <span className="text-xs text-[var(--text-muted)] truncate">{member.email}</span>
-                                  </div>
                                 </div>
-                                <StatusBadge status={member.status} />
+
+                                {/* Feedback row — shown below the member row */}
+                                {feedback && (
+                                  <div className="mt-2 ml-[52px]">
+                                    {feedback.emailSent ? (
+                                      <p className="text-xs text-[var(--success-text)] flex items-center gap-1">
+                                        <Check className="w-3 h-3" />
+                                        Invitation email sent successfully.
+                                      </p>
+                                    ) : (
+                                      <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-400/30">
+                                        <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                            Email delivery failed. Share this link manually:
+                                          </p>
+                                          {feedback.inviteLink && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                              <span className="text-[10px] text-[var(--text-muted)] font-mono truncate max-w-[280px]">
+                                                {feedback.inviteLink}
+                                              </span>
+                                              <button
+                                                onClick={() => handleCopyLink(member.id, feedback.inviteLink!)}
+                                                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors flex-shrink-0"
+                                              >
+                                                {isCopied
+                                                  ? <><Check className="w-2.5 h-2.5 text-[var(--success-text)]" /> Copied</>
+                                                  : <><Copy className="w-2.5 h-2.5" /> Copy</>
+                                                }
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </li>
                             );
                           })}

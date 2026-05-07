@@ -484,8 +484,21 @@ export function useDoorTableState({
                 }
 
                 if (['quantity', 'width', 'height', 'thickness'].includes(editingCell.field as string)) {
-                    newVal = parseFloat(newVal as string);
-                    if (isNaN(newVal as number)) newVal = 0;
+                    const rawStr = String(tempValue).trim();
+                    const numeric = parseFloat(rawStr);
+                    newVal = isNaN(numeric) ? 0 : numeric;
+
+                    // Mirror the display-string fields so syncedSections writes the
+                    // user's typed value (not stale raw Excel) back to final_json.
+                    if (editingCell.field === 'width') {
+                        return { ...d, width: newVal as number, widthDisplay: rawStr };
+                    }
+                    if (editingCell.field === 'height') {
+                        return { ...d, height: newVal as number, heightDisplay: rawStr };
+                    }
+                    if (editingCell.field === 'thickness') {
+                        return { ...d, thickness: newVal as number, thicknessDisplay: rawStr };
+                    }
                 }
 
                 if (editingCell.field === 'leafCount') {
@@ -650,14 +663,6 @@ export function useDoorTableState({
                         console.error('[DoorScheduleManager] Persist failed:', err);
                     } else {
                         onDoorSaved?.();
-                    }
-                    if (res.ok && hwSetChanged) {
-                        fetch(`/api/projects/${projectId}/hardware-merge`, {
-                            method: 'POST',
-                            credentials: 'include',
-                        }).catch(err =>
-                            console.error('[DoorScheduleManager] Re-merge failed:', err)
-                        );
                     }
                 } catch (err) {
                     console.error('[DoorScheduleManager] Persist fetch error:', err);

@@ -322,7 +322,10 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                 const isExpanded = expandedRows.has(set.id);
                                 const doorCount = doorCounts.get(set.id) || 0;
                                 const hasZeroQtyItem = set.items.some(item => !item.quantity || item.quantity <= 0);
-                                const assignedDoors = doors.filter(d => d.assignedHardwareSet?.id === set.id);
+                                const assignedDoors = doors.filter(d =>
+                                    d.assignedHardwareSet?.id === set.id &&
+                                    d.hardwareIncludeExclude?.toUpperCase() !== 'EXCLUDE'
+                                );
                                 const assignedDoorMismatches = getAssignedDoorMismatchMap(assignedDoors);
                                 const currentDoorSelection = selectedDoors[set.id] || new Set();
                                 const isUnavailable = set.isAvailable === false;

@@ -315,11 +315,33 @@ export const exportHardwareSetToExcel = (
 
     // Output each group
     groups.forEach((items, groupName) => {
-      wsData.push([groupName]); // Group header
+      const groupTotalQty = items.reduce((sum: number, item: any) => sum + (item.totalQuantity || 0), 0);
+      wsData.push([`${groupName}  —  ${items.length} item${items.length !== 1 ? 's' : ''} · Total Qty: ${groupTotalQty}`]);
       wsData.push(headers);
       items.forEach(item => {
         wsData.push(buildHardwareSetRow(item, config));
       });
+
+      // Subtotal row
+      const subtotalRow: any[] = ['', '', '', '', 'SUBTOTAL'];
+      if (config.optionalColumns.includes('quantityPerSet')) subtotalRow.push('');
+      if (config.optionalColumns.includes('totalQuantity')) subtotalRow.push(groupTotalQty);
+      if (config.optionalColumns.includes('unitPrice')) subtotalRow.push('');
+      if (config.optionalColumns.includes('extendedPrice')) {
+        const groupExtended = items.reduce(
+          (sum: number, item: any) => sum + (item.item.unitPrice || 0) * (item.totalQuantity || 0),
+          0
+        );
+        subtotalRow.push(groupExtended);
+      }
+      if (config.optionalColumns.includes('laborCost')) subtotalRow.push('');
+      if (config.optionalColumns.includes('installationTime')) subtotalRow.push('');
+      if (config.optionalColumns.includes('category')) subtotalRow.push('');
+      if (config.optionalColumns.includes('modelNumber')) subtotalRow.push('');
+      if (config.optionalColumns.includes('leadTime')) subtotalRow.push('');
+      if (config.optionalColumns.includes('supplier')) subtotalRow.push('');
+      wsData.push(subtotalRow);
+
       wsData.push([]); // Empty row between groups
     });
   }

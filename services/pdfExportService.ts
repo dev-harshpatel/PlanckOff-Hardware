@@ -324,12 +324,31 @@ export const exportHardwareSetToPDF = async (
         yPosition = (doc as any).lastAutoTable.finalY + 10;
       }
 
+      const groupTotalQty = items.reduce((sum: number, item: any) => sum + (item.totalQuantity || 0), 0);
+
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(groupName, PDF_MARGIN, yPosition);
       yPosition += 5;
 
-      const rows = items.map(item => buildHardwareSetRow(item, config));
+      const rows = items.map((item: any) => buildHardwareSetRow(item, config));
+
+      // Build subtotal foot row aligned to header columns
+      const subtotalRow: any[] = ['', '', '', '', 'SUBTOTAL'];
+      if (config.optionalColumns.includes('quantityPerSet')) subtotalRow.push('');
+      if (config.optionalColumns.includes('totalQuantity')) subtotalRow.push(groupTotalQty);
+      if (config.optionalColumns.includes('unitCost')) subtotalRow.push('');
+      if (config.optionalColumns.includes('extendedCost')) {
+        const groupExtended = items.reduce(
+          (sum: number, item: any) => sum + (item.item.unitCost || 0) * (item.totalQuantity || 0),
+          0
+        );
+        subtotalRow.push(`$${groupExtended.toFixed(2)}`);
+      }
+      if (config.optionalColumns.includes('category')) subtotalRow.push('');
+      if (config.optionalColumns.includes('modelNumber')) subtotalRow.push('');
+      if (config.optionalColumns.includes('leadTime')) subtotalRow.push('');
+      if (config.optionalColumns.includes('supplier')) subtotalRow.push('');
 
       autoTable(doc, {
         ...themeOpts,

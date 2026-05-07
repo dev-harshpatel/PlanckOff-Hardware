@@ -145,14 +145,22 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const doorMaterials   = useMemo(() => uniqueValues(doorGroups,  'materials'),  [doorGroups]);
   const doorFloors      = useMemo(() => uniqueValues(doorGroups,  'floors'),     [doorGroups]);
   const doorBuildings   = useMemo(() => uniqueValues(doorGroups,  'buildings'),  [doorGroups]);
-  const doorPreps       = useMemo(() => uniquePreps(doorGroups),                 [doorGroups]);
   const frameMaterials  = useMemo(() => uniqueValues(frameGroups, 'materials'),  [frameGroups]);
   const frameFloors     = useMemo(() => uniqueValues(frameGroups, 'floors'),     [frameGroups]);
   const frameBuildings  = useMemo(() => uniqueValues(frameGroups, 'buildings'),  [frameGroups]);
-  const framePreps      = useMemo(() => uniquePreps(frameGroups),                [frameGroups]);
-  const hwMaterials     = useMemo(() => {
+  const hwMaterials  = useMemo(() => {
     const seen = new Set<string>();
     hardwareGroups.forEach(g => g.doorMaterials.forEach(m => seen.add(m)));
+    return Array.from(seen).sort();
+  }, [hardwareGroups]);
+  const hwFloors     = useMemo(() => {
+    const seen = new Set<string>();
+    hardwareGroups.forEach(g => g.doorFloors.forEach(f => seen.add(f)));
+    return Array.from(seen).sort();
+  }, [hardwareGroups]);
+  const hwBuildings  = useMemo(() => {
+    const seen = new Set<string>();
+    hardwareGroups.forEach(g => g.doorBuildings.forEach(b => seen.add(b)));
     return Array.from(seen).sort();
   }, [hardwareGroups]);
 
@@ -160,9 +168,12 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const proposalFloors    = useMemo(() => Array.from(new Set([...doorFloors, ...frameFloors])).sort(),       [doorFloors, frameFloors]);
   const proposalBuildings = useMemo(() => Array.from(new Set([...doorBuildings, ...frameBuildings])).sort(), [doorBuildings, frameBuildings]);
 
-  const visibleDoors    = useMemo(() => filterDoorGroups(doorGroups,     filters), [doorGroups,     filters]);
-  const visibleFrames   = useMemo(() => filterDoorGroups(frameGroups,    filters), [frameGroups,    filters]);
-  const visibleHardware = useMemo(() => filterHardwareGroups(hardwareGroups, { material: filters.material }), [hardwareGroups, filters.material]);
+  const visibleDoors    = useMemo(() => filterDoorGroups(doorGroups,  filters), [doorGroups,  filters]);
+  const visibleFrames   = useMemo(() => filterDoorGroups(frameGroups, filters), [frameGroups, filters]);
+  const visibleHardware = useMemo(
+    () => filterHardwareGroups(hardwareGroups, { material: filters.material, building: filters.building, floor: filters.floor }),
+    [hardwareGroups, filters.material, filters.building, filters.floor],
+  );
 
   const doorTotal  = useMemo(() => calcTotal(visibleDoors),    [visibleDoors]);
   const frameTotal = useMemo(() => calcTotal(visibleFrames),   [visibleFrames]);
@@ -212,9 +223,8 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const totalHwCount    = useMemo(() => visibleHardware.reduce((s, g) => s + g.totalQty, 0),     [visibleHardware]);
 
   const currentMaterials = activeTab === 'door' ? doorMaterials : activeTab === 'frame' ? frameMaterials : hwMaterials;
-  const currentFloors    = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorFloors    : frameFloors;
-  const currentBuildings = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorBuildings : frameBuildings;
-  const currentPreps     = activeTab === 'hardware' ? [] : activeTab === 'door' ? doorPreps     : framePreps;
+  const currentFloors    = activeTab === 'door' ? doorFloors    : activeTab === 'frame' ? frameFloors    : hwFloors;
+  const currentBuildings = activeTab === 'door' ? doorBuildings : activeTab === 'frame' ? frameBuildings : hwBuildings;
 
   const setFilter         = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
   const setProposalFilter = (k: keyof Filters, v: string[]) => setProposalFilters(prev => ({ ...prev, [k]: v }));
@@ -265,6 +275,8 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
     frameFloors,
     frameBuildings,
     hwMaterials,
+    hwFloors,
+    hwBuildings,
     proposalMaterials,
     proposalFloors,
     proposalBuildings,
@@ -286,7 +298,6 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
     currentMaterials,
     currentFloors,
     currentBuildings,
-    currentPreps,
     setFilter,
     setProposalFilter,
     handleCreateVariant,

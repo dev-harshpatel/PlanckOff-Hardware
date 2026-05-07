@@ -179,7 +179,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 canReupload={individualUploadsEnabled}
                 onDeleteDoors={handleDeleteDoors}
                 onAssignAll={handleAssignAll}
-                onDoorSaved={performSave}
             />
         </div>
     );

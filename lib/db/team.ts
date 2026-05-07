@@ -242,6 +242,7 @@ export interface UnifiedMember {
   role: RoleName;
   status: 'Active' | 'Invited';
   source: 'admin' | 'team_member';
+  inviteExpiresAt: string | null;
 }
 
 interface AdminRow {
@@ -271,6 +272,7 @@ export async function getAllAdmins(): Promise<DbResult<UnifiedMember[]>> {
       role: row.role as RoleName,
       status: 'Active' as const,
       source: 'admin' as const,
+      inviteExpiresAt: null,
     }));
 
     return { data: admins, error: null };

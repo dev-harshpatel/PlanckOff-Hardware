@@ -71,7 +71,7 @@ export function useHardwareSetsManager({
         const counts = new Map<string, number>();
         if (Array.isArray(doors)) {
             doors.forEach(door => {
-                if (door.assignedHardwareSet?.id) {
+                if (door.assignedHardwareSet?.id && door.hardwareIncludeExclude?.toUpperCase() !== 'EXCLUDE') {
                     counts.set(door.assignedHardwareSet.id, (counts.get(door.assignedHardwareSet.id) || 0) + 1);
                 }
             });
@@ -83,7 +83,7 @@ export function useHardwareSetsManager({
         const totals = new Map<string, number>();
         if (Array.isArray(doors)) {
             doors.forEach(door => {
-                if (door.assignedHardwareSet?.id) {
+                if (door.assignedHardwareSet?.id && door.hardwareIncludeExclude?.toUpperCase() !== 'EXCLUDE') {
                     const id = door.assignedHardwareSet.id;
                     totals.set(id, (totals.get(id) || 0) + (door.quantity || 1));
                 }
