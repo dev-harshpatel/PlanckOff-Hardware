@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../../types';
-import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT } from '@/services/excelTheme';
+import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from '@/services/excelTheme';
 import { buildAutoTableOptions, addPageNumbers, loadLogoDataUrl, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
 
 
@@ -500,47 +500,43 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
 
         if (format === 'xlsx') {
             const XLSX = await import('xlsx-js-style');
-            const wsData: unknown[][] = [
-                [projectName || 'Hardware Set Report'],
-                [`Generated: ${new Date().toLocaleDateString()}`],
-                [],
-            ];
+            const colLabels = colDefs.map(c => c.label);
+            const allItemRows = groups.flatMap(g => g.items.map(u => colDefs.map(c => String(getExcelCellValue(u, c.id)))));
+            const totalItems  = groups.reduce((n, g) => n + g.items.length, 0);
+
+            // 3 branded metadata rows + data rows
+            const metaRows = buildMetadataRows({ reportTitle: 'Hardware Set Report', projectName: projectName || '', itemCount: totalItems });
+            const wsData: unknown[][] = [...metaRows];
+
             for (const group of groups) {
                 const doorTagText = group.groupDoorTags
                     ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
                     : '';
                 wsData.push([doorTagText ? `${group.label}  —  ${doorTagText}` : group.label]);
-                wsData.push(colDefs.map(c => c.label));
+                wsData.push(colLabels);
                 for (const usage of group.items) {
                     wsData.push(colDefs.map(c => getExcelCellValue(usage, c.id)));
                 }
                 wsData.push([]);
             }
+
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-            // Content-aware column widths (XLS-02) — replaces hardcoded fixed widths
-            const colLabels = colDefs.map(c => c.label);
-            const allItemRows = groups.flatMap(g => g.items.map(u => colDefs.map(c => String(getExcelCellValue(u, c.id)))));
-            ws['!cols'] = contentAwareColWidths(colLabels, allItemRows);
-            // Style every column-header row in the sheet (one per group) (XLS-01)
-            const wsRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-            let rowCursor = 3; // skip: projectName(0), generated(1), empty(2)
+
+            // Style metadata banner rows 0–1
+            applyMetadataStyles(ws, colLabels.length);
+
+            // Style every column-header row in the sheet (one per group)
+            let rowCursor = 3; // after meta rows 0-2
             for (const group of groups) {
                 rowCursor++; // group separator label row
-                // Style this row as a column header
-                for (let c = wsRange.s.c; c <= wsRange.e.c; c++) {
-                    const addr = XLSX.utils.encode_cell({ r: rowCursor, c });
-                    if (ws[addr]) {
-                        ws[addr].s = {
-                            font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
-                            fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
-                            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-                        };
-                    }
-                }
-                rowCursor += group.items.length + 2; // header row + data rows + empty row
+                applyHeaderRowAt(ws, rowCursor, colLabels.length);
+                rowCursor += group.items.length + 2;
             }
-            // Freeze the top metadata rows so first group header stays visible (XLS-03)
-            (ws as any)['!freeze'] = { xSplit: 0, ySplit: 3, topLeftCell: 'A4', activePane: 'bottomLeft', state: 'frozen' };
+
+            // Freeze meta + first group header visible at all times
+            applyFreezeAt(ws, 3);
+            ws['!cols'] = contentAwareColWidths(colLabels, allItemRows);
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
             XLSX.writeFile(wb, `${safeProjectName}.xlsx`, { cellStyles: true });

@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
-import { applySheetTheme } from './excelTheme';
+import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from './excelTheme';
 import {
     Door,
     HardwareSet,
@@ -53,10 +53,10 @@ export function exportPricingReportToExcel(
     addCoverSheet(wb, report, metadata);
 
     // Sheet 2: Door Line Items
-    addDoorLineItemsSheet(wb, report);
+    addDoorLineItemsSheet(wb, report, metadata.projectName);
 
     // Sheet 3: Hardware Line Items
-    addHardwareLineItemsSheet(wb, report);
+    addHardwareLineItemsSheet(wb, report, metadata.projectName);
 
     // Sheet 4: Cost Summary
     addCostSummarySheet(wb, report);
@@ -120,7 +120,8 @@ function addCoverSheet(
  */
 function addDoorLineItemsSheet(
     wb: XLSX.WorkBook,
-    report: PricingReport
+    report: PricingReport,
+    projectName: string
 ): void {
     const headers = [
         'Door Tag',
@@ -163,10 +164,16 @@ function addDoorLineItemsSheet(
         `$${totalExtended.toFixed(2)}`
     ]);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-
-    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
-    applySheetTheme(ws, headers, data);
+    const wsData = [
+        ...buildMetadataRows({ reportTitle: 'Door Line Items', projectName, itemCount: report.doorLineItems.length }),
+        headers,
+        ...data,
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = contentAwareColWidths(headers, data);
+    applyMetadataStyles(ws, headers.length);
+    applyHeaderRowAt(ws, 3, headers.length);
+    applyFreezeAt(ws, 4);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Door Line Items');
 }
@@ -176,7 +183,8 @@ function addDoorLineItemsSheet(
  */
 function addHardwareLineItemsSheet(
     wb: XLSX.WorkBook,
-    report: PricingReport
+    report: PricingReport,
+    projectName: string
 ): void {
     const headers = [
         'Hardware Set',
@@ -216,10 +224,16 @@ function addHardwareLineItemsSheet(
         `$${totalExtended.toFixed(2)}`
     ]);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-
-    // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
-    applySheetTheme(ws, headers, data);
+    const wsData = [
+        ...buildMetadataRows({ reportTitle: 'Hardware Line Items', projectName, itemCount: report.hardwareLineItems.length }),
+        headers,
+        ...data,
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = contentAwareColWidths(headers, data);
+    applyMetadataStyles(ws, headers.length);
+    applyHeaderRowAt(ws, 3, headers.length);
+    applyFreezeAt(ws, 4);
 
     XLSX.utils.book_append_sheet(wb, ws, 'Hardware Line Items');
 }

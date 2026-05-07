@@ -27,7 +27,7 @@ import {
     PDF_MARGIN,
     HEADER_BAR_HEIGHT,
 } from '@/services/pdfTheme';
-import { applySheetTheme } from '../../services/excelTheme';
+import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from '../../services/excelTheme';
 
 
 // ─── Exported types (kept for downstream services) ───────────────────────────
@@ -400,10 +400,12 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
                 const rows = rowsByGroup[i].map(row =>
                     selectedColumns.map(col => getRowValue(row, col) || ''),
                 );
-                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-                // Apply brand header styling, freeze pane, and content-aware column widths (XLS-01/02/03)
-                applySheetTheme(ws, headers, rows);
+                const metaRows = buildMetadataRows({ reportTitle: 'Door Schedule', projectName });
+                const ws = XLSX.utils.aoa_to_sheet([...metaRows, headers, ...rows]);
+                ws['!cols'] = contentAwareColWidths(headers, rows);
+                applyMetadataStyles(ws, headers.length);
+                applyHeaderRowAt(ws, 3, headers.length);
+                applyFreezeAt(ws, 4);
 
                 XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
@@ -415,7 +417,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
 
                     if (groupElevTypes.length > 0) {
                         // Images start 2 rows below the data table (0-indexed for OOXML)
-                        let currentRow = group.doors.length + 1 + 2; // header + data + gap
+                        // 3 metadata rows + 1 header row + data rows + 2-row gap
+                        let currentRow = group.doors.length + 4 + 2;
                         for (const et of groupElevTypes) {
                             const info = imageInfoMap.get(et.id)!;
                             const match = info.dataUrl.match(/^data:image\/(\w+);base64,(.+)$/s);

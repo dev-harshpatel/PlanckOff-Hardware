@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
-import { applySheetTheme, contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT } from './excelTheme';
+import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from './excelTheme';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
@@ -130,12 +130,8 @@ export const exportDoorScheduleToExcel = (
   // Create data array for worksheet
   const wsData: unknown[][] = [];
 
-  // Add header rows if requested
   if (config.includeHeader) {
-    wsData.push([projectName]);
-    wsData.push(['Door-Frame Reports']);
-    wsData.push([`Generated: ${new Date().toLocaleDateString()}`]);
-    wsData.push([]); // Empty row
+    wsData.push(...buildMetadataRows({ reportTitle: 'Door Schedule', projectName, itemCount: doors.length }));
   }
 
   // Add column headers and data
@@ -145,25 +141,15 @@ export const exportDoorScheduleToExcel = (
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Apply theme: content-aware widths (XLS-02) + styled header row + freeze (XLS-01, XLS-03)
-  const headerRowIdx = config.includeHeader ? 4 : 0;
   worksheet['!cols'] = contentAwareColWidths(headers, dataRows);
-  const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-  for (let c = wsRange.s.c; c <= wsRange.e.c; c++) {
-    const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
-    if (worksheet[addr]) {
-      worksheet[addr].s = {
-        font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
-        fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-      };
-    }
+  if (config.includeHeader) {
+    applyMetadataStyles(worksheet, headers.length);
+    applyHeaderRowAt(worksheet, 3, headers.length);
+    applyFreezeAt(worksheet, 4);
+  } else {
+    applyHeaderRowAt(worksheet, 0, headers.length);
+    applyFreezeAt(worksheet, 1);
   }
-  (worksheet as any)['!freeze'] = {
-    xSplit: 0, ySplit: headerRowIdx + 1,
-    topLeftCell: XLSX.utils.encode_cell({ r: headerRowIdx + 1, c: 0 }),
-    activePane: 'bottomLeft', state: 'frozen',
-  };
 
   // Add to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Door Schedule');
@@ -288,12 +274,12 @@ export const exportHardwareSetToExcel = (
   // Build data based on grouping
   const wsData: any[][] = [];
 
-  // Add header rows
-  wsData.push([projectName]);
-  wsData.push(['Hardware Set Report']);
-  wsData.push([`Generated: ${new Date().toLocaleDateString()}`]);
-  wsData.push([`Grouping: ${config.groupBy}`]);
-  wsData.push([]); // Empty row
+  wsData.push(...buildMetadataRows({
+    reportTitle: 'Hardware Set Report',
+    projectName,
+    itemCount: usageStats.length,
+    extraInfo: config.groupBy !== 'flat' ? `Grouped by ${config.groupBy}` : undefined,
+  }));
 
   if (config.groupBy === 'flat') {
     // Simple flat list
@@ -341,26 +327,14 @@ export const exportHardwareSetToExcel = (
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Apply theme: content-aware widths (XLS-02) + styled header row + freeze (XLS-01, XLS-03)
-  // Header row is at index 5 (4 metadata rows + 1 empty) for flat layout; grouped adds group labels
-  const hwHeaderRowIdx = 5;
-  worksheet['!cols'] = contentAwareColWidths(headers, wsData.slice(hwHeaderRowIdx + 1).filter(r => r.length > 1));
-  const hwRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-  for (let c = hwRange.s.c; c <= hwRange.e.c; c++) {
-    const addr = XLSX.utils.encode_cell({ r: hwHeaderRowIdx, c });
-    if (worksheet[addr]) {
-      worksheet[addr].s = {
-        font: { bold: true, color: { rgb: XLS_HEADER_TEXT } },
-        fill: { patternType: 'solid', fgColor: { rgb: XLS_HEADER_FILL } },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-      };
-    }
+  worksheet['!cols'] = contentAwareColWidths(headers, wsData.slice(4).filter(r => r.length > 1));
+  applyMetadataStyles(worksheet, headers.length);
+  if (config.groupBy === 'flat') {
+    applyHeaderRowAt(worksheet, 3, headers.length);
+    applyFreezeAt(worksheet, 4);
+  } else {
+    applyFreezeAt(worksheet, 3);
   }
-  (worksheet as any)['!freeze'] = {
-    xSplit: 0, ySplit: hwHeaderRowIdx + 1,
-    topLeftCell: XLSX.utils.encode_cell({ r: hwHeaderRowIdx + 1, c: 0 }),
-    activePane: 'bottomLeft', state: 'frozen',
-  };
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Hardware Items');
 
