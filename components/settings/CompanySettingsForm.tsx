@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, Globe, Mail, MapPin, Phone, Upload, X } from 'lucide-react';
 import type { CompanySettings } from '@/lib/db/companySettings';
+import { GENERAL_ERRORS } from '@/constants/errors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,7 +40,7 @@ function SaveIndicator({ state }: { state: SaveState }) {
     <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Saved ✓</span>
   );
   return (
-    <span className="text-xs font-semibold text-red-600 dark:text-red-400">Save failed</span>
+    <span className="text-xs font-semibold text-[var(--error-text)]">{GENERAL_ERRORS.SAVE_FAILED.message}</span>
   );
 }
 

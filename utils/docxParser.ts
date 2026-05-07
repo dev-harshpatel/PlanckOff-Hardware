@@ -1,4 +1,6 @@
 
+import { ERRORS } from '@/constants/errors';
+
 /**
  * Extracts raw text content from a DOCX file using Mammoth.js.
  * @param file The DOCX file to parse.
@@ -9,7 +11,7 @@ export const extractTextFromDOCX = async (file: File): Promise<string> => {
     const globalScope = typeof window !== 'undefined' ? window : self as any;
     
     if (!globalScope.mammoth) {
-        throw new Error("The Word document processing library (Mammoth) is not loaded. If you are uploading a .docx file, this feature currently requires the main thread or npm package implementation.");
+        throw new Error(ERRORS.HARDWARE.DOCX_LIBRARY_MISSING.message);
     }
 
     try {
@@ -20,6 +22,6 @@ export const extractTextFromDOCX = async (file: File): Promise<string> => {
         return result.value;
     } catch (error) {
         console.error("Failed to parse DOCX:", error);
-        throw new Error("Could not read the provided Word document. It might be corrupted or password protected.");
+        throw new Error(ERRORS.HARDWARE.DOCX_READ_FAILED.message);
     }
 };

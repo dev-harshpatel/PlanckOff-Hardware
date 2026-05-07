@@ -4,6 +4,8 @@ import DoorScheduleConfig, { DoorScheduleExportConfig } from '../doorSchedule/Do
 import HardwareSetConfig, { HardwareSetExportConfig } from '../hardware/HardwareSetConfig';
 import SubmittalPackageConfig, { SubmittalExportConfig } from '../submittals/SubmittalPackageConfig';
 import { exportDoorSchedule, exportHardwareSet } from '../../services/reportExportService';
+import { useToast } from '@/contexts/ToastContext';
+import { PDF_ERRORS } from '@/constants/errors';
 
 interface ReportGenerationCenterProps {
     isOpen: boolean;
@@ -25,6 +27,7 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
     projectName
 }) => {
     const [currentView, setCurrentView] = useState<ReportView>('selector');
+    const { addToast } = useToast();
 
     if (!isOpen) return null;
 
@@ -39,7 +42,7 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
             exportDoorSchedule(doors, config, projectName, elevationTypes);
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Export failed. Please try again.');
+            addToast({ type: 'error', message: PDF_ERRORS.DOOR_SCHEDULE_EXPORT_FAILED.message, details: PDF_ERRORS.DOOR_SCHEDULE_EXPORT_FAILED.action });
         }
     };
 
@@ -48,13 +51,12 @@ const ReportGenerationCenter: React.FC<ReportGenerationCenterProps> = ({
             exportHardwareSet(doors, hardwareSets, config, projectName);
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Export failed. Please try again.');
+            addToast({ type: 'error', message: PDF_ERRORS.HARDWARE_SET_EXPORT_FAILED.message, details: PDF_ERRORS.HARDWARE_SET_EXPORT_FAILED.action });
         }
     };
 
-    const handleSubmittalExport = (config: SubmittalExportConfig) => {
-        console.log('Generating Submittal Package:', config);
-        alert('Submittal Package generation initialized. PDF generation service will be connected next.');
+    const handleSubmittalExport = (_config: SubmittalExportConfig) => {
+        addToast({ type: 'info', message: 'Submittal Package generation is not yet available.' });
     };
 
     return (

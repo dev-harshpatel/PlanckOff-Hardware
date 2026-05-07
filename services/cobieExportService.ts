@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { Door, HardwareSet, HardwareItem } from '../types';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';

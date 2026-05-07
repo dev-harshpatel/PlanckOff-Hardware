@@ -3,6 +3,8 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
+import { AUTH_ERRORS, GENERAL_ERRORS } from '@/constants/errors';
 
 interface InviteInfo {
   name: string;
@@ -32,7 +34,7 @@ function SetPasswordForm() {
 
   useEffect(() => {
     if (!token) {
-      setTokenError('No invite token provided.');
+      setTokenError(AUTH_ERRORS.INVITE_INVALID.message);
       setIsValidating(false);
       return;
     }
@@ -43,12 +45,12 @@ function SetPasswordForm() {
         const json = (await res.json()) as { data?: InviteInfo; error?: string };
 
         if (!res.ok) {
-          setTokenError(json.error ?? 'Invalid or expired invite link.');
+          setTokenError(json.error ?? AUTH_ERRORS.INVITE_INVALID.message);
         } else if (json.data) {
           setInviteInfo(json.data);
         }
       } catch {
-        setTokenError('Failed to validate invite link.');
+        setTokenError(GENERAL_ERRORS.NETWORK.message);
       } finally {
         setIsValidating(false);
       }
@@ -62,7 +64,7 @@ function SetPasswordForm() {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(AUTH_ERRORS.PASSWORD_MISMATCH.message);
       return;
     }
 
@@ -77,14 +79,14 @@ function SetPasswordForm() {
       const json = (await res.json()) as { success?: boolean; error?: string };
 
       if (!res.ok) {
-        setError(json.error ?? 'Failed to set password.');
+        setError(json.error ?? AUTH_ERRORS.SET_PASSWORD_FAILED.message);
         return;
       }
 
       setSuccess(true);
       setTimeout(() => router.push('/login'), 2000);
     } catch {
-      setError('Network error. Please try again.');
+      setError(AUTH_ERRORS.NETWORK_ERROR.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -96,8 +98,8 @@ function SetPasswordForm() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] px-4">
         <div className="w-full max-w-md text-center">
-          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-red-500/30 p-8">
-            <p className="text-red-600 dark:text-red-400 font-medium">{tokenError}</p>
+          <div className="bg-[var(--bg)] shadow-sm rounded-lg border border-[var(--border)] p-8">
+            <ErrorDisplay error={tokenError} />
             <button onClick={() => router.push('/login')} className="mt-4 text-sm text-blue-600 hover:underline">
               Go to login
             </button>
@@ -172,11 +174,7 @@ function SetPasswordForm() {
               />
             </div>
 
-            {error && (
-              <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              </div>
-            )}
+            <ErrorDisplay error={error} />
 
             <button
               type="submit"

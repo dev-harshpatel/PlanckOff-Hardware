@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ERRORS } from '@/constants/errors';
 
 const statusOptions: { id: ProjectStatus; label: string }[] = [
   { id: 'Active', label: 'In Progress' },
@@ -138,17 +139,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
 
   const handleSave = () => {
     if (!projectData.name.trim()) {
-      addToast({ type: 'error', message: 'Project Name is required.' });
+      addToast({ type: 'error', message: ERRORS.GENERAL.REQUIRED_FIELD.message });
       return;
     }
 
     if (!projectData.country?.trim()) {
-      addToast({ type: 'error', message: 'Project country is required.' });
+      addToast({ type: 'error', message: ERRORS.GENERAL.REQUIRED_FIELD.message });
       return;
     }
 
     if (!projectData.province?.trim()) {
-      addToast({ type: 'error', message: 'Project province is required.' });
+      addToast({ type: 'error', message: ERRORS.GENERAL.REQUIRED_FIELD.message });
       return;
     }
 

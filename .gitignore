@@ -93,3 +93,10 @@ tmp/
 
 .planning/
 .planning
+
+CLAUDE.md
+
+settings.local.json
+
+.claude/worktress/
+

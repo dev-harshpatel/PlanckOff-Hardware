@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../../types';
+import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from '@/services/excelTheme';
+import { buildAutoTableOptions, addPageNumbers, loadLogoDataUrl, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
 
 
 // ─── Exported types ───────────────────────────────────────────────────────────
@@ -497,35 +499,47 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
         };
 
         if (format === 'xlsx') {
-            const XLSX = await import('xlsx');
-            const wsData: unknown[][] = [
-                [projectName || 'Hardware Set Report'],
-                [`Generated: ${new Date().toLocaleDateString()}`],
-                [],
-            ];
+            const XLSX = await import('xlsx-js-style');
+            const colLabels = colDefs.map(c => c.label);
+            const allItemRows = groups.flatMap(g => g.items.map(u => colDefs.map(c => String(getExcelCellValue(u, c.id)))));
+            const totalItems  = groups.reduce((n, g) => n + g.items.length, 0);
+
+            // 3 branded metadata rows + data rows
+            const metaRows = buildMetadataRows({ reportTitle: 'Hardware Set Report', projectName: projectName || '', itemCount: totalItems });
+            const wsData: unknown[][] = [...metaRows];
+
             for (const group of groups) {
                 const doorTagText = group.groupDoorTags
                     ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
                     : '';
                 wsData.push([doorTagText ? `${group.label}  —  ${doorTagText}` : group.label]);
-                wsData.push(colDefs.map(c => c.label));
+                wsData.push(colLabels);
                 for (const usage of group.items) {
                     wsData.push(colDefs.map(c => getExcelCellValue(usage, c.id)));
                 }
                 wsData.push([]);
             }
+
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-            ws['!cols'] = colDefs.map(c => ({
-                wch: c.id === 'description' ? 45
-                   : c.id === 'name'         ? 35
-                   : c.id === 'usage'        ? 40
-                   : c.id === 'door_material'? 30
-                   : c.id === 'hw_set_name'  ? 20
-                   : 14,
-            }));
+
+            // Style metadata banner rows 0–1
+            applyMetadataStyles(ws, colLabels.length);
+
+            // Style every column-header row in the sheet (one per group)
+            let rowCursor = 3; // after meta rows 0-2
+            for (const group of groups) {
+                rowCursor++; // group separator label row
+                applyHeaderRowAt(ws, rowCursor, colLabels.length);
+                rowCursor += group.items.length + 2;
+            }
+
+            // Freeze meta + first group header visible at all times
+            applyFreezeAt(ws, 3);
+            ws['!cols'] = contentAwareColWidths(colLabels, allItemRows);
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
-            XLSX.writeFile(wb, `${safeProjectName}.xlsx`);
+            XLSX.writeFile(wb, `${safeProjectName}.xlsx`, { cellStyles: true });
             return;
         }
 
@@ -534,13 +548,13 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 import('jspdf'),
                 import('jspdf-autotable'),
             ]);
-            const doc       = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-            const headers   = colDefs.map(c => c.label);
-            const marginL   = 14;
-            const marginR   = 14;
-            const pageW     = doc.internal.pageSize.getWidth();
-            const maxTextW  = pageW - marginL - marginR;
-            let isFirst     = true;
+            const doc        = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const headers    = colDefs.map(c => c.label);
+            const pageW      = doc.internal.pageSize.getWidth();
+            const pageH      = doc.internal.pageSize.getHeight();
+            const exportDate = new Date().toLocaleDateString();
+            const logoDataUrl = await loadLogoDataUrl();
+            let isFirst      = true;
 
             for (const group of groups) {
                 if (!isFirst) doc.addPage();
@@ -549,49 +563,32 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
                 const doorTagText = group.groupDoorTags
                     ? formatDoorTags(group.groupDoorTags, usageDisplay, group.groupTotalQuantity)
                     : '';
+                const groupTitle = `${group.label}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`;
 
-                // Project name header
-                doc.setFontSize(11);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0);
-                doc.text(projectName || 'Hardware Set Report', marginL, 14);
-
-                // Group label + item count on one line
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(30);
-                doc.text(
-                    `${group.label}  ·  ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`,
-                    marginL, 21,
-                );
-
-                let startY = 27;
-
-                // Door tags — wrap to fit page width
+                // Draw door-tag subtitle below the branded header bar (which didDrawPage handles)
+                let startY = HEADER_BAR_HEIGHT + 4;
                 if (doorTagText) {
                     doc.setFontSize(7);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(100);
-                    const wrappedLines = doc.splitTextToSize(doorTagText, maxTextW) as string[];
-                    doc.text(wrappedLines, marginL, startY);
-                    // Each wrapped line is ~3.5 mm tall at 7pt; add 2 mm gap before table
+                    const wrappedLines = doc.splitTextToSize(doorTagText, pageW - PDF_MARGIN * 2) as string[];
+                    doc.text(wrappedLines, PDF_MARGIN, startY);
                     startY += wrappedLines.length * 3.5 + 2;
                 }
-
                 doc.setTextColor(0);
 
                 autoTable(doc, {
+                    ...buildAutoTableOptions(DEFAULT_THEME, groupTitle, exportDate, pageW, PDF_MARGIN, { projectName, logoDataUrl }),
                     startY,
                     head: [headers],
                     body: group.items.map(usage =>
                         colDefs.map(c => getCellValue(usage, c.id) || '—'),
                     ),
-                    styles:      { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
-                    headStyles:  { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 6.5 },
-                    alternateRowStyles: { fillColor: [248, 250, 252] },
-                    margin: { left: marginL, right: marginR },
+                    styles: { fontSize: 6.5, cellPadding: 1.8, overflow: 'linebreak' },
                 });
             }
+            // Two-pass page numbers — called after all autoTable() calls complete (PDF-03)
+            addPageNumbers(doc, projectName || 'Hardware Set Report', pageW, pageH, PDF_MARGIN);
             doc.save(`${safeProjectName}.pdf`);
         }
     }, [groups, requiredColumns, usageDisplay, format, projectName]);

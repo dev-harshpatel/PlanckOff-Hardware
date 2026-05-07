@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { HardwareSet, Door, Toast, ValidationReport } from '../types';
+import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
 import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
@@ -209,7 +210,7 @@ export function useProjectUploads({
             });
 
             const json = await res.json() as { data?: { setCount: number; itemCount: number; durationMs: number; tier: number; warnings: string[]; masterQueued: number; masterSkipped: number; masterQueueWarning?: string | null }; error?: string };
-            if (!res.ok) throw new Error(json.error ?? 'Upload failed.');
+            if (!res.ok) throw new Error(json.error ?? ERRORS.HARDWARE.UPLOAD_FAILED.message);
 
             updateProcessingTask(taskId, { stage: 'Saving to database…', progress: 85 });
 
@@ -263,14 +264,14 @@ export function useProjectUploads({
             if (warnings.length > 0) { setUploadErrors(warnings); setIsErrorModalOpen(true); }
         } catch (err) {
             removeProcessingTask(taskId);
-            addToast({ type: 'error', message: `Hardware PDF failed: ${err instanceof Error ? err.message : 'Unknown error'}` });
+            addToast({ type: 'error', message: ERRORS.HARDWARE.HARDWARE_PDF_FAILED.message, details: ERRORS.HARDWARE.HARDWARE_PDF_FAILED.action });
         }
     };
 
     const handleHardwareUploads = async (files: File[]) => {
         const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
         if (pdfs.length === 0) {
-            addToast({ type: 'error', message: 'Please upload a PDF file for hardware sets.' });
+            addToast({ type: 'error', message: ERRORS.HARDWARE.PDF_FILE_REQUIRED.message });
             return;
         }
         const file = pdfs[0];
@@ -312,7 +313,7 @@ export function useProjectUploads({
             });
 
             const json = await res.json() as { data?: { rowCount: number; warnings: string[] }; error?: string };
-            if (!res.ok) throw new Error(json.error ?? 'Upload failed.');
+            if (!res.ok) throw new Error(json.error ?? ERRORS.HARDWARE.UPLOAD_FAILED.message);
 
             updateProcessingTask(taskId, { stage: 'Saving…', progress: 80 });
 
@@ -361,7 +362,7 @@ export function useProjectUploads({
             if (warnings.length > 0) { setUploadErrors(warnings); setIsErrorModalOpen(true); }
         } catch (err) {
             removeProcessingTask(taskId);
-            addToast({ type: 'error', message: `Door schedule failed: ${err instanceof Error ? err.message : 'Unknown error'}` });
+            addToast({ type: 'error', message: ERRORS.HARDWARE.DOOR_SCHEDULE_FAILED.message, details: ERRORS.HARDWARE.DOOR_SCHEDULE_FAILED.action });
         }
     };
 
@@ -491,10 +492,10 @@ export function useProjectUploads({
             try {
                 json = await res.json();
             } catch {
-                throw new Error(`Server error (HTTP ${res.status}). The request may have timed out — please try again.`);
+                throw new Error(ERRORS.HARDWARE.SERVER_ERROR.message);
             }
 
-            if (!res.ok) throw new Error(json?.error ?? `Server error (HTTP ${res.status}).`);
+            if (!res.ok) throw new Error(json?.error ?? ERRORS.HARDWARE.SERVER_ERROR.message);
 
             const { setCount, matchedDoorCount, unmatchedDoorCount, unmatchedDoorCodes, pdfSetsWithNoDoors, rowCount, itemCount, warnings, masterQueueWarning } = json!.data!;
 
@@ -549,7 +550,7 @@ export function useProjectUploads({
             addLog('error', `Failed: ${msg}`);
             setCombinedCurrentStep('Failed');
             setCombinedProgress(0);
-            addToast({ type: 'error', message: `Processing failed: ${msg}` });
+            addToast({ type: 'error', message: ERRORS.HARDWARE.PROCESSING_FAILED.message, details: ERRORS.HARDWARE.PROCESSING_FAILED.action });
         } finally {
             setIsCombinedProcessing(false);
             sessionStorage.removeItem(`planckoff_proc_${projectId}`);
@@ -570,7 +571,7 @@ export function useProjectUploads({
     const handleAssignAll = async (): Promise<void> => {
         const mergeStats = await runHardwareMerge();
         if (!mergeStats) {
-            addToast({ type: 'error', message: 'Assignment failed. Make sure both the hardware PDF and door schedule are uploaded.' });
+            addToast({ type: 'error', message: ERRORS.HARDWARE.ASSIGNMENT_FAILED.message, details: ERRORS.HARDWARE.ASSIGNMENT_FAILED.action });
             return;
         }
 

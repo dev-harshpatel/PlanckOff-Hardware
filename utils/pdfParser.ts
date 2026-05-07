@@ -1,3 +1,5 @@
+import { ERRORS } from '@/constants/errors';
+
 /**
  * Result structure for a batch of pages
  */
@@ -76,7 +78,7 @@ export async function* extractTextGenerator(file: File, batchSize: number = 20):
 
     } catch (error: any) {
         console.error("Failed to parse PDF:", error);
-        throw new Error(`PDF Parsing Error: ${error.message || 'Unknown error'}. Please check if the file is a valid PDF.`);
+        throw new Error(ERRORS.PDF.PARSE_FAILED.message);
     }
 }
 

@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { analyzeImageWithAI } from '../../services/geminiService';
 import { AppSettings, Toast } from '../../types';
 import { CameraIcon, ArrowUpTrayIcon, XCircleIcon } from '../shared/icons';
+import { ERRORS } from '@/constants/errors';
 
 interface ImageAnalysisModalProps {
   isOpen: boolean;
@@ -62,10 +63,10 @@ const ImageAnalysisModal: React.FC<ImageAnalysisModalProps> = ({ isOpen, onClose
             setAnalysisResult(result);
         } catch (error: any) {
             console.error("Analysis failed", error);
-            addToast({ 
-                type: 'error', 
-                message: 'Analysis Failed', 
-                details: error.message || 'Could not analyze the image.' 
+            addToast({
+                type: 'error',
+                message: ERRORS.HARDWARE.PROCESSING_FAILED.message,
+                details: ERRORS.HARDWARE.PROCESSING_FAILED.action,
             });
         } finally {
             setIsLoading(false);

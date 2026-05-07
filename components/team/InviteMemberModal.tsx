@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Role } from '../../types';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ERRORS } from '@/constants/errors';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
 
 interface InviteMemberModalProps {
   isOpen: boolean;
@@ -17,7 +19,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, 
 
   const handleInviteClick = () => {
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email address.');
+      setError(ERRORS.GENERAL.REQUIRED_FIELD.message);
       return;
     }
     setError('');
@@ -63,7 +65,7 @@ const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, onClose, 
               </SelectContent>
             </Select>
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <ErrorDisplay error={error} />}
         </div>
         <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
           <Button onClick={onClose} variant="outline" className="bg-white">

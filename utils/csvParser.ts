@@ -1,5 +1,6 @@
 
 import { Door, HardwareSet, HardwareItem } from '../types';
+import { ERRORS } from '@/constants/errors';
 
 /**
  * Parses a CSV string into an array of Door objects.
@@ -14,7 +15,7 @@ import { Door, HardwareSet, HardwareItem } from '../types';
 export const parseDoorScheduleCSV = (csvText: string): Door[] => {
     const lines = csvText.trim().split(/\r?\n/);
     if (lines.length < 2) {
-        throw new Error("CSV file must contain a header row and at least one data row.");
+        throw new Error(ERRORS.DOORS.CSV_EMPTY.message);
     }
 
     // Handle potential Byte Order Mark (BOM) at the start of the file
@@ -74,7 +75,7 @@ export const parseDoorScheduleCSV = (csvText: string): Door[] => {
             height: '"Height" (e.g., Door Height)'
         };
         const friendlyMissing = missingHeaders.map(h => friendlyNames[h] || h).join(', ');
-        throw new Error(`CSV is missing required columns. Please ensure your file has headers for at least: ${friendlyMissing}.`);
+        throw new Error(ERRORS.DOORS.CSV_MISSING_COLUMNS.message);
     }
 
     const doors: Door[] = dataLines.map((line, index): Door | null => {
@@ -116,7 +117,7 @@ export const parseDoorScheduleCSV = (csvText: string): Door[] => {
     }).filter((door): door is Door => door !== null && !!door.doorTag && door.width > 0 && door.height > 0);
 
     if (doors.length === 0 && dataLines.filter(l => l.trim()).length > 0) {
-        throw new Error("Could not parse any valid door data from the CSV. Please check that the required columns (doorTag, width, height) contain valid data.");
+        throw new Error(ERRORS.DOORS.CSV_NO_VALID_DATA.message);
     }
 
     return doors;
@@ -164,7 +165,7 @@ const splitCSVLine = (line: string): string[] => {
 export const parseHardwareSetCSV = (csvText: string): HardwareSet[] => {
     const lines = csvText.trim().split(/\r?\n/);
     if (lines.length < 2) {
-        throw new Error("CSV file must contain a header row and at least one data row.");
+        throw new Error(ERRORS.DOORS.CSV_EMPTY.message);
     }
 
     const headerLine = lines[0].startsWith('﻿') ? lines[0].substring(1) : lines[0];
@@ -207,7 +208,7 @@ export const parseHardwareSetCSV = (csvText: string): HardwareSet[] => {
     });
 
     if (columnIndexMap['setName'] === undefined) {
-        throw new Error("CSV is missing the required 'Set Name' column.");
+        throw new Error(ERRORS.DOORS.CSV_MISSING_SET_NAME.message);
     }
 
     const setsMap = new Map<string, HardwareSet>();

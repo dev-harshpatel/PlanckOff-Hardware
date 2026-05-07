@@ -1,6 +1,14 @@
 import { Door, HardwareSet, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import {
+  buildAutoTableOptions,
+  addPageNumbers,
+  loadLogoDataUrl,
+  DEFAULT_THEME,
+  PDF_MARGIN,
+  HEADER_BAR_HEIGHT,
+} from './pdfTheme';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
   if (!door.elevationTypeId) return '';
@@ -125,81 +133,53 @@ export const exportDoorScheduleToPDF = async (
     format: 'a4'
   });
 
-  let yPosition = 15;
-
-  // Add header if requested
-  if (config.includeHeader) {
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(projectName, 14, yPosition);
-    yPosition += 7;
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Door-Frame Reports', 14, yPosition);
-    yPosition += 6;
-
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, yPosition);
-    yPosition += 10;
-  }
+  const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const pageWidth   = doc.internal.pageSize.getWidth();
+  const pageHeight  = doc.internal.pageSize.getHeight();
+  const logoDataUrl = await loadLogoDataUrl();
 
   // Build table data
   const headers = buildDoorScheduleHeaders(config.columns);
   const rows = doors.map(door => buildDoorScheduleRow(door, config.columns, elevationTypes));
 
-  // Create table
+  // Create table using shared theme
   autoTable(doc, {
+    ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl }),
     head: [headers],
     body: rows,
-    startY: yPosition,
-    styles: {
-      fontSize: 7,
-      cellPadding: 1.5,
-      overflow: 'linebreak',
-      cellWidth: 'wrap'
-    },
-    headStyles: {
-      fillColor: [66, 139, 202],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      halign: 'center'
-    },
-    alternateRowStyles: {
-      fillColor: [245, 245, 245]
-    },
-    margin: { left: 14, right: 14 },
-    theme: 'striped'
+    startY: HEADER_BAR_HEIGHT + 2,
+    columnStyles: { cellWidth: 'wrap' } as any,
   });
 
   // Add summary if requested
   if (config.includeSummary) {
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    let yPosition = (doc as any).lastAutoTable.finalY + 10;
 
     // Check if we need a new page
-    if (finalY > 180) {
+    if (yPosition > 180) {
       doc.addPage();
-      yPosition = 15;
-    } else {
-      yPosition = finalY;
+      yPosition = HEADER_BAR_HEIGHT + 2;
     }
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Summary', 14, yPosition);
+    doc.text('Summary', PDF_MARGIN, yPosition);
     yPosition += 7;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Total Doors: ${doors.length}`, 14, yPosition);
+    doc.text(`Total Doors: ${doors.length}`, PDF_MARGIN, yPosition);
     yPosition += 5;
 
     const doorsWithHardware = doors.filter(d => d.assignedHardwareSet).length;
-    doc.text(`Doors with Hardware: ${doorsWithHardware}`, 14, yPosition);
+    doc.text(`Doors with Hardware: ${doorsWithHardware}`, PDF_MARGIN, yPosition);
     yPosition += 5;
 
-    doc.text(`Doors without Hardware: ${doors.length - doorsWithHardware}`, 14, yPosition);
+    doc.text(`Doors without Hardware: ${doors.length - doorsWithHardware}`, PDF_MARGIN, yPosition);
   }
+
+  // Add page numbers (two-pass: correct total is known only after autoTable returns)
+  addPageNumbers(doc, projectName, pageWidth, pageHeight, PDF_MARGIN);
 
   // Generate filename
   const date = new Date().toISOString().split('T')[0];
@@ -289,24 +269,11 @@ export const exportHardwareSetToPDF = async (
     format: 'a4'
   });
 
-  let yPosition = 15;
-
-  // Add header
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(projectName, 14, yPosition);
-  yPosition += 7;
-
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Hardware Set Report', 14, yPosition);
-  yPosition += 6;
-
-  doc.setFontSize(10);
-  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, yPosition);
-  yPosition += 5;
-  doc.text(`Grouping: ${config.groupBy}`, 14, yPosition);
-  yPosition += 10;
+  const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const pageWidth   = doc.internal.pageSize.getWidth();
+  const pageHeight  = doc.internal.pageSize.getHeight();
+  const logoDataUrl = await loadLogoDataUrl();
+  const themeOpts   = buildAutoTableOptions(DEFAULT_THEME, 'Hardware Set Report', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl });
 
   const headers = buildHardwareSetHeaders(config);
 
@@ -315,26 +282,13 @@ export const exportHardwareSetToPDF = async (
     const rows = usageStats.map(item => buildHardwareSetRow(item, config));
 
     autoTable(doc, {
+      ...themeOpts,
       head: [headers],
       body: rows,
-      startY: yPosition,
-      styles: {
-        fontSize: 7,
-        cellPadding: 1.5,
-        overflow: 'linebreak'
-      },
-      headStyles: {
-        fillColor: [147, 51, 234],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245]
-      },
-      margin: { left: 14, right: 14 },
-      theme: 'striped'
+      startY: HEADER_BAR_HEIGHT + 2,
     });
+
+    addPageNumbers(doc, projectName, pageWidth, pageHeight, PDF_MARGIN);
   } else {
     // Grouped output
     const groups = new Map<string, any[]>();
@@ -363,13 +317,8 @@ export const exportHardwareSetToPDF = async (
 
     // Output each group
     let isFirstGroup = true;
+    let yPosition = HEADER_BAR_HEIGHT + 2;
     groups.forEach((items, groupName) => {
-      // Add page break if not first group and not enough space
-      if (!isFirstGroup && yPosition > 150) {
-        doc.addPage();
-        yPosition = 15;
-      }
-
       // Group header
       if (!isFirstGroup) {
         yPosition = (doc as any).lastAutoTable.finalY + 10;
@@ -377,46 +326,32 @@ export const exportHardwareSetToPDF = async (
 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(groupName, 14, yPosition);
+      doc.text(groupName, PDF_MARGIN, yPosition);
       yPosition += 5;
 
       const rows = items.map(item => buildHardwareSetRow(item, config));
 
       autoTable(doc, {
+        ...themeOpts,
         head: [headers],
         body: rows,
-        startY: yPosition,
-        styles: {
-          fontSize: 7,
-          cellPadding: 1.5,
-          overflow: 'linebreak'
-        },
-        headStyles: {
-          fillColor: [147, 51, 234],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          halign: 'center'
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245]
-        },
-        margin: { left: 14, right: 14 },
-        theme: 'striped'
+        startY: isFirstGroup ? HEADER_BAR_HEIGHT + 2 : yPosition,
       });
 
       isFirstGroup = false;
     });
+
+    // Page numbers after all group tables are complete (correct total known now)
+    addPageNumbers(doc, projectName, pageWidth, pageHeight, PDF_MARGIN);
   }
 
   // Add cost summary if requested
   if (config.optionalColumns.includes('extendedCost')) {
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    let yPosition = (doc as any).lastAutoTable.finalY + 10;
 
-    if (finalY > 180) {
+    if (yPosition > 180) {
       doc.addPage();
-      yPosition = 15;
-    } else {
-      yPosition = finalY;
+      yPosition = HEADER_BAR_HEIGHT + 2;
     }
 
     const totalCost = usageStats.reduce((sum, item) => {
@@ -425,14 +360,14 @@ export const exportHardwareSetToPDF = async (
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Cost Summary', 14, yPosition);
+    doc.text('Cost Summary', PDF_MARGIN, yPosition);
     yPosition += 7;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Total Items: ${usageStats.length}`, 14, yPosition);
+    doc.text(`Total Items: ${usageStats.length}`, PDF_MARGIN, yPosition);
     yPosition += 5;
-    doc.text(`Total Cost: $${totalCost.toFixed(2)}`, 14, yPosition);
+    doc.text(`Total Cost: $${totalCost.toFixed(2)}`, PDF_MARGIN, yPosition);
   }
 
   // Generate filename
@@ -473,6 +408,11 @@ export const exportSubmittalPackageToPDF = async (
     format: 'a4'
   });
 
+  const exportDate  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const pageWidth   = doc.internal.pageSize.getWidth();
+  const pageHeight  = doc.internal.pageSize.getHeight();
+  const logoDataUrl = await loadLogoDataUrl();
+
   const { coverPageDetails, sections } = config;
 
   // 1. COVER PAGE
@@ -493,7 +433,7 @@ export const exportSubmittalPackageToPDF = async (
 
     // Document Title
     doc.setFontSize(32);
-    doc.setTextColor(66, 139, 202); // Brand Blue
+    doc.setTextColor(...DEFAULT_THEME.headFill); // Brand Navy
     doc.text('SUBMITTAL PACKAGE', 105, y, { align: 'center' });
     doc.setTextColor(0, 0, 0); // Reset
     y += 15;
@@ -561,21 +501,19 @@ export const exportSubmittalPackageToPDF = async (
     // Section Title Page (Optional? No, just header)
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('SECTION 1: DOOR SCHEDULE', 14, 20);
-    
+    doc.text('SECTION 1: DOOR SCHEDULE', PDF_MARGIN, 20);
+
     const headers = buildDoorScheduleHeaders(SUBMITTAL_DOOR_COLUMNS);
     const rows = doors.map(door => buildDoorScheduleRow(door, SUBMITTAL_DOOR_COLUMNS));
 
     autoTable(doc, {
+      ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN, { projectName: coverPageDetails.projectName, logoDataUrl }),
       head: [headers],
       body: rows,
-      startY: 30,
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [66, 139, 202], halign: 'center' },
-      theme: 'grid',
-      margin: { top: 30 }
+      startY: HEADER_BAR_HEIGHT + 2,
     });
 
+    addPageNumbers(doc, coverPageDetails.projectName, pageWidth, pageHeight, PDF_MARGIN);
     doc.addPage();
   }
 
@@ -628,14 +566,12 @@ export const exportSubmittalPackageToPDF = async (
       ]);
 
       autoTable(doc, {
+        ...buildAutoTableOptions(DEFAULT_THEME, 'Submittal Package', exportDate, pageWidth, PDF_MARGIN, { projectName: coverPageDetails.projectName, logoDataUrl }),
         head: [setHeaders],
         body: setRows,
         startY: currentY,
-        styles: { fontSize: 8, cellPadding: 1 },
-        headStyles: { fillColor: [100, 100, 100], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
         columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 40 } }, // Optimize widths
-        margin: { left: 14, right: 14 },
-        theme: 'plain'
       });
 
       currentY = (doc as any).lastAutoTable.finalY + 10;
@@ -706,6 +642,7 @@ export const exportSubmittalPackageToPDF = async (
     });
   }
 
-  // Final Output
+  // Final Output — add page numbers then save
+  addPageNumbers(doc, coverPageDetails.projectName, pageWidth, pageHeight, PDF_MARGIN);
   doc.save(`SubmittalPkg_${coverPageDetails.projectName}.pdf`);
 };

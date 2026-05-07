@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Door, HardwareSet, ElevationType, Toast } from '../types';
+import { ERRORS } from '@/constants/errors';
 import { matchHardwareSet } from '../utils/hardwareMatcher';
 import { migrateDoorData } from '../utils/doorDataMigration';
 import { useBackgroundUpload } from '../contexts/BackgroundUploadContext';
@@ -589,7 +590,7 @@ export function useDoorTableState({
 
     const addCustomColumn = () => {
         if (!newColumnName.trim()) {
-            addToast({ type: 'warning', message: 'Please enter a column name' });
+            addToast({ type: 'warning', message: ERRORS.DOORS.COLUMN_NAME_REQUIRED.message });
             return;
         }
         const id = `custom_${Date.now()}`;

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { RoleName } from '@/types/auth';
 import type { MasterHardwareItem, MasterHardwarePending } from '@/lib/db/masterHardware';
+import { ERRORS } from '@/constants/errors';
 import { MasterItemFormModal } from '../components/settings/MasterItemFormModal';
 import { DatabaseSkeleton } from '@/components/skeletons/DatabaseSkeleton';
 import { PendingReviewModal } from '../components/projects/PendingReviewModal';
@@ -52,7 +53,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
     try {
       const res = await fetch('/api/master-hardware', { credentials: 'include' });
       const json = await res.json() as { data?: MasterHardwareItem[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load database.');
+      if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.LOAD_FAILED.message);
       setItems(json.data ?? []);
       setLoadError(null);
     } catch (err) {
@@ -164,7 +165,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
         body: JSON.stringify(payload),
       });
       const json = await res.json() as { data?: MasterHardwareItem; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Update failed.');
+      if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.UPDATE_FAILED.message);
       setItems(prev => prev.map(i => i.id === editingItem.id ? json.data! : i));
       addToast({ type: 'success', message: 'Item updated.' });
     } else {
@@ -175,7 +176,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
         body: JSON.stringify(payload),
       });
       const json = await res.json() as { data?: MasterHardwareItem; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Create failed.');
+      if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.CREATE_FAILED.message);
       setItems(prev => [...prev, json.data!]);
       addToast({ type: 'success', message: 'Item added to database.' });
     }
@@ -194,12 +195,12 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       });
       if (!res.ok) {
         const json = await res.json() as { error?: string };
-        throw new Error(json.error ?? 'Delete failed.');
+        throw new Error(json.error ?? ERRORS.DOORS.DELETE_FAILED.message);
       }
       setItems(prev => prev.filter(i => i.id !== id));
       addToast({ type: 'success', message: 'Item deleted.' });
     } catch (err) {
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Delete failed.' });
+      addToast({ type: 'error', message: ERRORS.DOORS.DELETE_FAILED.message });
     } finally {
       setDeletingId(null);
     }
@@ -214,7 +215,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       body: JSON.stringify({ ids, action }),
     });
     const json = await res.json() as { data?: { processed: number }; error?: string };
-    if (!res.ok) throw new Error(json.error ?? 'Review failed.');
+    if (!res.ok) throw new Error(json.error ?? ERRORS.DOORS.REVIEW_FAILED.message);
 
     // Remove processed items from pending list
     setPending(prev => prev.filter(p => !ids.includes(p.id)));

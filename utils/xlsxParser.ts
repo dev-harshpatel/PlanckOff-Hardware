@@ -1,5 +1,6 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { Door, HardwareSet, HardwareItem, DoorScheduleSections } from '../types';
+import { ERRORS } from '@/constants/errors';
 
 /**
  * Parses an Excel file buffer into an array of Door objects.
@@ -61,7 +62,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
     const colSectionMap = sectioned ? buildColumnSectionMap(worksheet) : {};
 
     if (jsonData.length === 0) {
-        throw new Error("Excel file appears to be empty or in an unsupported format.");
+        throw new Error(ERRORS.DOORS.EXCEL_EMPTY.message);
     }
 
     // Define mappings from internal property names to possible Excel header names.
@@ -161,7 +162,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
             height: '"Height" (e.g., Door Height)'
         };
         const friendlyMissing = missingHeaders.map(h => friendlyNames[h] || h).join(', ');
-        throw new Error(`Excel file is missing required columns. Please ensure your file has headers for at least: ${friendlyMissing}.`);
+        throw new Error(ERRORS.DOORS.EXCEL_MISSING_COLUMNS.message);
     }
 
     const doors: Door[] = jsonData.map((row, index): Door | null => {
@@ -311,7 +312,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
     }).filter((door): door is Door => door !== null && !!door.doorTag && door.width > 0 && door.height > 0);
 
     if (doors.length === 0 && jsonData.length > 0) {
-        throw new Error("Could not parse any valid door data from the Excel file. Please check that the required columns (doorTag, width, height) contain valid data.");
+        throw new Error(ERRORS.DOORS.EXCEL_NO_VALID_DATA.message);
     }
 
     return doors;
@@ -332,7 +333,7 @@ export const parseHardwareSetXLSX = (data: ArrayBuffer): HardwareSet[] => {
     const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
 
     if (jsonData.length === 0) {
-        throw new Error("Excel file appears to be empty or in an unsupported format.");
+        throw new Error(ERRORS.DOORS.EXCEL_EMPTY.message);
     }
 
     // Header Mappings
@@ -412,7 +413,7 @@ export const parseHardwareSetXLSX = (data: ArrayBuffer): HardwareSet[] => {
     });
 
     if (setsMap.size === 0) {
-        throw new Error("Could not find any valid hardware sets in the Excel file. Ensure you have a 'Set Name' column.");
+        throw new Error(ERRORS.DOORS.EXCEL_NO_HARDWARE_SETS.message);
     }
 
     return Array.from(setsMap.values());

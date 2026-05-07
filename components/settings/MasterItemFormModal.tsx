@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Package } from 'lucide-react';
 import type { MasterHardwareItem } from '@/lib/db/masterHardware';
 import { Button } from '@/components/ui/button';
+import { ERRORS } from '@/constants/errors';
+import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
 
 interface MasterItemFormModalProps {
   isOpen: boolean;
@@ -54,13 +56,13 @@ export const MasterItemFormModal: React.FC<MasterItemFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) { setError('Item Name is required.'); return; }
+    if (!name.trim()) { setError(ERRORS.GENERAL.REQUIRED_FIELD.message); return; }
     setError(null);
     setIsSaving(true);
     try {
       await onSave({ name: name.trim(), manufacturer: manufacturer.trim(), description: description.trim(), finish: finish.trim(), modelNumber: modelNumber.trim() });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed.');
+      setError(ERRORS.GENERAL.SAVE_FAILED.message);
     } finally {
       setIsSaving(false);
     }
@@ -145,9 +147,7 @@ export const MasterItemFormModal: React.FC<MasterItemFormModalProps> = ({
             />
           </div>
 
-          {error && (
-            <p className="text-xs text-red-500 dark:text-red-400 font-medium">{error}</p>
-          )}
+          {error && <ErrorDisplay error={error} />}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button

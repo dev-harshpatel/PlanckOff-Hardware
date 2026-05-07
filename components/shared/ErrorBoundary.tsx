@@ -1,56 +1,66 @@
-import * as React from 'react';
+'use client';
+
 import { Component, ErrorInfo, ReactNode } from 'react';
 
-interface Props {
-    children: ReactNode;
+import { GENERAL_ERRORS } from '@/constants/errors';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  /** Optional custom fallback UI. If provided, replaces the default error screen. */
+  fallback?: ReactNode;
 }
 
-interface State {
-    hasError: boolean;
-    error: Error | null;
-    errorInfo: ErrorInfo | null;
+interface ErrorBoundaryState {
+  hasError: boolean;
 }
 
-class ErrorBoundary extends Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
-        this.state = { hasError: false, error: null, errorInfo: null };
+/**
+ * Catches unhandled React render errors and shows a safe fallback UI.
+ * Never exposes raw error messages or stack traces to users.
+ */
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log full details for developer debugging — never shown to users
+    console.error('[ErrorBoundary] Uncaught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-subtle)] p-4">
+          <div className="w-full max-w-md rounded-lg border border-[var(--error-border)] bg-[var(--bg)] p-8 shadow-xl">
+            <h1 className="mb-2 text-xl font-semibold text-[var(--error-text)]">
+              {GENERAL_ERRORS.UNEXPECTED.message}
+            </h1>
+            <p className="mb-6 text-sm text-[var(--text-muted)]">
+              {GENERAL_ERRORS.UNEXPECTED.action}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-[var(--primary-action)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
     }
 
-    static getDerivedStateFromError(error: Error): State {
-        return { hasError: true, error, errorInfo: null };
-    }
-
-    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
-        this.setState({ error, errorInfo });
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-                    <div className="bg-white p-8 rounded-lg shadow-xl max-w-4xl w-full border border-red-100">
-                        <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
-                        <div className="bg-red-50 p-4 rounded-md overflow-auto max-h-[60vh] text-sm font-mono text-red-800">
-                            <p className="font-bold mb-2">{this.state.error && this.state.error.toString()}</p>
-                            <pre className="whitespace-pre-wrap">
-                                {this.state.errorInfo && this.state.errorInfo.componentStack}
-                            </pre>
-                        </div>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="mt-6 px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
-                        >
-                            Reload Page
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        return this.props.children;
-    }
+    return this.props.children;
+  }
 }
 
-export default ErrorBoundary;
+export { ErrorBoundary };

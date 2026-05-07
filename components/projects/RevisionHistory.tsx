@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { SubmittalRevision, SubmittalStatus } from '../../types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/contexts/ToastContext';
+import { GENERAL_ERRORS } from '@/constants/errors';
 
 interface RevisionHistoryProps {
     revisions: SubmittalRevision[];
@@ -15,6 +17,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
     onAddRevision,
     onUpdateRevision
 }) => {
+    const { addToast } = useToast();
     const [showNewRevisionModal, setShowNewRevisionModal] = useState(false);
     const [expandedRevision, setExpandedRevision] = useState<number | null>(currentRevision);
     const [newRevisionData, setNewRevisionData] = useState({
@@ -46,7 +49,7 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
 
     const handleCreateRevision = () => {
         if (!newRevisionData.changedBy || !newRevisionData.changeDescription) {
-            alert('Please fill in all required fields');
+            addToast({ type: 'error', message: GENERAL_ERRORS.REQUIRED_FIELD.message });
             return;
         }
 

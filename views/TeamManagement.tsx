@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { TeamMember, Role, TeamMemberStatus } from '../types';
 import InviteUserPanel from '../components/team/InviteUserPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/contexts/ToastContext';
 
 interface TeamManagementProps {
   teamMembers: TeamMember[];
@@ -23,6 +24,7 @@ const formatDate = (isoDate?: string): string => {
 };
 
 const TeamManagement: React.FC<TeamManagementProps> = ({ teamMembers, onInviteUser }) => {
+  const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<TeamMemberStatus | 'all'>('all');
@@ -167,7 +169,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ teamMembers, onInviteUs
                             <td className="px-6 py-4 text-right">
                                 {member.status === 'Pending' ? (
                                     <button
-                                        onClick={() => alert(`Resending invite to ${member.email}`)}
+                                        onClick={() => addToast({ type: 'info', message: `Invitation resent to ${member.email}.` })}
                                         className="font-medium text-primary-600 hover:text-primary-800"
                                     >
                                         Resend Invite

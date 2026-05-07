@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
+import { ErrorDisplay } from "@/components/shared/ErrorDisplay";
 
 function LoginForm() {
   const router = useRouter();
@@ -107,13 +108,7 @@ function LoginForm() {
               />
             </div>
 
-            {error && (
-              <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3">
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {error}
-                </p>
-              </div>
-            )}
+            <ErrorDisplay error={error} />
 
             <button
               type="submit"

@@ -14,6 +14,7 @@ import {
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Calendar, FolderOpen, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ERRORS } from '@/constants/errors';
 import { useModalState } from '../hooks/useModalState';
 import { useDashboardState } from '../hooks/useDashboardState';
 import { ProjectCard } from '../components/dashboard/ProjectCard';
@@ -140,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
             closeProjectModal();
         } catch (error) {
             const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-            addToast({ type: 'error', message: editingProject ? 'Project update failed' : 'Project creation failed', details: message });
+            addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: message });
         } finally {
             setIsSavingProject(false);
         }
