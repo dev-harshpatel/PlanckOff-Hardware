@@ -5,6 +5,7 @@ import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
+import { buildExportFilename } from '../utils/exportFilename';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
   if (!door.elevationTypeId) return '';
@@ -184,12 +185,7 @@ export const exportDoorScheduleToExcel = (
     XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
   }
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `DoorSchedule_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.xlsx`;
-
-  // Download
-  XLSX.writeFile(workbook, filename, { cellStyles: true });
+  XLSX.writeFile(workbook, buildExportFilename(projectName, 'door-schedule', 'xlsx'), { cellStyles: true });
 };
 
 // Format usage for Hardware Set reports
@@ -378,12 +374,7 @@ export const exportHardwareSetToExcel = (
     XLSX.utils.book_append_sheet(workbook, costSheet, 'Cost Summary');
   }
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `HardwareSet_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.xlsx`;
-
-  // Download
-  XLSX.writeFile(workbook, filename, { cellStyles: true });
+  XLSX.writeFile(workbook, buildExportFilename(projectName, 'hardware-set', 'xlsx'), { cellStyles: true });
 };
 
 // ============================================================================
@@ -429,8 +420,7 @@ export function exportMultiSheetWorkbook(
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', cellStyles: true });
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     
-    const fileName = `${options.projectName.replace(/[^a-z0-9]/gi, '_')}_Complete_Schedule.xlsx`;
-    saveAs(blob, fileName);
+    saveAs(blob, buildExportFilename(options.projectName, 'complete-schedule', 'xlsx'));
 }
 
 /**

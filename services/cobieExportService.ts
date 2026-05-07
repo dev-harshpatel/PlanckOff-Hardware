@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { Door, HardwareSet, HardwareItem } from '../types';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
+import { buildExportFilename } from '../utils/exportFilename';
 
 /**
  * COBie (Construction Operations Building Information Exchange) Export Service
@@ -59,8 +60,7 @@ export function exportToCOBie(
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     
-    const fileName = `${options.projectName.replace(/[^a-z0-9]/gi, '_')}_COBie.xlsx`;
-    saveAs(blob, fileName);
+    saveAs(blob, buildExportFilename(options.projectName, 'cobie', 'xlsx'));
 }
 
 /**

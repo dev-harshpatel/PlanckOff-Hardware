@@ -41,7 +41,9 @@ export type AssignedDoorConflictField =
     | 'leafCount'
     | 'dimensions'
     | 'doorMaterial'
-    | 'interiorExterior';
+    | 'interiorExterior'
+    | 'frameMaterial'
+    | 'operation';
 
 export type AssignedDoorConflictMap = Partial<Record<AssignedDoorConflictField, string>>;
 
@@ -55,11 +57,20 @@ const formatDoorDimension = (inches: number): string => {
 const normalizeComparableValue = (value: string | number | undefined | null): string =>
     String(value ?? '').trim().toLowerCase();
 
+// Treat blank / placeholder values as equivalent so they don't trigger a mismatch
+const EMPTY_LIKE = new Set(['-', '—', 'na', 'n/a', 'n.a.', 'none', 'not applicable', 'tbd', '']);
+const normalizeFieldValue = (value: string | number | undefined | null): string => {
+    const v = normalizeComparableValue(value);
+    return EMPTY_LIKE.has(v) ? '' : v;
+};
+
 const getFireRatingDisplay = (door: Door): string => door.fireRating?.trim() || '—';
 const getLeafCountDisplay = (door: Door): string => door.leafCountDisplay?.trim() || (door.leafCount != null ? String(door.leafCount) : '—');
 const getDimensionsDisplay = (door: Door): string => `${formatDoorDimension(door.width)} × ${formatDoorDimension(door.height)}`;
 const getDoorMaterialDisplay = (door: Door): string => door.doorMaterial?.trim() || '—';
 const getInteriorExteriorDisplay = (door: Door): string => door.interiorExterior?.trim() || '—';
+const getFrameMaterialDisplay = (door: Door): string => (door.frameMaterial as string)?.trim() || '—';
+const getOperationDisplay = (door: Door): string => door.operation?.trim() || '—';
 
 export function getAssignedDoorMismatchMap(doors: Door[]): Map<string, AssignedDoorConflictMap> {
     const mismatches = new Map<string, AssignedDoorConflictMap>();
@@ -102,25 +113,37 @@ export function getAssignedDoorMismatchMap(doors: Door[]): Map<string, AssignedD
         }
     };
 
-    register('fireRating', 'Rating', door => normalizeComparableValue(door.fireRating || '—'), getFireRatingDisplay);
+    register('fireRating', 'Rating', door => normalizeFieldValue(door.fireRating), getFireRatingDisplay);
     register(
         'leafCount',
         'Leaf count',
-        door => normalizeComparableValue(door.leafCountDisplay || (door.leafCount != null ? String(door.leafCount) : '—')),
+        door => normalizeFieldValue(door.leafCountDisplay || (door.leafCount != null ? String(door.leafCount) : '')),
         getLeafCountDisplay,
     );
     register(
         'dimensions',
         'W × H',
-        door => `${normalizeComparableValue(door.width)}x${normalizeComparableValue(door.height)}`,
+        door => `${normalizeFieldValue(door.width)}x${normalizeFieldValue(door.height)}`,
         getDimensionsDisplay,
     );
-    register('doorMaterial', 'Door material', door => normalizeComparableValue(door.doorMaterial || '—'), getDoorMaterialDisplay);
+    register('doorMaterial', 'Door material', door => normalizeFieldValue(door.doorMaterial), getDoorMaterialDisplay);
     register(
         'interiorExterior',
         'Interior / Exterior',
-        door => normalizeComparableValue(door.interiorExterior || '—'),
+        door => normalizeFieldValue(door.interiorExterior),
         getInteriorExteriorDisplay,
+    );
+    register(
+        'frameMaterial',
+        'Frame material',
+        door => normalizeFieldValue(door.frameMaterial as string),
+        getFrameMaterialDisplay,
+    );
+    register(
+        'operation',
+        'Door operation',
+        door => normalizeFieldValue(door.operation),
+        getOperationDisplay,
     );
 
     return mismatches;

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { CompanySettings } from '@/lib/db/companySettings';
 import type { DoorPricingGroup, HardwarePricingGroup } from '@/utils/pricingGrouping';
+import { buildExportFilename } from '@/utils/exportFilename';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
@@ -148,7 +149,7 @@ export function usePricingExport({
     }
 
     if (wb.SheetNames.length === 0) return; // nothing selected
-    writeFile(wb, 'pricing-report.xlsx');
+    writeFile(wb, buildExportFilename(projectName, 'pricing-report', 'xlsx'));
   }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
   const handleDownloadPdf = useCallback(async (sections: ExportSections) => {
@@ -252,8 +253,8 @@ export function usePricingExport({
     }
 
     if (firstSection) return; // nothing selected
-    doc.save('pricing-report.pdf');
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings]);
+    doc.save(buildExportFilename(projectName, 'pricing-report', 'pdf'));
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
   const handleDownloadProposalPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf');
@@ -540,8 +541,7 @@ export function usePricingExport({
       doc.text(`Page ${i} of ${pageCount}`, pageW - margin, pageH - 20, { align: 'right' });
     }
 
-    const safeName = (projectName || 'Proposal').replace(/[^a-z0-9]/gi, '_');
-    doc.save(`${safeName}_Proposal.pdf`);
+    doc.save(buildExportFilename(projectName || 'project', 'proposal', 'pdf'));
   }, [
     companySettings, projectName,
     proposalDoorBase, proposalFrameBase, proposalHwBase,

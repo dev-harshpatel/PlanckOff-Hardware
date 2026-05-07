@@ -604,6 +604,11 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                     elevationTypes={elevationTypes}
                     projectId={projectId}
                     onElevationTypeUpdate={onElevationTypeUpdate ?? (() => {})}
+                    siblingDoors={
+                        editModalDoor.assignedHardwareSet
+                            ? doors.filter(d => d.id !== editModalDoor.id && d.assignedHardwareSet?.id === editModalDoor.assignedHardwareSet?.id)
+                            : []
+                    }
                 />
             )}
         </div>

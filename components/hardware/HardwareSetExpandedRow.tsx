@@ -170,6 +170,8 @@ export function HardwareSetExpandedRow({
                                                 <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">W × H</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Thk</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Material</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Door Operation</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Frame Material</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wide">Int / Ext</th>
                                             </tr>
                                         </thead>
@@ -208,6 +210,12 @@ export function HardwareSetExpandedRow({
                                                         <td className="px-3 py-2 text-[var(--text-muted)]">{door.thicknessDisplay ?? (door.thickness != null ? `${door.thickness}"` : '—')}</td>
                                                         <td className={`px-3 py-2 ${getCellClass(conflicts.doorMaterial)}`} title={conflicts.doorMaterial}>
                                                             {door.doorMaterial}{conflicts.doorMaterial && renderConflictIcon(conflicts.doorMaterial, true)}
+                                                        </td>
+                                                        <td className={`px-3 py-2 text-[var(--text-muted)] ${getCellClass(conflicts.operation)}`} title={conflicts.operation}>
+                                                            {door.operation || '—'}{conflicts.operation && renderConflictIcon(conflicts.operation, false)}
+                                                        </td>
+                                                        <td className={`px-3 py-2 text-[var(--text-muted)] ${getCellClass(conflicts.frameMaterial)}`} title={conflicts.frameMaterial}>
+                                                            {(door.frameMaterial as string) || '—'}{conflicts.frameMaterial && renderConflictIcon(conflicts.frameMaterial, false)}
                                                         </td>
                                                         <td className={`px-3 py-2 text-[var(--text-muted)] ${getCellClass(conflicts.interiorExterior)}`} title={conflicts.interiorExterior}>{door.interiorExterior || '—'}{conflicts.interiorExterior && renderConflictIcon(conflicts.interiorExterior, false)}</td>
                                                     </tr>

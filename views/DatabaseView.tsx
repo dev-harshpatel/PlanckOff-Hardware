@@ -22,6 +22,7 @@ import { MasterItemFormModal } from '../components/settings/MasterItemFormModal'
 import { DatabaseSkeleton } from '@/components/skeletons/DatabaseSkeleton';
 import { PendingReviewModal } from '../components/projects/PendingReviewModal';
 import { Pagination } from '@/components/ui/Pagination';
+import { buildExportFilename } from '@/utils/exportFilename';
 
 type SortKey = 'name' | 'manufacturer' | 'description' | 'finish';
 type SortDir = 'asc' | 'desc';
@@ -153,7 +154,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = `master-hardware-database-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = buildExportFilename('', 'master-hardware-database', 'csv');
       a.click();
       URL.revokeObjectURL(url);
       addToast({ type: 'success', message: 'Database exported to CSV.' });

@@ -39,7 +39,7 @@
       "Bash(cat tailwind.config.js)",
       "Bash(grep -E \"\\\\.tsx$\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
-      "Skill(gsd:new-project)"
+      "Skill(gsd:new-project)",
       "Bash(xargs -I {} sh -c 'echo \"$\\(basename {}\\):\" && grep -c \"fetch\\(\" {}')",
       "Bash(sort -t: -k2 -rn)",
       "Bash(npx --prefix d:/Projects/learning-projects/PlanckOff-Hardware tsc --noEmit --skipLibCheck)",
@@ -49,7 +49,11 @@
       "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\PriceBookManager.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\pricing\\\\PriceBookManager.tsx\")",
       "PowerShell(Move-Item \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\PricingReportConfig.tsx\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\components\\\\pricing\\\\PricingReportConfig.tsx\")",
       "Bash(cd /d)",
-      "Bash(grep -n \"totalQuantity\\\\|totalQty\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\services\\\\reportExportService.ts\")"
+      "Bash(grep -n \"totalQuantity\\\\|totalQty\" \"d:\\\\Projects\\\\learning-projects\\\\PlanckOff-Hardware\\\\services\\\\reportExportService.ts\")",
+      "Bash(grep -r \"exportReportToCSV\\\\|exportInventoryToCSV\" d:\\\\\\\\Projects\\\\\\\\learning-projects\\\\\\\\PlanckOff-Hardware --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.jsx\")",
+      "Bash(find d:\\\\\\\\Projects\\\\\\\\learning-projects\\\\\\\\PlanckOff-Hardware -name \"*.tsx\" -path \"*/components/*\" -o -name \"*.tsx\" -path \"*/pages/*\" -o -name \"*.tsx\" -path \"*/app/*\")",
+      "Bash(find d:\\\\\\\\Projects\\\\\\\\learning-projects\\\\\\\\PlanckOff-Hardware\\\\\\\\components -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\))",
+      "Bash(grep -r \"csvExporter\\\\|CSV\\\\|download\" d:\\\\\\\\Projects\\\\\\\\learning-projects\\\\\\\\PlanckOff-Hardware\\\\\\\\components --include=\"*.tsx\" --include=\"*.ts\" -l)"
     ]
   }
 }

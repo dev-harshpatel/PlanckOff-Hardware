@@ -8,8 +8,7 @@ import Tooltip from '../shared/Tooltip';
 import ContextualProgressBar from '../shared/ContextualProgressBar';
 import { useHardwareSetsManager } from '../../hooks/useHardwareSetsManager';
 import { HardwareSetExpandedRow } from './HardwareSetExpandedRow';
-import { getDoorConflicts } from '../../utils/hardwareUtils';
-import { getAssignedDoorMismatchMap } from '../../utils/doorValidation';
+import { getAssignedDoorMismatchMap, AssignedDoorConflictMap } from '../../utils/doorValidation';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +47,13 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant,
         activeTask, onCancelTask, canReupload = true,
     } = props;
+
+    const [conflictsModal, setConflictsModal] = React.useState<{
+        setName: string;
+        assignedDoors: Door[];
+        mismatches: Map<string, AssignedDoorConflictMap>;
+        hardwareSet: (typeof hardwareSets)[0];
+    } | null>(null);
 
     const {
         fileInputRef,
@@ -330,11 +336,9 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                 const currentDoorSelection = selectedDoors[set.id] || new Set();
                                 const isUnavailable = set.isAvailable === false;
                                 const isManualEntry = set.isManualEntry === true;
-                                const hasAnyConflicts = assignedDoors.some(d => {
-                                    const setConflicts = getDoorConflicts(set, d);
-                                    const groupConflicts = assignedDoorMismatches.get(d.id) ?? {};
-                                    return Object.keys(setConflicts).length > 0 || Object.keys(groupConflicts).length > 0;
-                                });
+                                const hasAnyConflicts = assignedDoors.some(d =>
+                                    Object.keys(assignedDoorMismatches.get(d.id) ?? {}).length > 0
+                                );
                                 const isSelected = selectedRows.has(set.id);
                                 const hasZeroDoors = doorCount === 0;
                                 const allHwExcluded = assignedDoors.length > 0 &&
@@ -383,8 +387,16 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                         </Tooltip>
                                                     )}
                                                     {hasAnyConflicts && (
-                                                        <Tooltip content="Conflict detected on one or more assigned doors. Expand to view.">
-                                                            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                                                        <Tooltip content="Conflict detected on one or more assigned doors. Click to view.">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setConflictsModal({ setName: set.name, assignedDoors, mismatches: assignedDoorMismatches, hardwareSet: set });
+                                                                }}
+                                                                className="p-0 bg-transparent border-none cursor-pointer flex-shrink-0 hover:opacity-75 transition-opacity"
+                                                            >
+                                                                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                                            </button>
                                                         </Tooltip>
                                                     )}
                                                 </div>
@@ -463,6 +475,73 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 files={selectedFiles}
                 isLoading={isLoading}
             />
+
+            {/* Door conflicts modal */}
+            {conflictsModal && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => setConflictsModal(null)}
+                >
+                    <div
+                        className="bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[75vh]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+                            <h3 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                Door Conflicts — Set {conflictsModal.setName}
+                            </h3>
+                            <button
+                                onClick={() => setConflictsModal(null)}
+                                className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1 p-4 space-y-4">
+                            {conflictsModal.assignedDoors.map(door => {
+                                const groupConflicts = conflictsModal.mismatches.get(door.id) ?? {};
+                                const entries = Object.entries(groupConflicts).filter(([, msg]) => !!msg);
+                                if (entries.length === 0) return null;
+                                return (
+                                    <div key={door.id}>
+                                        <p className="text-xs font-semibold text-[var(--text)] mb-1.5">
+                                            Door {door.doorTag}{door.location ? ` · ${door.location}` : ''}
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            {entries.map(([field, message]) => (
+                                                <div
+                                                    key={field}
+                                                    className="rounded-lg border p-3 bg-amber-500/10 border-amber-500/20 flex items-start gap-2"
+                                                >
+                                                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-amber-500 flex-shrink-0" />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-medium text-[var(--text)]">{message}</p>
+                                                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-mono">{field}</p>
+                                                    </div>
+                                                    <span className="ml-auto flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                                                        Warning
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="px-5 py-3 border-t border-[var(--border)] flex justify-end flex-shrink-0">
+                            <button
+                                onClick={() => setConflictsModal(null)}
+                                className="px-4 py-1.5 text-sm bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
