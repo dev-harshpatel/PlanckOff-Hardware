@@ -1,6 +1,7 @@
 import { Door, HardwareSet, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import { buildExportFilename } from '../utils/exportFilename';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
   if (!door.elevationTypeId) return '';
@@ -12,11 +13,12 @@ function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): 
   return et?.imageUrl ?? '';
 }
 
-// Helper to escape CSV values
-const escapeCSV = (value: any): string => {
+// Helper to escape CSV values.
+// Numbers are written bare (no quotes) so Excel treats them as numeric cells.
+const escapeCSV = (value: unknown): string => {
   if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return isNaN(value) ? '' : String(value);
   const str = String(value);
-  // Escape quotes and wrap in quotes if contains comma, quote, or newline
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -172,12 +174,7 @@ export const exportDoorScheduleToCSV = (
     csv += `Doors with Hardware,${doorsWithHardware}\n`;
   }
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `DoorSchedule_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.csv`;
-
-  // Download
-  downloadFile(csv, filename, 'text/csv');
+  downloadFile(csv, buildExportFilename(projectName, 'door-schedule', 'csv'), 'text/csv');
 };
 
 // Format usage for Hardware Set reports
@@ -236,7 +233,7 @@ const buildHardwareSetRow = (item: any, config: HardwareSetExportConfig): any[] 
   if (config.optionalColumns.includes('unitCost')) row.push(item.item.unitCost || '');
   if (config.optionalColumns.includes('extendedCost')) {
     const extended = (item.item.unitCost || 0) * (item.totalQuantity || 0);
-    row.push(extended.toFixed(2));
+    row.push(Math.round(extended * 100) / 100);
   }
   if (config.optionalColumns.includes('category')) row.push(item.item.category || '');
   if (config.optionalColumns.includes('modelNumber')) row.push(item.item.modelNumber || '');
@@ -319,10 +316,5 @@ export const exportHardwareSetToCSV = (
     csv += `Total Cost,$${totalCost.toFixed(2)}\n`;
   }
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `HardwareSet_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.csv`;
-
-  // Download
-  downloadFile(csv, filename, 'text/csv');
+  downloadFile(csv, buildExportFilename(projectName, 'hardware-set', 'csv'), 'text/csv');
 };

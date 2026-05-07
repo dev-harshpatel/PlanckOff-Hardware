@@ -1,15 +1,15 @@
 
 import { Report, HardwareItem } from '../types';
+import { buildExportFilename } from './exportFilename';
 
-// Helper to escape CSV fields to handle commas, quotes, and newlines
+// Helper to escape CSV fields to handle commas, quotes, and newlines.
+// Numbers are written bare (no quotes) so Excel treats them as numeric cells.
 const escapeCsvField = (field: string | number): string => {
-    const stringField = String(field);
-    // If the field contains a comma, double quote, or newline, enclose it in double quotes
-    if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-        // Inside a double-quoted field, any double quote must be escaped by another double quote
-        return `"${stringField.replace(/"/g, '""')}"`;
+    if (typeof field === 'number') return isNaN(field) ? '' : String(field);
+    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+        return `"${field.replace(/"/g, '""')}"`;
     }
-    return stringField;
+    return field;
 };
 
 /**
@@ -50,9 +50,7 @@ export const exportReportToCSV = (report: Report, projectName: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
 
-    // Sanitize project name for a clean filename
-    const sanitizedProjectName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    link.setAttribute('download', `TVE-Report-${sanitizedProjectName}.csv`);
+    link.setAttribute('download', buildExportFilename(projectName, 'estimation-report', 'csv'));
     link.setAttribute('href', url);
     document.body.appendChild(link);
     
@@ -91,8 +89,7 @@ export const exportInventoryToCSV = (inventory: HardwareItem[]) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     
-    const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute('download', `TVE-Master-Inventory-${dateStr}.csv`);
+    link.setAttribute('download', buildExportFilename('', 'master-hardware-database', 'csv'));
     link.setAttribute('href', url);
     document.body.appendChild(link);
     

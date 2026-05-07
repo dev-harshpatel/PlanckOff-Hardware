@@ -1,6 +1,7 @@
 import { Door, HardwareSet, ElevationType } from '../types';
 import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
 import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import { buildExportFilename } from '../utils/exportFilename';
 import {
   buildAutoTableOptions,
   addPageNumbers,
@@ -181,12 +182,7 @@ export const exportDoorScheduleToPDF = async (
   // Add page numbers (two-pass: correct total is known only after autoTable returns)
   addPageNumbers(doc, projectName, pageWidth, pageHeight, PDF_MARGIN);
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `DoorSchedule_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.pdf`;
-
-  // Download
-  doc.save(filename);
+  doc.save(buildExportFilename(projectName, 'door-schedule', 'pdf'));
 };
 
 // Format usage for Hardware Set reports
@@ -389,12 +385,7 @@ export const exportHardwareSetToPDF = async (
     doc.text(`Total Cost: $${totalCost.toFixed(2)}`, PDF_MARGIN, yPosition);
   }
 
-  // Generate filename
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `HardwareSet_${projectName.replace(/[^a-z0-9]/gi, '_')}_${date}.pdf`;
-
-  // Download
-  doc.save(filename);
+  doc.save(buildExportFilename(projectName, 'hardware-set', 'pdf'));
 };
 
 // ----------------------------------------------------------------------
@@ -663,5 +654,5 @@ export const exportSubmittalPackageToPDF = async (
 
   // Final Output — add page numbers then save
   addPageNumbers(doc, coverPageDetails.projectName, pageWidth, pageHeight, PDF_MARGIN);
-  doc.save(`SubmittalPkg_${coverPageDetails.projectName}.pdf`);
+  doc.save(buildExportFilename(coverPageDetails.projectName, 'submittal-package', 'pdf'));
 };

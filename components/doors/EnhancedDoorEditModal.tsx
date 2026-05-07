@@ -5,7 +5,8 @@ import HardwarePrepEditor from '../hardware/HardwarePrepEditor';
 import ElectrificationEditor from '../hardware/ElectrificationEditor';
 import HingeSpecEditor from '../hardware/HingeSpecEditor';
 import { ElevationTab } from '../elevation/ElevationTab';
-import { X, DoorOpen, Frame, Wrench, Image, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
+import { X, DoorOpen, Frame, Wrench, Image, ClipboardList, AlertCircle } from 'lucide-react';
+import { getAssignedDoorMismatchMap, ValidationResult } from '../../utils/doorValidation';
 import { SectionFields } from '../forms/DoorFormSection';
 import { DoorBasicSection } from '../forms/DoorBasicSection';
 import { DoorDimensionSection } from '../forms/DoorDimensionSection';
@@ -20,6 +21,7 @@ interface EnhancedDoorEditModalProps {
     elevationTypes: ElevationType[];
     projectId: string;
     onElevationTypeUpdate: (updated: ElevationType) => void;
+    siblingDoors?: Door[];
 }
 
 type TabId = 'basic' | 'door' | 'frame' | 'hardware' | 'elevation';
@@ -32,6 +34,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     elevationTypes,
     projectId,
     onElevationTypeUpdate,
+    siblingDoors = [],
 }) => {
     const [activeTab, setActiveTab] = useState<TabId>('basic');
     const [elevationMode, setElevationMode] = useState<'door' | 'frame'>('door');
@@ -40,7 +43,6 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
     const {
         editedDoor,
         setElevationDirty,
-        validationResults,
         basicInfoSec,
         doorSec,
         frameSec,
@@ -56,7 +58,23 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
         handleSave,
     } = useDoorFormState({ door, hardwareSets, onSave });
 
-    const criticalCount = validationResults.filter(r => r.severity === 'critical').length;
+    // Group-mismatch warnings only: compare this door against siblings in the same hardware set
+    const mismatchWarnings: ValidationResult[] = React.useMemo(() => {
+        if (siblingDoors.length === 0) return [];
+        const allInSet = [editedDoor, ...siblingDoors];
+        const mismatchMap = getAssignedDoorMismatchMap(allInSet);
+        const conflicts = mismatchMap.get(editedDoor.id) ?? {};
+        return Object.entries(conflicts).map(([field, message]) => ({
+            doorId: editedDoor.id,
+            doorTag: editedDoor.doorTag,
+            ruleId: `group-mismatch-${field}`,
+            severity: 'warning' as const,
+            message: message ?? '',
+            field: field as keyof Door,
+        }));
+    }, [editedDoor, siblingDoors]);
+
+    const conflictCount = mismatchWarnings.length;
 
     const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
         { id: 'basic',     label: 'Basic Info', icon: <ClipboardList className="w-3.5 h-3.5" /> },
@@ -109,18 +127,12 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                         </button>
                     ))}
 
-                    {/* Validation pill — clickable */}
-                    {criticalCount > 0 && (
-                        <button onClick={() => setIsIssuesOpen(true)} className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-500/20 transition-colors">
-                            <AlertTriangle className="w-3 h-3" />
-                            {criticalCount} issue{criticalCount > 1 ? 's' : ''}
+                    {/* Conflict pill — only shown when group mismatches exist */}
+                    {conflictCount > 0 && (
+                        <button onClick={() => setIsIssuesOpen(true)} className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-500/20 transition-colors">
+                            <AlertCircle className="w-3 h-3" />
+                            {conflictCount} conflict{conflictCount > 1 ? 's' : ''}
                         </button>
-                    )}
-                    {criticalCount === 0 && validationResults.length > 0 && (
-                        <div className="ml-auto self-center flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-[10px] font-semibold">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Valid
-                        </div>
                     )}
                 </div>
 
@@ -211,7 +223,7 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                 {/* Footer */}
                 <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg)] rounded-b-xl flex-shrink-0">
                     <div className="text-[10px] text-[var(--text-faint)]">
-                        {criticalCount > 0 && <span className="text-red-500">⚠ {criticalCount} critical issue{criticalCount > 1 ? 's' : ''} — save anyway?</span>}
+                        {conflictCount > 0 && <span className="text-amber-500">⚠ {conflictCount} group conflict{conflictCount > 1 ? 's' : ''} detected</span>}
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -232,14 +244,14 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
             </div>
         </div>
 
-        {/* Issues detail modal */}
+        {/* Group conflicts modal */}
         {isIssuesOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setIsIssuesOpen(false)}>
                 <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
                         <h3 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-500" />
-                            Validation Issues — Door {editedDoor.doorTag}
+                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                            Group Conflicts — Door {editedDoor.doorTag}
                         </h3>
                         <button onClick={() => setIsIssuesOpen(false)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
                             <X className="w-4 h-4" />
@@ -247,19 +259,10 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                     </div>
 
                     <div className="overflow-y-auto flex-1 p-4 space-y-2">
-                        {validationResults.map((r, i) => (
-                            <div key={i} className={`rounded-lg border p-3 ${
-                                r.severity === 'critical'
-                                    ? 'bg-red-500/10 border-red-500/20'
-                                    : r.severity === 'warning'
-                                    ? 'bg-amber-500/10 border-amber-500/20'
-                                    : 'bg-blue-500/10 border-blue-500/20'
-                            }`}>
+                        {mismatchWarnings.map((r, i) => (
+                            <div key={i} className="rounded-lg border p-3 bg-amber-500/10 border-amber-500/20">
                                 <div className="flex items-start gap-2">
-                                    <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
-                                        r.severity === 'critical' ? 'text-red-500' :
-                                        r.severity === 'warning' ? 'text-amber-500' : 'text-blue-500'
-                                    }`} />
+                                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
                                     <div className="min-w-0">
                                         <p className="text-xs font-medium text-[var(--text)]">{r.message}</p>
                                         {r.field && (
@@ -267,15 +270,10 @@ const EnhancedDoorEditModal: React.FC<EnhancedDoorEditModalProps> = ({
                                                 Field: <span className="font-mono">{String(r.field)}</span>
                                             </p>
                                         )}
-                                        {r.suggestion && (
-                                            <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">{r.suggestion}</p>
-                                        )}
                                     </div>
-                                    <span className={`ml-auto flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                                        r.severity === 'critical' ? 'bg-red-500/20 text-red-600 dark:text-red-400' :
-                                        r.severity === 'warning' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' :
-                                        'bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                                    }`}>{r.severity}</span>
+                                    <span className="ml-auto flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                                        Conflict
+                                    </span>
                                 </div>
                             </div>
                         ))}
