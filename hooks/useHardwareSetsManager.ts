@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { HardwareSet, Door } from '../types';
+import { ERRORS } from '@/constants/errors';
 import { useAnnounce } from '../contexts/AnnouncementContext';
 import { useModalState } from '../hooks/useModalState';
 import { getDoorConflicts } from '../utils/hardwareUtils';
@@ -229,15 +230,15 @@ export function useHardwareSetsManager({
             try {
                 json = (await res.json()) as { prep?: string; error?: string };
             } catch {
-                throw new Error('Server returned an invalid response. Please try again.');
+                throw new Error(ERRORS.HARDWARE.INVALID_RESPONSE.message);
             }
 
             if (!res.ok) {
-                throw new Error(json.error ?? 'Prep generation failed.');
+                throw new Error(json.error ?? ERRORS.HARDWARE.PREP_GENERATION_FAILED.message);
             }
 
             if (!json.prep) {
-                throw new Error('Server did not return prep data.');
+                throw new Error(ERRORS.HARDWARE.NO_PREP_DATA.message);
             }
 
             // Update only the prep field in local state — does not trigger onProjectUpdate

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { HardwareSet, Door, Toast } from '../types';
+import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
 import { transformHardwareSets, transformDoors, transformFromFinalJson } from '../utils/hardwareTransformers';
 import { useSyncRef } from './useSyncRef';
@@ -47,7 +48,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                 setIsPollingForResult(false);
                 setIsDataLoading(false);
-                addToast({ type: 'error', message: 'File processing timed out. Please try uploading again.' });
+                addToast({ type: 'error', message: ERRORS.HARDWARE.TIMEOUT.message, details: ERRORS.HARDWARE.TIMEOUT.action });
                 return;
             }
             try {

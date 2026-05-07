@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Project, ProjectStatus, Toast } from '../types';
+import { ERRORS } from '@/constants/errors';
 import {
     ProjectStatusOverrides,
     applyProjectStatusOverrides,
@@ -95,7 +96,7 @@ export function useDashboardState({ projects, onProjectUpdate, addToast }: UseDa
             const details = error instanceof Error ? error.message : 'Could not update project status.';
             addToast({
                 type: 'error',
-                message: `Failed to move "${project.name}"`,
+                message: ERRORS.GENERAL.SAVE_FAILED.message,
                 details,
             });
             setOptimisticStatuses(current => {
