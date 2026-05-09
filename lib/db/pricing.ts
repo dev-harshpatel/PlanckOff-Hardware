@@ -132,10 +132,10 @@ export async function getProjectPricing(projectId: string): Promise<DbResult<Pri
 export async function upsertPricingItem(
   projectId: string,
   item: PricingItemRow,
-): Promise<DbResult<boolean>> {
+): Promise<DbResult<{ id: string; updated_at: string }>> {
   try {
     const db = createSupabaseAdminClient();
-    const { error } = await db
+    const { data, error } = await db
       .from('project_pricing_items')
       .upsert(
         {
@@ -146,9 +146,12 @@ export async function upsertPricingItem(
           updated_at:  new Date().toISOString(),
         },
         { onConflict: 'project_id,category,group_key' },
-      );
+      )
+      .select('id, updated_at')
+      .single();
     if (error) return { data: null, error: { message: error.message } };
-    return { data: true, error: null };
+    if (!data) return { data: null, error: { message: 'Upsert returned no row.' } };
+    return { data: { id: data.id as string, updated_at: data.updated_at as string }, error: null };
   } catch (err) {
     return { data: null, error: { message: String(err) } };
   }
@@ -189,10 +192,10 @@ export async function getProposalProfit(projectId: string): Promise<DbResult<Pro
 export async function upsertProposalProfit(
   projectId: string,
   row: ProposalProfitRow,
-): Promise<DbResult<boolean>> {
+): Promise<DbResult<{ project_id: string; updated_at: string }>> {
   try {
     const db = createSupabaseAdminClient();
-    const { error } = await db
+    const { data, error } = await db
       .from('project_pricing_proposal')
       .upsert(
         {
@@ -205,9 +208,12 @@ export async function upsertProposalProfit(
           updated_at:        new Date().toISOString(),
         },
         { onConflict: 'project_id' },
-      );
+      )
+      .select('project_id, updated_at')
+      .single();
     if (error) return { data: null, error: { message: error.message } };
-    return { data: true, error: null };
+    if (!data) return { data: null, error: { message: 'Upsert returned no row.' } };
+    return { data: { project_id: data.project_id as string, updated_at: data.updated_at as string }, error: null };
   } catch (err) {
     return { data: null, error: { message: String(err) } };
   }

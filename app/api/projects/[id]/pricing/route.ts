@@ -31,12 +31,21 @@ export const PUT = withAuth(
       return NextResponse.json({ error: 'unit_price must be a non-negative number.' }, { status: 400 });
     }
 
-    const { error } = await upsertPricingItem(projectId, {
+    const { data, error } = await upsertPricingItem(projectId, {
       category: category as 'door' | 'frame' | 'hardware',
       group_key,
       unit_price,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ data: { ok: true } });
+    if (!data)  return NextResponse.json({ error: 'Upsert returned no row.' }, { status: 500 });
+    return NextResponse.json({
+      data: {
+        id: data.id,
+        updated_at: data.updated_at,
+        category,
+        group_key,
+        unit_price,
+      },
+    });
   },
 );
