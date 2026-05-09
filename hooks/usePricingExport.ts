@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { CompanySettings } from '@/lib/db/companySettings';
 import type { DoorPricingGroup, HardwarePricingGroup } from '@/utils/pricingGrouping';
 import { buildExportFilename } from '@/utils/exportFilename';
+import { buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt, contentAwareColWidths } from '@/services/excelTheme';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
@@ -80,76 +81,50 @@ export function usePricingExport({
   const handleDownloadExcel = useCallback(async (sections: ExportSections) => {
     const { utils, writeFile } = await import('xlsx-js-style');
 
-    const makeSheet = <T extends { totalPrice: number }>(
-      rows: T[],
+    const makeSheet = (
+      headers: string[],
+      dataRows: unknown[][],
       total: number,
-      toRow: (g: T) => Record<string, string | number>,
+      reportTitle: string,
     ) => {
-      const dataRows = rows.map(toRow);
-      const ws = utils.json_to_sheet(dataRows);
-      const nextRow = dataRows.length + 2;
-      utils.sheet_add_aoa(ws, [['', 'Total', '', fmt.format(total)]], { origin: nextRow });
+      const totalRow = Array<unknown>(headers.length).fill('');
+      totalRow[headers.length - 2] = 'Total';
+      totalRow[headers.length - 1] = fmt.format(total);
+
+      const metaRows = buildMetadataRows({ reportTitle, projectName, itemCount: dataRows.length });
+      const wsData = [...metaRows, headers, ...dataRows, totalRow];
+      const ws = utils.aoa_to_sheet(wsData);
+
+      applyMetadataStyles(ws, headers.length);
+      applyHeaderRowAt(ws, 3, headers.length);
+      applyFreezeAt(ws, 4);
+      ws['!cols'] = contentAwareColWidths(headers, dataRows);
       return ws;
     };
 
     const wb = utils.book_new();
 
-    if (companySettings?.companyName) {
-      const co = companySettings;
-      const coverRows: [string, string][] = [
-        ['Project',      projectName],
-        ['',             ''],
-        ['Company',      co.companyName],
-      ];
-      if (co.websiteUrl) coverRows.push(['Website', co.websiteUrl]);
-      if (co.email)      coverRows.push(['Email',   co.email]);
-      if (co.phone)      coverRows.push(['Phone',   co.phone]);
-      if (co.address)    coverRows.push(['Address', co.address]);
-      const coverParts = [co.province, co.country].filter(Boolean).join(', ');
-      if (coverParts)    coverRows.push(['',        coverParts]);
-      utils.book_append_sheet(wb, utils.aoa_to_sheet(coverRows), 'Company');
-    }
-
     if (sections.doors) {
-      utils.book_append_sheet(wb,
-        makeSheet(doorGroups, doorTotal, g => ({
-          'Description': withPrep(g),
-          'Total Qty':   g.totalQty,
-          'Unit Price':  g.unitPrice,
-          'Total Price': g.totalPrice,
-        })),
-        'Doors',
-      );
+      const headers = ['Description', 'Total Qty', 'Unit Price', 'Total Price'];
+      const rows = doorGroups.map(g => [withPrep(g), g.totalQty, g.unitPrice, g.totalPrice]);
+      utils.book_append_sheet(wb, makeSheet(headers, rows, doorTotal, 'Pricing Report — Doors'), 'Doors');
     }
     if (sections.frames) {
-      utils.book_append_sheet(wb,
-        makeSheet(frameGroups, frameTotal, g => ({
-          'Description': withPrep(g),
-          'Total Qty':   g.totalQty,
-          'Unit Price':  g.unitPrice,
-          'Total Price': g.totalPrice,
-        })),
-        'Frames',
-      );
+      const headers = ['Description', 'Total Qty', 'Unit Price', 'Total Price'];
+      const rows = frameGroups.map(g => [withPrep(g), g.totalQty, g.unitPrice, g.totalPrice]);
+      utils.book_append_sheet(wb, makeSheet(headers, rows, frameTotal, 'Pricing Report — Frames'), 'Frames');
     }
     if (sections.hardware) {
-      utils.book_append_sheet(wb,
-        makeSheet(hardwareGroups, hwTotal, g => ({
-          'Item Name':      g.item.name          ?? '',
-          'Description':    g.item.description   ?? '',
-          'Manufacturer':   g.item.manufacturer  ?? '',
-          'Finish':         g.item.finish        ?? '',
-          'Total Qty':      g.totalQty,
-          'Door Materials': g.doorMaterials.join(', '),
-          'Unit Price':     g.unitPrice,
-          'Total Price':    g.totalPrice,
-        })),
-        'Hardware',
-      );
+      const headers = ['Item Name', 'Description', 'Manufacturer', 'Finish', 'Total Qty', 'Door Materials', 'Unit Price', 'Total Price'];
+      const rows = hardwareGroups.map(g => [
+        g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
+        g.totalQty, g.doorMaterials.join(', '), g.unitPrice, g.totalPrice,
+      ]);
+      utils.book_append_sheet(wb, makeSheet(headers, rows, hwTotal, 'Pricing Report — Hardware'), 'Hardware');
     }
 
-    if (wb.SheetNames.length === 0) return; // nothing selected
-    writeFile(wb, buildExportFilename(projectName, 'pricing-report', 'xlsx'));
+    if (wb.SheetNames.length === 0) return;
+    writeFile(wb, buildExportFilename(projectName, 'pricing-report', 'xlsx'), { cellStyles: true });
   }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
   const handleDownloadPdf = useCallback(async (sections: ExportSections) => {

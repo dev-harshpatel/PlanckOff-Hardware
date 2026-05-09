@@ -218,8 +218,8 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
     return result;
   }, [doors, hardwareGroups]);
 
-  const totalDoorCount  = useMemo(() => visibleDoors.reduce((s, g) => s + g.doors.length, 0),    [visibleDoors]);
-  const totalFrameCount = useMemo(() => visibleFrames.reduce((s, g) => s + g.doors.length, 0),   [visibleFrames]);
+  const totalDoorCount  = useMemo(() => visibleDoors.reduce((s, g) => s + g.totalQty, 0),    [visibleDoors]);
+  const totalFrameCount = useMemo(() => visibleFrames.reduce((s, g) => s + g.totalQty, 0),   [visibleFrames]);
   const totalHwCount    = useMemo(() => visibleHardware.reduce((s, g) => s + g.totalQty, 0),     [visibleHardware]);
 
   const currentMaterials = activeTab === 'door' ? doorMaterials : activeTab === 'frame' ? frameMaterials : hwMaterials;

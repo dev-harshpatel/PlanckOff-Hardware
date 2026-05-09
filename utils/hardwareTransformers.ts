@@ -166,7 +166,7 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
         return leafCount !== undefined ? (leafCount > 1 ? 'Pair' : 'Single') : undefined;
       })(),
       buildingTag:      bi?.['BUILDING TAG']        ?? d?.['BUILDING TAG']       ?? row.buildingTag,
-      buildingLocation: bi?.['BUILDING LOCATION']   ?? d?.['BUILDING LOCATION']  ?? row.buildingLocation,
+      buildingLocation: bi?.['BUILDING LOCATION']   ?? d?.['BUILDING LOCATION']  ?? row.buildingLocation ?? row.buildingArea,
       handing:          (bi?.['HAND OF OPENINGS']   ?? d?.['HAND OF OPENINGS']   ?? row.handOfOpenings) as Door['handing'],
       operation:        bi?.['DOOR OPERATION']      ?? d?.['DOOR OPERATION']     ?? row.doorOperation,
       leafCount: parseLeafCountValue(rawLeafCount),
