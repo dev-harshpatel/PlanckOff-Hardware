@@ -5,6 +5,7 @@ import { HardwareSet, Door, Project, Toast } from '../types';
 import type { MergedHardwareSet, MergedDoor, TrashItem } from '@/lib/db/hardware';
 import { captureTrainingExample } from '../services/mlOpsService';
 import type { SaveStatus } from '../components/shared/SaveStatusIndicator';
+import { markPendingWrite } from '@/lib/realtime/dedupSet';
 
 interface UseProjectPersistenceOptions {
     projectId: string;
@@ -136,12 +137,18 @@ export function useProjectPersistence({
                 });
             }
 
-            await fetch(`/api/projects/${projectId}/hardware-merge`, {
+            const res = await fetch(`/api/projects/${projectId}/hardware-merge`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ finalJson, trashJson: currentTrash }),
             });
+            if (res.ok) {
+                const json = await res.json() as { data?: { id?: string; updatedAt?: string } };
+                if (json?.data?.id && json?.data?.updatedAt) {
+                    markPendingWrite('project_hardware_finals', json.data.id, json.data.updatedAt);
+                }
+            }
         } catch (err) {
             console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
         }
