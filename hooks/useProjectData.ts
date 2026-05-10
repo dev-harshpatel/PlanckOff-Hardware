@@ -10,6 +10,7 @@ import { useProjectRealtime } from './useProjectRealtime';
 import { useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { isOwnWrite } from '@/lib/realtime/dedupSet';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface UseProjectDataOptions {
     projectId: string;
@@ -34,6 +35,30 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
     // Tracks whether final_json was successfully loaded — when true, realtime
     // reloads of door_schedule_imports are ignored (final_json is the source).
     const hasFinalJsonRef = useRef(false);
+
+    // Pricing callbacks are registered by deeply-nested components (PricingReportConfig)
+    // via the setter functions returned below. We hold them in refs so registration does
+    // not re-mount the Realtime channel.
+    type RealtimePayload = { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> };
+    const pricingItemsCallbackRef    = useRef<((payload: RealtimePayload) => void) | null>(null);
+    const pricingProposalCallbackRef = useRef<((payload: RealtimePayload) => void) | null>(null);
+
+    const setPricingItemsCallback = useCallback(
+      (cb: ((payload: RealtimePayload) => void) | null) => {
+        pricingItemsCallbackRef.current = cb;
+      },
+      [],
+    );
+    const setPricingProposalCallback = useCallback(
+      (cb: ((payload: RealtimePayload) => void) | null) => {
+        pricingProposalCallbackRef.current = cb;
+      },
+      [],
+    );
+
+    const { updateProjectFromRealtime } = useProject();
+    const updateProjectFromRealtimeRef = useRef(updateProjectFromRealtime);
+    updateProjectFromRealtimeRef.current = updateProjectFromRealtime;
 
     useEffect(() => {
         isInitialMount.current  = true;
@@ -348,10 +373,32 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         }
     }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const handlePricingItemsChange = useCallback(
+      (payload: RealtimePayload) => {
+        pricingItemsCallbackRef.current?.(payload);
+      },
+      [],
+    );
+    const handlePricingProposalChange = useCallback(
+      (payload: RealtimePayload) => {
+        pricingProposalCallbackRef.current?.(payload);
+      },
+      [],
+    );
+    const handleProjectChange = useCallback(
+      (payload: RealtimePayload) => {
+        updateProjectFromRealtimeRef.current(payload);
+      },
+      [],
+    );
+
     useProjectRealtime({
         projectId,
-        onDoorScheduleChange: reloadDoorSchedule,
-        onHardwareFinalsChange: reloadFromHardwareFinals,
+        onDoorScheduleChange:    reloadDoorSchedule,
+        onHardwareFinalsChange:  reloadFromHardwareFinals,
+        onPricingItemsChange:    handlePricingItemsChange,
+        onPricingProposalChange: handlePricingProposalChange,
+        onProjectChange:         handleProjectChange,
     });
 
     return {
@@ -368,5 +415,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         isPollingForResult,
         isInitialMount,
         reloadDoorSchedule,
+        setPricingItemsCallback,
+        setPricingProposalCallback,
     };
 }
