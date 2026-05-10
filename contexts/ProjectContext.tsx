@@ -6,6 +6,7 @@ import { initialMasterInventory } from '@/constants/inventory';
 import { ERRORS } from '@/constants/errors';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { isOwnWrite, markPendingWrite } from '@/lib/realtime/dedupSet';
 
 interface ProjectContextType {
   projects: Project[];
@@ -15,6 +16,7 @@ interface ProjectContextType {
   appSettings: AppSettings;
   addProject: (data: NewProjectData, doorFile?: File, hwFile?: File) => Promise<void>;
   updateProject: (project: Project) => void;
+  updateProjectFromRealtime: (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => void;
   deleteProject: (id: string) => void;
   restoreProject: (id: string) => void;
   permDeleteProject: (id: string) => void;
@@ -32,6 +34,33 @@ const DEFAULT_SETTINGS: AppSettings = {
   model: 'gemini-2.5-flash',
   geminiApiKey: '',
 };
+
+/**
+ * Client-side mirror of lib/db/projects.ts toProject(). Maps a snake_case
+ * Supabase Realtime row payload to the camelCase Project domain type.
+ * Kept in sync with the server-side helper — both must update if the
+ * projects table schema changes.
+ */
+function projectRowToProject(row: Record<string, unknown>): Project {
+  return {
+    id:             row.id as string,
+    name:           (row.name as string) ?? '',
+    client:         (row.client as string) ?? '',
+    location:       (row.location as string) ?? '',
+    country:        (row.country as string) ?? undefined,
+    province:       (row.province as string) ?? undefined,
+    description:    (row.description as string) ?? '',
+    projectNumber:  (row.project_number as string) ?? '',
+    status:         ((row.status as Project['status']) ?? 'Active'),
+    dueDate:        (row.due_date as string) ?? undefined,
+    assignedTo:     (row.assigned_to as string) ?? undefined,
+    createdAt:      new Date(row.created_at as string),
+    updatedAt:      new Date(row.updated_at as string),
+    lastModified:   row.updated_at as string,
+    elevationTypes: (row.elevation_types as Project['elevationTypes']) ?? [],
+    deletedAt:      (row.deleted_at as string) ?? undefined,
+  };
+}
 
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { addToast } = useToast();
@@ -139,10 +168,65 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       };
 
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? merged : p));
+
+      // Mark our own write so the Realtime echo is skipped (lib/realtime/dedupSet).
+      const rawUpdatedAt = (json.data as { updatedAt?: Date | string } | undefined)?.updatedAt;
+      const updatedAtStr = rawUpdatedAt instanceof Date
+        ? rawUpdatedAt.toISOString()
+        : typeof rawUpdatedAt === 'string'
+          ? rawUpdatedAt
+          : undefined;
+      if (updatedAtStr) {
+        markPendingWrite('projects', updatedProject.id, updatedAtStr);
+      }
     } catch {
       addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
     }
   };
+
+  const updateProjectFromRealtime = useCallback(
+    (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
+      // DELETE: remove from list.
+      if (payload.eventType === 'DELETE') {
+        const oldId = payload.old?.id;
+        if (typeof oldId === 'string') {
+          setProjects(prev => prev.filter(p => p.id !== oldId));
+        }
+        return;
+      }
+
+      const row = payload.new ?? {};
+      const id = typeof row.id === 'string' ? row.id : '';
+      const updatedAt = typeof row.updated_at === 'string' ? row.updated_at : '';
+      if (!id) return;
+
+      // Skip echoes of our own writes.
+      if (updatedAt && isOwnWrite('projects', id, updatedAt)) return;
+
+      const incoming = projectRowToProject(row);
+
+      setProjects(prev => {
+        const existing = prev.find(p => p.id === id);
+        if (!existing) {
+          // INSERT: append to list. New project from another tab.
+          return [...prev, incoming];
+        }
+        // UPDATE: preserve domain arrays (hardwareSets, doors, elevationTypes) from the
+        // local entry — the Realtime payload only carries metadata columns.
+        return prev.map(p =>
+          p.id === id
+            ? {
+                ...incoming,
+                hardwareSets:   existing.hardwareSets,
+                doors:          existing.doors,
+                elevationTypes: incoming.elevationTypes ?? existing.elevationTypes,
+              }
+            : p,
+        );
+      });
+    },
+    [],
+  );
 
   const deleteProject = async (id: string) => {
     try {
@@ -221,6 +305,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       appSettings,
       addProject,
       updateProject,
+      updateProjectFromRealtime,
       deleteProject,
       restoreProject: restoreProjectFn,
       permDeleteProject,
