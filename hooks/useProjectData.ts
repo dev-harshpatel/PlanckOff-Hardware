@@ -8,6 +8,8 @@ import { transformHardwareSets, transformDoors, transformFromFinalJson } from '.
 import { useSyncRef } from './useSyncRef';
 import { useProjectRealtime } from './useProjectRealtime';
 import { useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
+import { isOwnWrite } from '@/lib/realtime/dedupSet';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 interface UseProjectDataOptions {
     projectId: string;
@@ -272,7 +274,85 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         }
     }, [projectId]);
 
-    useProjectRealtime({ projectId, onDoorScheduleChange: reloadDoorSchedule });
+    /**
+     * Called when Supabase Realtime fires a postgres_changes event for
+     * project_hardware_finals. Skips the event if it was triggered by this
+     * tab's own write (deduplication via dedupSet.ts).
+     *
+     * On a genuine remote change, re-fetches the hardware-merge GET endpoint
+     * and applies the latest final_json + trash_json to local state.
+     */
+    const reloadFromHardwareFinals = useCallback(async (
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+    ) => {
+        // Extract id and updated_at from the realtime payload.
+        // Both UPDATE and INSERT events carry `new`; `old` may be empty for INSERT.
+        const row = (payload as { new?: Record<string, unknown> }).new ?? {};
+        const rowId      = typeof row['id']         === 'string' ? row['id']         : '';
+        const updatedAt  = typeof row['updated_at'] === 'string' ? row['updated_at'] : '';
+
+        // Skip if this is the echo of our own write.
+        if (rowId && updatedAt && isOwnWrite('project_hardware_finals', rowId, updatedAt)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
+            if (!res.ok) return;
+            const json = await res.json() as {
+                data?: {
+                    finalJson?: unknown[];
+                    trashJson?: TrashItem[];
+                } | null;
+            };
+            if (!json?.data?.finalJson?.length) return;
+
+            const finalData = transformFromFinalJson(
+                json.data.finalJson as Parameters<typeof transformFromFinalJson>[0],
+            );
+            if (!finalData || !finalData.hardwareSets.length) return;
+
+            // Update trash if provided.
+            if (Array.isArray(json.data.trashJson)) {
+                setTrashItems(json.data.trashJson);
+            }
+
+            const trashedDoorTags = new Set<string>(
+                trashItemsRef.current
+                    .filter(t => t.type === 'door')
+                    .map(t => t.doorData?.doorTag)
+                    .filter(Boolean) as string[],
+            );
+
+            const sets = finalData.hardwareSets.filter(s => s.name !== '__unassigned__');
+            const setsById = new Map(sets.map(s => [s.id, s]));
+
+            const loadedDoors = finalData.doors
+                .filter(d => !trashedDoorTags.has(d.doorTag))
+                .map(d => ({
+                    ...d,
+                    assignedHardwareSet: d.assignedHardwareSet && d.assignedHardwareSet.name !== '__unassigned__'
+                        ? (setsById.get(d.assignedHardwareSet.id) ?? d.assignedHardwareSet)
+                        : undefined,
+                }))
+                .sort((a, b) => a.doorTag.localeCompare(b.doorTag, undefined, { numeric: true, sensitivity: 'base' }));
+
+            // Mark as initial mount so the auto-save effect does not immediately
+            // write back the same data we just loaded.
+            isInitialMount.current = true;
+            hasFinalJsonRef.current = true;
+            setHardwareSets(sets);
+            setDoors(loadedDoors);
+        } catch {
+            // Non-critical — stale data is better than a crash
+        }
+    }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useProjectRealtime({
+        projectId,
+        onDoorScheduleChange: reloadDoorSchedule,
+        onHardwareFinalsChange: reloadFromHardwareFinals,
+    });
 
     return {
         hardwareSets,
