@@ -63,6 +63,12 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
 
     const optimisticWrite = useOptimisticDoorWrite();
 
+    // Incremented by reloadAllProjectData() (called on reconnect via onFullReload) to
+    // trigger the data-loading useEffect without re-mounting the Realtime channel.
+    const [reloadCounter, setReloadCounter] = useState(0);
+    const reloadAllProjectData = useCallback(() => {
+        setReloadCounter(c => c + 1);
+    }, []);
 
     useEffect(() => {
         isInitialMount.current  = true;
@@ -260,7 +266,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 pollingIntervalRef.current = null;
             }
         };
-    }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [projectId, reloadCounter]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const reloadDoorSchedule = useCallback(async () => {
         // When final_json is the source of truth, realtime changes to
@@ -403,6 +409,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         onPricingItemsChange:    handlePricingItemsChange,
         onPricingProposalChange: handlePricingProposalChange,
         onProjectChange:         handleProjectChange,
+        onFullReload:            reloadAllProjectData,
     });
 
     return {
