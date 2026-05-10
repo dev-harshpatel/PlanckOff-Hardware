@@ -11,6 +11,7 @@ import { useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { isOwnWrite } from '@/lib/realtime/dedupSet';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useProject } from '@/contexts/ProjectContext';
+import { useOptimisticDoorWrite } from './useOptimisticDoorWrite';
 
 interface UseProjectDataOptions {
     projectId: string;
@@ -59,6 +60,9 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
     const { updateProjectFromRealtime } = useProject();
     const updateProjectFromRealtimeRef = useRef(updateProjectFromRealtime);
     updateProjectFromRealtimeRef.current = updateProjectFromRealtime;
+
+    const optimisticWrite = useOptimisticDoorWrite();
+
 
     useEffect(() => {
         isInitialMount.current  = true;
@@ -417,5 +421,6 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         reloadDoorSchedule,
         setPricingItemsCallback,
         setPricingProposalCallback,
+        optimisticWrite,
     };
 }
