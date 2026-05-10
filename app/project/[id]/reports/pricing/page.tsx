@@ -1,13 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { DollarSign } from 'lucide-react';
-import type { Door, HardwareSet } from '@/types';
+import type { Door, HardwareSet, Toast } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
+import { useProjectData } from '@/hooks/useProjectData';
 
 const PricingReportConfig = dynamic(() => import('@/components/pricing/PricingReportConfig'), { ssr: false });
 
@@ -18,6 +19,17 @@ export default function PricingReportPage() {
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [projectName, setProjectName] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Noop refs/callbacks — the pricing page uses its own data-loading effect above.
+  // We only call useProjectData to subscribe to the Realtime channel and get the
+  // setPricingItemsCallback / setPricingProposalCallback setter functions.
+  const noopSaveRef = useRef<((sets: HardwareSet[], doors: Door[]) => Promise<void>) | null>(null);
+  const noopToast = (toast: Omit<Toast, 'id'>) => { void toast; };
+  const { setPricingItemsCallback, setPricingProposalCallback } = useProjectData({
+    projectId: id ?? '',
+    addToast: noopToast,
+    saveToFinalJsonRef: noopSaveRef,
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -84,6 +96,8 @@ export default function PricingReportPage() {
           doors={doors}
           hardwareSets={hardwareSets}
           projectName={projectName}
+          registerPricingItemsCallback={setPricingItemsCallback}
+          registerPricingProposalCallback={setPricingProposalCallback}
         />
       </div>
     </div>
