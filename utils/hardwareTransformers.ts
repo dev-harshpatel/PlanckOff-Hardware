@@ -306,7 +306,7 @@ export function transformFromFinalJson(
         thicknessDisplay: rawThickness?.trim() || undefined,
 
         buildingTag: bi?.['BUILDING TAG'] ?? ds?.['BUILDING TAG'],
-        buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'],
+        buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'] ?? door.buildingArea,
         handing: (bi?.['HAND OF OPENINGS'] ?? ds?.['HAND OF OPENINGS']) as Door['handing'],
         operation: bi?.['DOOR OPERATION'] ?? ds?.['DOOR OPERATION'],
         excludeReason: bi?.['EXCLUDE REASON'] ?? ds?.['EXCLUDE REASON'] ?? door.excludeReason,

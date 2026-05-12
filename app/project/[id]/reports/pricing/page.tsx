@@ -50,19 +50,20 @@ export default function PricingReportPage() {
         setProjectName(projJson?.data?.name ?? '');
 
         let sets: HardwareSet[] = [];
+        let loadedDoors: Door[] = [];
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
-          const { hardwareSets: mergedSets } = transformFromFinalJson(finalData);
+          const { hardwareSets: mergedSets, doors: finalDoors } = transformFromFinalJson(finalData);
           sets = mergedSets;
+          loadedDoors = finalDoors;
         } else {
           const hwRes = await fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' });
           const hwJson = hwRes.ok ? await hwRes.json() : null;
           if (hwJson?.data?.extractedJson) sets = transformHardwareSets(hwJson.data.extractedJson);
+          loadedDoors = dsJson?.data?.scheduleJson
+            ? transformDoors(dsJson.data.scheduleJson, sets)
+            : [];
         }
-
-        const loadedDoors: Door[] = dsJson?.data?.scheduleJson
-          ? transformDoors(dsJson.data.scheduleJson, sets)
-          : [];
 
         setHardwareSets(sets);
         setDoors(loadedDoors);
