@@ -5,7 +5,7 @@ import { HardwareSet, Door, Project, Toast } from '../types';
 import type { MergedHardwareSet, MergedDoor, TrashItem } from '@/lib/db/hardware';
 import { captureTrainingExample } from '../services/mlOpsService';
 import type { SaveStatus } from '../components/shared/SaveStatusIndicator';
-import { markPendingWrite } from '@/lib/realtime/dedupSet';
+import { GENERAL_ERRORS } from '@/constants/errors';
 
 interface UseProjectPersistenceOptions {
     projectId: string;
@@ -16,6 +16,7 @@ interface UseProjectPersistenceOptions {
     onProjectUpdate: (project: Project) => void;
     isInitialMount: React.MutableRefObject<boolean>;
     hasPendingUndoRef: React.MutableRefObject<boolean>;
+    addToast: (toast: Omit<Toast, 'id'>) => void;
 }
 
 export function useProjectPersistence({
@@ -27,6 +28,7 @@ export function useProjectPersistence({
     onProjectUpdate,
     isInitialMount,
     hasPendingUndoRef,
+    addToast,
 }: UseProjectPersistenceOptions) {
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
@@ -137,22 +139,21 @@ export function useProjectPersistence({
                 });
             }
 
-            const res = await fetch(`/api/projects/${projectId}/hardware-merge`, {
+            await fetch(`/api/projects/${projectId}/hardware-merge`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ finalJson, trashJson: currentTrash }),
             });
-            if (res.ok) {
-                const json = await res.json() as { data?: { id?: string; updatedAt?: string } };
-                if (json?.data?.id && json?.data?.updatedAt) {
-                    markPendingWrite('project_hardware_finals', json.data.id, json.data.updatedAt);
-                }
-            }
         } catch (err) {
-            console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
+            console.error('[saveToFinalJson] Failed to persist final JSON:', err);
+            addToast({
+                type: 'error',
+                message: GENERAL_ERRORS.SAVE_FAILED.message,
+                details: GENERAL_ERRORS.SAVE_FAILED.action,
+            });
         }
-    }, [projectId]);
+    }, [projectId, addToast]);
 
     const saveToHardwarePdf = useCallback(async (currentSets: HardwareSet[]): Promise<void> => {
         try {
@@ -177,9 +178,14 @@ export function useProjectPersistence({
                 body: JSON.stringify({ extractedJson }),
             });
         } catch (err) {
-            console.warn('[saveToHardwarePdf] Failed to persist hardware PDF extraction:', err);
+            console.error('[saveToHardwarePdf] Failed to persist hardware PDF extraction:', err);
+            addToast({
+                type: 'error',
+                message: GENERAL_ERRORS.SAVE_FAILED.message,
+                details: GENERAL_ERRORS.SAVE_FAILED.action,
+            });
         }
-    }, [projectId]);
+    }, [projectId, addToast]);
 
     const performSave = useCallback(() => {
         if (hasPendingUndoRef.current) return;
