@@ -3,6 +3,7 @@ import type { CompanySettings } from '@/lib/db/companySettings';
 import type { DoorPricingGroup, HardwarePricingGroup } from '@/utils/pricingGrouping';
 import { buildExportFilename } from '@/utils/exportFilename';
 import { buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt, contentAwareColWidths } from '@/services/excelTheme';
+import { buildAutoTableOptions, addPageNumbers, loadLogoDataUrl, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT, BRAND_NAVY, ROW_ALT_FILL } from '@/services/pdfTheme';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
@@ -128,108 +129,77 @@ export function usePricingExport({
   }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
 
   const handleDownloadPdf = useCallback(async (sections: ExportSections) => {
-    const { default: jsPDF } = await import('jspdf');
+    const { default: jsPDF }     = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
-    const doc = new jsPDF({ orientation: 'landscape' });
-    type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
-    const d = doc as DocWithAutoTable;
+    const doc        = new jsPDF({ orientation: 'landscape' });
+    const pageW      = doc.internal.pageSize.getWidth();
+    const pageH      = doc.internal.pageSize.getHeight();
+    const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const logoDataUrl = await loadLogoDataUrl();
+    const headerMeta  = { projectName, logoDataUrl };
+    const totalStyle  = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
 
-    const nextY = (offset = 0) => (d.lastAutoTable?.finalY ?? 0) + offset;
-    const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
-
-    let currentY = 10;
-
-    if (companySettings?.companyName) {
-      const co = companySettings;
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(co.companyName, 14, 12);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      const lines: string[] = [];
-      if (co.websiteUrl || co.email) lines.push([co.websiteUrl, co.email].filter(Boolean).join('  |  '));
-      if (co.phone) lines.push(co.phone);
-      const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
-      if (addrParts) lines.push(addrParts);
-      lines.forEach((line, i) => doc.text(line, 14, 18 + i * 5));
-      currentY = 18 + lines.length * 5 + 4;
-      doc.setDrawColor(180, 180, 180);
-      doc.line(14, currentY, doc.internal.pageSize.width - 14, currentY);
-      currentY += 6;
-    }
-
-    let firstSection = true;
+    let added = 0;
 
     if (sections.doors) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, startY);
+      if (added > 0) doc.addPage();
       autoTable(doc, {
-        startY: startY + 6,
+        ...buildAutoTableOptions(DEFAULT_THEME, 'Pricing Report — Doors', exportDate, pageW, PDF_MARGIN, headerMeta),
+        startY: HEADER_BAR_HEIGHT + 2,
         head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
         body: [
           ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
           ['', '', 'Total', fmt.format(doorTotal)],
         ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        didParseCell: (data: any) => {
+          if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalStyle);
         },
       });
-      firstSection = false;
+      added++;
     }
 
     if (sections.frames) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, startY);
+      if (added > 0) doc.addPage();
       autoTable(doc, {
-        startY: (firstSection ? startY : nextY(18)),
+        ...buildAutoTableOptions(DEFAULT_THEME, 'Pricing Report — Frames', exportDate, pageW, PDF_MARGIN, headerMeta),
+        startY: HEADER_BAR_HEIGHT + 2,
         head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
         body: [
           ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
           ['', '', 'Total', fmt.format(frameTotal)],
         ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        didParseCell: (data: any) => {
+          if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalStyle);
         },
       });
-      firstSection = false;
+      added++;
     }
 
     if (sections.hardware) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, startY);
+      if (added > 0) doc.addPage();
       autoTable(doc, {
-        startY: (firstSection ? startY : nextY(18)),
-        head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
+        ...buildAutoTableOptions(DEFAULT_THEME, 'Pricing Report — Hardware', exportDate, pageW, PDF_MARGIN, headerMeta),
+        startY: HEADER_BAR_HEIGHT + 2,
+        head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Total Qty', 'Door Materials', 'Unit Price', 'Total Price']],
         body: [
           ...hardwareGroups.map(g => [
             g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
-            g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
+            g.totalQty, g.doorMaterials.join(', '), fmt.format(g.unitPrice), fmt.format(g.totalPrice),
           ]),
-          ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
+          ['', '', '', '', '', '', 'Total', fmt.format(hwTotal)],
         ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+        didParseCell: (data: any) => {
+          if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalStyle);
         },
       });
-      firstSection = false;
+      added++;
     }
 
-    if (firstSection) return; // nothing selected
+    if (added === 0) return;
+    addPageNumbers(doc, projectName, pageW, pageH, PDF_MARGIN);
     doc.save(buildExportFilename(projectName, 'pricing-report', 'pdf'));
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, projectName]);
 
   const handleDownloadProposalPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf');
@@ -347,7 +317,10 @@ export function usePricingExport({
         ['Grand Total', grandLabel, '', fmt.format(proposalGrandTotal + (allocateExpenses ? extraExpensesTotal : 0))],
       ],
       styles:     { fontSize: 8, cellPadding: 5 },
-      headStyles: { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
+      headStyles: { fillColor: BRAND_NAVY, textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: ROW_ALT_FILL },
+      repeatHeaders: true,
+      rowPageBreak: 'avoid',
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
       didParseCell: (data) => {
         if (data.row.index === summaryRows.length) {
@@ -446,7 +419,10 @@ export function usePricingExport({
           ['Total', fmt.format(extraExpensesTotal)],
         ],
         styles:       { fontSize: 8, cellPadding: 5 },
-        headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
+        headStyles:   { fillColor: BRAND_NAVY, textColor: 255 },
+      alternateRowStyles: { fillColor: ROW_ALT_FILL },
+      repeatHeaders: true,
+      rowPageBreak: 'avoid',
         columnStyles: { 1: { halign: 'right' } },
         didParseCell: (data) => {
           if (data.row.index === extraExpenses.length) {
@@ -480,7 +456,10 @@ export function usePricingExport({
       head: [['Description', 'Amount']],
       body: taxBody,
       styles:       { fontSize: 8, cellPadding: 5 },
-      headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
+      headStyles:   { fillColor: BRAND_NAVY, textColor: 255 },
+      alternateRowStyles: { fillColor: ROW_ALT_FILL },
+      repeatHeaders: true,
+      rowPageBreak: 'avoid',
       columnStyles: {
         0: { halign: 'left' },
         1: { halign: 'right' },
