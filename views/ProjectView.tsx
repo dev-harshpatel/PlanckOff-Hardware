@@ -59,6 +59,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const { saveStatus, saveToFinalJson, saveToHardwarePdf, performSave } = useProjectPersistence({
         projectId: project.id, project, hardwareSets, doors, trashItems,
         onProjectUpdate, isInitialMount, hasPendingUndoRef,
+        addToast,
     });
 
     // Assign synchronously so loadProjectData can call it on first-upload initialization
