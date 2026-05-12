@@ -4,11 +4,13 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { DollarSign } from 'lucide-react';
-import type { Door, HardwareSet, Toast } from '@/types';
+import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 import { useProjectData } from '@/hooks/useProjectData';
+import { useToast } from '@/contexts/ToastContext';
+import { ERRORS } from '@/constants/errors';
 
 const PricingReportConfig = dynamic(() => import('@/components/pricing/PricingReportConfig'), { ssr: false });
 
@@ -20,14 +22,13 @@ export default function PricingReportPage() {
   const [projectName, setProjectName] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Noop refs/callbacks — the pricing page uses its own data-loading effect above.
-  // We only call useProjectData to subscribe to the Realtime channel and get the
-  // setPricingItemsCallback / setPricingProposalCallback setter functions.
+  // useProjectData is called for Realtime channel subscription only (setPricingItemsCallback, setPricingProposalCallback).
+  // addToast is wired in so subscription errors surface as toasts.
   const noopSaveRef = useRef<((sets: HardwareSet[], doors: Door[]) => Promise<void>) | null>(null);
-  const noopToast = (toast: Omit<Toast, 'id'>) => { void toast; };
+  const { addToast } = useToast();
   const { setPricingItemsCallback, setPricingProposalCallback } = useProjectData({
     projectId: id ?? '',
-    addToast: noopToast,
+    addToast,
     saveToFinalJsonRef: noopSaveRef,
   });
 
@@ -69,6 +70,7 @@ export default function PricingReportPage() {
         setDoors(loadedDoors);
       } catch (err) {
         console.error('[PricingReport] Load failed:', err);
+        addToast({ type: 'error', message: ERRORS.GENERAL.UNEXPECTED.message, details: ERRORS.GENERAL.UNEXPECTED.action });
       } finally {
         setLoading(false);
       }
