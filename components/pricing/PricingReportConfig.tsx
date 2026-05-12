@@ -15,35 +15,18 @@ import { DoorRow, HardwareRow, TH } from './PricingTableRows';
 import { usePricingFilters } from '@/hooks/usePricingFilters';
 import { usePricingExport, type ExportSections } from '@/hooks/usePricingExport';
 import { usePricingProposal } from '@/hooks/usePricingProposal';
-import { isOwnWrite, markPendingWrite } from '@/lib/realtime/dedupSet';
-
-type RealtimePayload = { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> };
+import { useToast } from '@/contexts/ToastContext';
 
 interface Props {
   projectId: string;
   doors: Door[];
   hardwareSets: HardwareSet[];
   projectName: string;
-  /**
-   * Optional — when supplied, the component registers its Realtime patch callback so
-   * useProjectRealtime (called from useProjectData) can invoke it. If omitted (e.g.,
-   * the component is rendered outside a project view), Realtime patches are silently
-   * not applied and the component still functions via its existing fetch-on-mount.
-   */
-  registerPricingItemsCallback?: (cb: ((payload: RealtimePayload) => void) | null) => void;
-  registerPricingProposalCallback?: (cb: ((payload: RealtimePayload) => void) | null) => void;
 }
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
-const PricingReportConfig: React.FC<Props> = ({
-  projectId,
-  doors,
-  hardwareSets,
-  projectName,
-  registerPricingItemsCallback,
-  registerPricingProposalCallback,
-}) => {
+const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, projectName }) => {
   const [activeTab, setActiveTab]   = useState<PricingTab>('door');
   const [prices, setPrices]         = useState<PriceMap>(new Map());
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
@@ -56,6 +39,8 @@ const PricingReportConfig: React.FC<Props> = ({
   const exportDialogRef = useRef<HTMLDivElement>(null);
 
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const { addToast } = useToast();
 
   useEffect(() => {
     fetch('/api/settings/company', { credentials: 'include' })
@@ -92,44 +77,6 @@ const PricingReportConfig: React.FC<Props> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, [exportDialog]);
 
-  const handlePricingItemsChange = useCallback(
-    (payload: RealtimePayload) => {
-      if (payload.eventType === 'DELETE') {
-        const oldRow = payload.old ?? {};
-        const category = typeof oldRow.category === 'string' ? oldRow.category : '';
-        const groupKey = typeof oldRow.group_key === 'string' ? oldRow.group_key : '';
-        if (!category || !groupKey) return;
-        setPrices(prev => {
-          const next = new Map(prev);
-          next.delete(`${category}:${groupKey}`);
-          return next;
-        });
-        return;
-      }
-
-      const row = payload.new ?? {};
-      const id = typeof row.id === 'string' ? row.id : '';
-      const updatedAt = typeof row.updated_at === 'string' ? row.updated_at : '';
-      const category = typeof row.category === 'string' ? row.category : '';
-      const groupKey = typeof row.group_key === 'string' ? row.group_key : '';
-      const unitPrice = typeof row.unit_price === 'number' ? row.unit_price : 0;
-      if (!category || !groupKey) return;
-
-      if (id && updatedAt && isOwnWrite('project_pricing_items', id, updatedAt)) return;
-
-      setPrices(prev => new Map(prev).set(`${category}:${groupKey}`, unitPrice));
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!registerPricingItemsCallback) return;
-    registerPricingItemsCallback(handlePricingItemsChange);
-    return () => {
-      registerPricingItemsCallback(null);
-    };
-  }, [registerPricingItemsCallback, handlePricingItemsChange]);
-
   const handlePriceChange = useCallback((category: PricingTab, key: string, raw: string) => {
     const unitPrice = Math.max(0, parseFloat(raw) || 0);
     const mapKey    = `${category}:${key}`;
@@ -139,20 +86,12 @@ const PricingReportConfig: React.FC<Props> = ({
     if (existing) clearTimeout(existing);
     debounceTimers.current.set(mapKey, setTimeout(async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/pricing`, {
+        await fetch(`/api/projects/${projectId}/pricing`, {
           method: 'PUT',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category, group_key: key, unit_price: unitPrice }),
         });
-        if (res.ok) {
-          const json = (await res.json()) as { data?: { id?: string; updated_at?: string } };
-          const id = json.data?.id;
-          const updatedAt = json.data?.updated_at;
-          if (id && updatedAt) {
-            markPendingWrite('project_pricing_items', id, updatedAt);
-          }
-        }
       } catch (err) {
         console.error('[Pricing] Save failed:', err);
       }
@@ -217,7 +156,6 @@ const PricingReportConfig: React.FC<Props> = ({
     handleAddExpense,
     handleExpenseChange,
     handleRemoveExpense,
-    handlePricingProposalChange,
     proposalDoorTotal,
     proposalFrameTotal,
     proposalHwTotal,
@@ -230,20 +168,12 @@ const PricingReportConfig: React.FC<Props> = ({
     hwAlloc,
   } = usePricingProposal({ projectId, proposalDoorBase, proposalFrameBase, proposalHwBase });
 
-  useEffect(() => {
-    if (!registerPricingProposalCallback) return;
-    registerPricingProposalCallback(handlePricingProposalChange);
-    return () => {
-      registerPricingProposalCallback(null);
-    };
-  }, [registerPricingProposalCallback, handlePricingProposalChange]);
-
   const { handleDownloadExcel, handleDownloadPdf, handleDownloadProposalPdf } = usePricingExport({
     projectId,
     projectName,
     companySettings,
-    doorGroups: visibleDoors,
-    frameGroups: visibleFrames,
+    doorGroups,
+    frameGroups,
     hardwareGroups: visibleHardware,
     doorTotal,
     frameTotal,
@@ -268,6 +198,7 @@ const PricingReportConfig: React.FC<Props> = ({
     taxSubtotal,
     totalAfterTax,
     remarks,
+    addToast,
   });
 
   const handleExportConfirm = useCallback(() => {
