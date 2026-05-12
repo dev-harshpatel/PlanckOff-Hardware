@@ -15,12 +15,14 @@ export { DOOR_ERRORS } from './doors';
 export { HARDWARE_ERRORS } from './hardware';
 export { PDF_ERRORS } from './pdf';
 export { GENERAL_ERRORS } from './general';
+export { REALTIME_ERRORS } from './realtime';
 
 import { AUTH_ERRORS } from './auth';
 import { DOOR_ERRORS } from './doors';
 import { HARDWARE_ERRORS } from './hardware';
 import { PDF_ERRORS } from './pdf';
 import { GENERAL_ERRORS } from './general';
+import { REALTIME_ERRORS } from './realtime';
 
 /**
  * Convenience namespace. Import as `import { ERRORS } from '@/constants/errors'`
@@ -32,4 +34,5 @@ export const ERRORS = {
   HARDWARE: HARDWARE_ERRORS,
   PDF: PDF_ERRORS,
   GENERAL: GENERAL_ERRORS,
+  REALTIME: REALTIME_ERRORS,
 } as const;
