@@ -9,7 +9,7 @@ import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { exportHardwareSet } from '@/services/reportExportService';
-import type { HardwareSetExportConfig } from '@/components/hardware/HardwareSetConfig';
+import type { HardwareSetExportConfig } from '@/types/hardwareSetTypes';
 import { useToast } from '@/contexts/ToastContext';
 import { PDF_ERRORS } from '@/constants/errors';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';

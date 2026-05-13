@@ -2,8 +2,8 @@ import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from './excelTheme';
 import { Door, HardwareSet, HardwareItem, ElevationType } from '../types';
-import { DoorScheduleExportConfig } from '../components/doorSchedule/DoorScheduleConfig';
-import { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import type { DoorScheduleExportConfig } from '../types/doorScheduleTypes';
+import type { HardwareSetExportConfig } from '../types/hardwareSetTypes';
 import { assignDoorCSISection, assignHardwareCSISection } from '../utils/csiMasterFormat';
 import { buildExportFilename } from '../utils/exportFilename';
 

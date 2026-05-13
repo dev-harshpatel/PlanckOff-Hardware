@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Door, HardwareSet, ElevationType } from '../../types';
-import DoorScheduleConfig, { DoorScheduleExportConfig } from '../doorSchedule/DoorScheduleConfig';
-import HardwareSetConfig, { HardwareSetExportConfig } from '../hardware/HardwareSetConfig';
+import DoorScheduleConfig from '../doorSchedule/DoorScheduleConfig';
+import type { DoorScheduleExportConfig } from '../../types/doorScheduleTypes';
+import HardwareSetConfig from '../hardware/HardwareSetConfig';
+import type { HardwareSetExportConfig } from '../../types/hardwareSetTypes';
 import SubmittalPackageConfig, { SubmittalExportConfig } from '../submittals/SubmittalPackageConfig';
 import { exportDoorSchedule, exportHardwareSet } from '../../services/reportExportService';
 import { useToast } from '@/contexts/ToastContext';

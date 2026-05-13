@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Door, HardwareSet, ElevationType } from '../types';
 import DoorScheduleConfig from '../components/doorSchedule/DoorScheduleConfig';
-import HardwareSetConfig, { HardwareSetExportConfig } from '../components/hardware/HardwareSetConfig';
+import HardwareSetConfig from '../components/hardware/HardwareSetConfig';
+import type { HardwareSetExportConfig } from '../types/hardwareSetTypes';
 // SubmittalGenerator now uses finalJson — routing handled by /reports/submittal-package page
 import ValidationModal from '../components/shared/ValidationModal';
 import { exportHardwareSet } from '../services/reportExportService';
