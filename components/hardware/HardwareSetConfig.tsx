@@ -7,17 +7,12 @@ import CollapseAllButton from '@/components/ui/CollapseAllButton';
 import { Door, HardwareSet, HardwareItem } from '../../types';
 import { contentAwareColWidths, XLS_HEADER_FILL, XLS_HEADER_TEXT, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from '@/services/excelTheme';
 import { buildAutoTableOptions, addPageNumbers, loadLogoDataUrl, DEFAULT_THEME, PDF_MARGIN, HEADER_BAR_HEIGHT } from '@/services/pdfTheme';
+import type { HardwareSetExportConfig } from '../../types/hardwareSetTypes';
 
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
-export interface HardwareSetExportConfig {
-    requiredColumns: string[];
-    optionalColumns: string[];
-    groupBy: 'set' | 'type' | 'manufacturer' | 'flat' | 'buildingTag' | 'buildingLocation' | 'doorMaterial';
-    usageDisplay: string[];
-    format: 'xlsx' | 'pdf';
-}
+export type { HardwareSetExportConfig } from '../../types/hardwareSetTypes';
 
 // ─── Local types ──────────────────────────────────────────────────────────────
 

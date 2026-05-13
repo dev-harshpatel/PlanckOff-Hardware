@@ -18,6 +18,7 @@ import { DoorGroupingControls } from './DoorGroupingControls';
 import {
     type SectionKey, type ExportFormat, type DynamicColumnGroup, type DoorGroup, type AggregatedDoorRow,
 } from './doorScheduleTypes';
+import type { DoorScheduleExportConfig } from '../../types/doorScheduleTypes';
 import {
     buildAutoTableOptions,
     addPageNumbers,
@@ -32,19 +33,7 @@ import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadat
 
 // ─── Exported types (kept for downstream services) ───────────────────────────
 
-export interface DoorScheduleExportConfig {
-    format?: string;
-    columns: {
-        basic: string[];
-        dimensions: string[];
-        materials: string[];
-        fireSafety: string[];
-        hardware: string[];
-        additional: string[];
-    };
-    includeHeader: boolean;
-    includeSummary: boolean;
-}
+export type { DoorScheduleExportConfig } from '../../types/doorScheduleTypes';
 
 // ─── Local types ──────────────────────────────────────────────────────────────
 
