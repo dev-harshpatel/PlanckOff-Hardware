@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { Project, HardwareItem, AppSettings, NewProjectData } from '../types';
 import { initialMasterInventory } from '@/constants/inventory';
 import { ERRORS } from '@/constants/errors';
@@ -129,7 +129,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
    * in updateProjectFromRealtime will find the project already present via
    * `prev.find(p => p.id === id)` and short-circuit correctly.
    */
-  const addProject = async (projectData: NewProjectData, _doorFile?: File, _hwFile?: File) => {
+  const addProject = useCallback(async (projectData: NewProjectData, _doorFile?: File, _hwFile?: File) => {
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -149,9 +149,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
       throw error;
     }
-  };
+  }, [addToast]);
 
-  const updateProject = async (updatedProject: Project) => {
+  const updateProject = useCallback(async (updatedProject: Project) => {
     try {
       // Strip large domain arrays before sending to the project metadata API —
       // the API only persists metadata columns (name, status, etc.) and ignores
@@ -191,7 +191,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch {
       addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
     }
-  };
+  }, [addToast]);
 
   const updateProjectFromRealtime = useCallback(
     (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
@@ -237,7 +237,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     [],
   );
 
-  const deleteProject = async (id: string) => {
+  const deleteProject = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}`, {
         method: 'DELETE',
@@ -255,7 +255,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [projects, addToast]);
 
   /**
    * Optimistic restore: mirrors deleteProject's optimistic filter pattern.
@@ -263,7 +263,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
    * prepends the restored project (minus deletedAt) to active projects directly,
    * instead of re-fetching the entire list via fetchProjects().
    */
-  const restoreProjectFn = async (id: string) => {
+  const restoreProjectFn = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}?restore=true`, {
         method: 'DELETE',
@@ -282,9 +282,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [trash, addToast]);
 
-  const permDeleteProject = async (id: string) => {
+  const permDeleteProject = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}?hard=true`, {
         method: 'DELETE',
@@ -297,44 +297,51 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [addToast]);
 
   // Inventory — keep in localStorage for now (Phase 1.3 will migrate this)
-  const updateInventory = (items: HardwareItem[]) => {
+  const updateInventory = useCallback((items: HardwareItem[]) => {
     setMasterInventory(items);
     localStorage.setItem('tve_master_inventory', JSON.stringify(items));
-  };
+  }, []);
 
   const addToInventory = useCallback((items: HardwareItem[]) => {
     setMasterInventory(prev => [...prev, ...items]);
   }, []);
 
-  const overwriteInventory = (items: HardwareItem[]) => setMasterInventory(items);
+  const overwriteInventory = useCallback((items: HardwareItem[]) => setMasterInventory(items), []);
 
-  const saveSettings = (newSettings: AppSettings) => {
+  const saveSettings = useCallback((newSettings: AppSettings) => {
     setAppSettings(newSettings);
     localStorage.setItem('tve_app_settings', JSON.stringify(newSettings));
-  };
+  }, []);
+
+  const contextValue = useMemo<ProjectContextType>(() => ({
+    projects,
+    projectsHydrated,
+    masterInventory,
+    trash,
+    appSettings,
+    addProject,
+    updateProject,
+    updateProjectFromRealtime,
+    deleteProject,
+    restoreProject: restoreProjectFn,
+    permDeleteProject,
+    fetchTrashed,
+    updateInventory,
+    addToInventory,
+    overwriteInventory,
+    saveSettings,
+  }), [
+    projects, projectsHydrated, masterInventory, trash, appSettings,
+    addProject, updateProject, updateProjectFromRealtime,
+    deleteProject, restoreProjectFn, permDeleteProject, fetchTrashed,
+    updateInventory, addToInventory, overwriteInventory, saveSettings,
+  ]);
 
   return (
-    <ProjectContext.Provider value={{
-      projects,
-      projectsHydrated,
-      masterInventory,
-      trash,
-      appSettings,
-      addProject,
-      updateProject,
-      updateProjectFromRealtime,
-      deleteProject,
-      restoreProject: restoreProjectFn,
-      permDeleteProject,
-      fetchTrashed,
-      updateInventory,
-      addToInventory,
-      overwriteInventory,
-      saveSettings,
-    }}>
+    <ProjectContext.Provider value={contextValue}>
       {children}
     </ProjectContext.Provider>
   );
