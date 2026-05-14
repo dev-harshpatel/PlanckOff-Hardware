@@ -77,7 +77,7 @@ export default function PricingReportPage() {
     }
 
     load();
-  }, [id]);
+  }, [id, addToast]);
 
   if (loading) {
     return <ReportPageSkeleton badgeWidth="w-32" rows={7} />;
