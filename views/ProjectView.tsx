@@ -95,7 +95,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         saveToFinalJson, saveToHardwarePdf, performSave,
     });
 
-    const persistElevationTypes = async (updatedTypes: ElevationType[]) => {
+    const persistElevationTypes = useCallback(async (updatedTypes: ElevationType[]) => {
         try {
             await fetch(`/api/projects/${project.id}`, {
                 method: 'PUT',
@@ -106,15 +106,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         } catch {
             // Non-critical — local state is still updated
         }
-    };
+    }, [project.id]);
 
-    const handleElevationUpdate = (updatedTypes: ElevationType[]) => {
+    const handleElevationUpdate = useCallback((updatedTypes: ElevationType[]) => {
         const updatedProject = { ...project, elevationTypes: updatedTypes };
         onProjectUpdate(updatedProject);
         void persistElevationTypes(updatedTypes);
-    };
+    }, [project, onProjectUpdate, persistElevationTypes]);
 
-    const handleSingleElevationTypeUpdate = (updated: ElevationType) => {
+    const handleSingleElevationTypeUpdate = useCallback((updated: ElevationType) => {
         const current = project.elevationTypes ?? [];
         const exists = current.some(et => et.id === updated.id);
         const next = exists
@@ -122,16 +122,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             : [...current, updated]; // new type created on-the-fly from ElevationTab
         onProjectUpdate({ ...project, elevationTypes: next });
         void persistElevationTypes(next);
-    };
+    }, [project, onProjectUpdate, persistElevationTypes]);
 
     // Reactive report generation
     const report = useMemo(() => generateReport(doors), [doors]);
 
-    const formatElapsed = (s: number) => {
+    const formatElapsed = useCallback((s: number) => {
         const m = Math.floor(s / 60);
         const sec = s % 60;
         return m > 0 ? `${m}m ${sec.toString().padStart(2, '0')}s` : `${sec}s`;
-    };
+    }, []);
 
     const hardwareActiveTask = useMemo(
         () => processingTasks.find(t => t.type === 'hardware-pdf'),
