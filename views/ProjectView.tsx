@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { HardwareSet, Door, Project, AppSettings, Toast, ElevationType } from '../types';
 import HardwareSetsManager from '../components/hardware/HardwareSetsManager';
@@ -133,8 +133,24 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         return m > 0 ? `${m}m ${sec.toString().padStart(2, '0')}s` : `${sec}s`;
     };
 
-    const hardwareActiveTask = processingTasks.find(t => t.type === 'hardware-pdf');
-    const doorActiveTask = processingTasks.find(t => t.type === 'door-schedule');
+    const hardwareActiveTask = useMemo(
+        () => processingTasks.find(t => t.type === 'hardware-pdf'),
+        [processingTasks],
+    );
+    const doorActiveTask = useMemo(
+        () => processingTasks.find(t => t.type === 'door-schedule'),
+        [processingTasks],
+    );
+
+    const handleCancelHardwareTask = useCallback(() => {
+        if (!hardwareActiveTask) return;
+        setProcessingTasks(prev => prev.filter(t => t.id !== hardwareActiveTask.id));
+    }, [hardwareActiveTask, setProcessingTasks]);
+
+    const handleCancelDoorTask = useCallback(() => {
+        if (!doorActiveTask) return;
+        setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id));
+    }, [doorActiveTask, setProcessingTasks]);
 
     // Individual re-upload buttons are only enabled after the first combined upload completes.
     // If there's already data (loaded from DB on mount), they're also enabled immediately.
@@ -153,7 +169,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 onBulkDeleteSets={handleBulkDeleteSets}
                 onCreateVariant={handleSplitSetAndReassign}
                 activeTask={hardwareActiveTask}
-                onCancelTask={hardwareActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== hardwareActiveTask.id)) : undefined}
+                onCancelTask={hardwareActiveTask ? handleCancelHardwareTask : undefined}
                 canReupload={individualUploadsEnabled}
             />
         </div>
@@ -175,7 +191,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 projectId={project.id}
                 addToast={addToast}
                 activeTask={doorActiveTask}
-                onCancelTask={doorActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id)) : undefined}
+                onCancelTask={doorActiveTask ? handleCancelDoorTask : undefined}
                 canReupload={individualUploadsEnabled}
                 onDeleteDoors={handleDeleteDoors}
                 onAssignAll={handleAssignAll}
