@@ -6,7 +6,7 @@ import { ERRORS } from '@/constants/errors';
 
 interface UseColumnVisibilityParams {
     projectId: string;
-    addToast: (toast: Toast) => void;
+    addToast: (toast: Omit<Toast, 'id'>) => void;
 }
 
 export function useColumnVisibility({ projectId, addToast }: UseColumnVisibilityParams) {

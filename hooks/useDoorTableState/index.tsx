@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { Door, HardwareSet, ElevationType, Toast } from '../../types';
-import { ERRORS } from '@/constants/errors';
 import { matchHardwareSet } from '../../utils/hardwareMatcher';
 import { migrateDoorData } from '../../utils/doorDataMigration';
 import { useBackgroundUpload } from '../../contexts/BackgroundUploadContext';
@@ -45,7 +44,7 @@ export function useDoorTableState({
     const validSetNames = useMemo(() => new Set(hardwareSets.map(s => s.name.trim().toLowerCase())), [hardwareSets]);
 
     const filterState = useFilterState({ doors });
-    const colVis = useColumnVisibility({ projectId, addToast: addToast as (toast: Toast) => void });
+    const colVis = useColumnVisibility({ projectId, addToast });
     const rowSel = useRowSelection({ filteredAndSortedDoors: filterState.filteredAndSortedDoors });
     const editState = useCellEditState({ onDoorsUpdate, onProvidedSetChange });
 

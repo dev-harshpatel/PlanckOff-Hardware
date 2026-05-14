@@ -43,7 +43,7 @@ export function useRowSelection({ filteredAndSortedDoors }: UseRowSelectionParam
     };
 
     return {
-        selectedRows,
+        selectedRows, setSelectedRows,
         reportModalOpen, setReportModalOpen,
         isFilterMenuOpen, setIsFilterMenuOpen,
         filterMenuRef,
