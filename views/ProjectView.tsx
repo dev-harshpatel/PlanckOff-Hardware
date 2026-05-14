@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { HardwareSet, Door, Project, AppSettings, Toast, ElevationType } from '../types';
 import HardwareSetsManager from '../components/hardware/HardwareSetsManager';
@@ -96,7 +96,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         saveToFinalJson, saveToHardwarePdf, performSave,
     });
 
-    const persistElevationTypes = async (updatedTypes: ElevationType[]) => {
+    const persistElevationTypes = useCallback(async (updatedTypes: ElevationType[]) => {
         try {
             await fetch(`/api/projects/${project.id}`, {
                 method: 'PUT',
@@ -107,15 +107,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         } catch {
             // Non-critical — local state is still updated
         }
-    };
+    }, [project.id]);
 
-    const handleElevationUpdate = (updatedTypes: ElevationType[]) => {
+    const handleElevationUpdate = useCallback((updatedTypes: ElevationType[]) => {
         const updatedProject = { ...project, elevationTypes: updatedTypes };
         onProjectUpdate(updatedProject);
         void persistElevationTypes(updatedTypes);
-    };
+    }, [project, onProjectUpdate, persistElevationTypes]);
 
-    const handleSingleElevationTypeUpdate = (updated: ElevationType) => {
+    const handleSingleElevationTypeUpdate = useCallback((updated: ElevationType) => {
         const current = project.elevationTypes ?? [];
         const exists = current.some(et => et.id === updated.id);
         const next = exists
@@ -123,19 +123,35 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             : [...current, updated]; // new type created on-the-fly from ElevationTab
         onProjectUpdate({ ...project, elevationTypes: next });
         void persistElevationTypes(next);
-    };
+    }, [project, onProjectUpdate, persistElevationTypes]);
 
     // Reactive report generation
     const report = useMemo(() => generateReport(doors), [doors]);
 
-    const formatElapsed = (s: number) => {
+    const formatElapsed = useCallback((s: number) => {
         const m = Math.floor(s / 60);
         const sec = s % 60;
         return m > 0 ? `${m}m ${sec.toString().padStart(2, '0')}s` : `${sec}s`;
-    };
+    }, []);
 
-    const hardwareActiveTask = processingTasks.find(t => t.type === 'hardware-pdf');
-    const doorActiveTask = processingTasks.find(t => t.type === 'door-schedule');
+    const hardwareActiveTask = useMemo(
+        () => processingTasks.find(t => t.type === 'hardware-pdf'),
+        [processingTasks],
+    );
+    const doorActiveTask = useMemo(
+        () => processingTasks.find(t => t.type === 'door-schedule'),
+        [processingTasks],
+    );
+
+    const handleCancelHardwareTask = useCallback(() => {
+        if (!hardwareActiveTask) return;
+        setProcessingTasks(prev => prev.filter(t => t.id !== hardwareActiveTask.id));
+    }, [hardwareActiveTask, setProcessingTasks]);
+
+    const handleCancelDoorTask = useCallback(() => {
+        if (!doorActiveTask) return;
+        setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id));
+    }, [doorActiveTask, setProcessingTasks]);
 
     // Individual re-upload buttons are only enabled after the first combined upload completes.
     // If there's already data (loaded from DB on mount), they're also enabled immediately.
@@ -154,7 +170,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 onBulkDeleteSets={handleBulkDeleteSets}
                 onCreateVariant={handleSplitSetAndReassign}
                 activeTask={hardwareActiveTask}
-                onCancelTask={hardwareActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== hardwareActiveTask.id)) : undefined}
+                onCancelTask={hardwareActiveTask ? handleCancelHardwareTask : undefined}
                 canReupload={individualUploadsEnabled}
             />
         </div>
@@ -176,7 +192,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 projectId={project.id}
                 addToast={addToast}
                 activeTask={doorActiveTask}
-                onCancelTask={doorActiveTask ? () => setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id)) : undefined}
+                onCancelTask={doorActiveTask ? handleCancelDoorTask : undefined}
                 canReupload={individualUploadsEnabled}
                 onDeleteDoors={handleDeleteDoors}
                 onAssignAll={handleAssignAll}
