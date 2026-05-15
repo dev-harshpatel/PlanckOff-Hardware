@@ -107,7 +107,7 @@ Plans:
 ### v3.0 Performance Optimization (Phase 12+)
 
 - [x] **Phase 12: Re-render & Fetch Audit** — Audit and eliminate unnecessary React re-renders, redundant Supabase API calls, and duplicate data fetches across the application (completed 2013-05-15)
-- [ ] **Phase 13: Implement Caching** — Introduce a Redis caching layer for the 3 core data sources so all downstream derived/merged data is served from cache on repeat fetches
+- [ ] **Phase 13: Implement Caching** — Introduce a Next.js `unstable_cache` layer for the 3 core data sources so all downstream derived/merged data is served from cache on repeat fetches
 
 ### Phase 12: Re-render & Fetch Audit
 **Goal**: Unnecessary React re-renders, redundant Supabase API calls, and duplicate data fetches are identified and eliminated across the application — resulting in a measurably snappier application with lower Supabase read usage
@@ -125,19 +125,22 @@ Plans:
 **UI hint**: yes
 
 ### Phase 13: Implement Caching
-**Goal**: A Redis caching layer is added at each of the 3 core data-source fetch points (door schedule, master hardware, projects list) so all downstream derived/merged data is served from cache on repeat fetches — pages that previously had a loading delay render data noticeably faster on repeat visits, and cache is always consistent (invalidated on every write)
+**Goal**: A Next.js `unstable_cache` layer is added at each of the 3 core data-source fetch points (door schedule, master hardware, projects list) so all downstream derived/merged data is served from cache on repeat fetches — pages that previously had a loading delay render data noticeably faster on repeat visits, and cache is always consistent (invalidated on every write via `revalidateTag`). Plans 13-01..13-04 were superseded by 13-05..13-07 when the implementation switched from Upstash Redis to Next.js built-in caching.
 **Depends on**: Phase 12 (stable fetch and re-render baseline before adding caching)
 **Requirements**: CACHE-01, CACHE-02, CACHE-03, CACHE-04, CACHE-05
 **Success Criteria** (what must be TRUE):
-  1. Each of the 3 core data-source API routes serves data from Redis cache on cache hit; on miss it fetches from Supabase, populates cache with appropriate TTL, then returns
-  2. Every write operation (create/update/delete) for a given source correctly invalidates the relevant cache key(s) before returning — no stale data is ever served after a write
-  3. Cache keys are namespaced per data source (e.g. `door-schedule:{projectId}`, `master-hardware:all`, `projects:all`) with no collisions
-  4. Redis client is initialized and used exclusively in API route handlers — never imported or called from client-side code
-  5. Application behaviour is identical to pre-cache: no functional regressions in auth flows, data access, or export functionality
-**Plans**: 4 plans
+  1. Each of the 3 core data-source API routes serves data from cache on cache hit; on miss it fetches from Supabase, populates cache with appropriate TTL via `revalidate` option, then returns
+  2. Every write operation (create/update/delete) for a given source correctly invalidates the relevant cache tag(s) before returning — no stale data is ever served after a write (`revalidateTag` in Next.js 15 is immediate, not stale-while-revalidate)
+  3. Cache tags and keyParts are namespaced per data source (tags: `door-schedule`, `master-hardware`, `projects`; keyParts: `['door-schedule']` + projectId arg, `['master-hardware-all']`, `['projects-all']`) — no collisions
+  4. Cache mechanism (`unstable_cache` from `next/cache`) is server-only by Next.js enforcement; no Redis client and no env vars required
+  5. Application behaviour is identical to pre-cache: no functional regressions in auth flows, data access, or export functionality; cache miss simply calls Supabase (structurally fail-open, no error path)
+**Plans**: 7 plans (13-01..13-04 superseded; 13-05..13-07 active)
 Plans:
-- [x] 13-01-PLAN.md — Install @upstash/redis, document env vars, create lib/cache/redis.ts singleton (Wave 1)
-- [x] 13-02-PLAN.md — Create the 3 cache-aside wrappers (doorSchedule, masterHardware, projects) in lib/cache/ (Wave 2)
-- [x] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) (Wave 3)
-- [ ] 13-04-PLAN.md — Verification gate: automated structural checks + 13-VERIFICATION.md + human smoke test checkpoint (Wave 4)
+- [x] 13-01-PLAN.md — (SUPERSEDED) Install @upstash/redis, document env vars, create lib/cache/redis.ts singleton (Wave 1)
+- [x] 13-02-PLAN.md — (SUPERSEDED) Create the 3 Upstash cache-aside wrappers in lib/cache/ (Wave 2)
+- [x] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) — function names preserved for the unstable_cache rewrite, so the route files require no further edits (Wave 3)
+- [x] 13-04-PLAN.md — (SUPERSEDED) Verification gate for Upstash implementation (Wave 4)
+- [x] 13-05-PLAN.md — Rewrite the 3 lib/cache/*.ts wrappers using unstable_cache + revalidateTag; delete lib/cache/redis.ts (Wave 1)
+- [ ] 13-06-PLAN.md — Run npm uninstall @upstash/redis; remove Upstash section from .env.example (Wave 2)
+- [ ] 13-07-PLAN.md — Verification gate: automated structural checks + 13-VERIFICATION.md + human smoke test under next build && next start (Wave 3)
 **UI hint**: no

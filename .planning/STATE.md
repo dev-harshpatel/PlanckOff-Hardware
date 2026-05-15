@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: File Modularization
 current_phase: 13
 status: executing
-last_updated: "2026-05-15T10:29:14.194Z"
+last_updated: "2026-05-15T12:07:33.204Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -152,6 +152,9 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 | PATCH /api/projects/[id]/door-schedule includes invalidateDoorSchedule (Phase 13-03) — resolves RESEARCH.md Open Question 1 in favor of correctness | 2026-05-15 | Same upsertDoorScheduleImport as POST; excluding would leave 5-min stale window violating CACHE-02 |
 | PUT /api/projects/[id] excluded from invalidation scope (Phase 13-03) — project field updates do not mutate list membership | 2026-05-15 | Per D-10; only create/delete/restore change whether a project appears in the list |
 | PATCH pre-mutation read uses getDoorScheduleImport directly not getCachedDoorSchedule (Phase 13-03) — must read freshest state before merging section updates | 2026-05-15 | Caching the pre-mutation read would corrupt merge results with stale scheduleJson sections |
+| @upstash/redis in package.json but not installed — `npm install` required in 13-04 Task 1 before tsc could pass (Rule 3 deviation) | 2026-05-15 | Package listed since Plan 13-01 but node_modules not populated; install resolves the tsc TS2307 error |
+| 13-04 Task 2 paused at checkpoint:human-verify — CACHE-03 and CACHE-04 are PASS (structural); CACHE-01/CACHE-02/CACHE-05 are PASS_AUTO + PENDING_FUNCTIONAL | 2026-05-15 | Human must configure Upstash credentials and run live cache smoke tests to close functional half |
+| unstable_cache replaces Upstash Redis in all 3 lib/cache wrappers; lib/cache/redis.ts deleted (Plan 13-05) | 2026-05-15 | getCachedDoorSchedule uses projectId as fn arg per Pattern 2; 6 function names preserved; zero new tsc errors; CACHE-01/CACHE-03/CACHE-04/CACHE-05 closed |
 
 ---
 
@@ -200,6 +203,9 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 | Phase 13 P01 | 8min | 2 tasks | 4 files |
 | Phase 13 P02 | 12min | 3 tasks | 3 files |
 | Phase 13 P03 | 15min | 3 tasks | 5 files |
+| Phase 13 P04 | 15min | 1 tasks | 1 files |
+| Phase 13 P05 | 3min | 4 tasks | 4 files |
+| Phase 13 P05 | 3min | 4 tasks | 4 files |
 
 ## History
 
@@ -239,3 +245,4 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 - 2026-05-15: Phase 13 Plan 01 complete — @upstash/redis@1.38.0 installed; lib/cache/redis.ts created with lazy-init getRedisClient() singleton; .env.example documents UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (server-only); CACHE-04 closed (commits cbd0373, 1bb82ff)
 - 2026-05-15: Phase 13 Plan 02 complete — lib/cache/doorSchedule.ts (76 lines), lib/cache/masterHardware.ts (69 lines), lib/cache/projects.ts (65 lines) created; all 6 getCached*/invalidate* functions with correct D-11 keys and D-09 TTLs; fail-open Redis error handling (CACHE-05); zero new tsc errors; CACHE-01/CACHE-03 closed (commits d5e8f90, 9fc443e, 49d5e69)
 - 2026-05-15: Phase 13 Plan 03 complete — 5 API route files wired to Redis cache layer; 3 read-path swaps (getCachedProjects, getCachedDoorSchedule, getCachedMasterHardware); 9 write-path invalidations across projects, door schedule, master hardware routes; PATCH door schedule invalidation included (CACHE-02 correctness); paginated master-hardware path preserved uncached (Pitfall 5); CACHE-02/CACHE-05 closed (commits 478b87f, 07d8013, d735f4a)
+- 2026-05-15: Phase 13 Plan 05 complete — 3 lib/cache/*.ts wrappers rewritten to use unstable_cache + revalidateTag from next/cache; lib/cache/redis.ts deleted; all 6 getCached*/invalidate* names preserved; zero new tsc errors; CACHE-01/CACHE-03/CACHE-04/CACHE-05 closed (commits 8de906d, 44196e8, d5e8db0, 9070c06)
