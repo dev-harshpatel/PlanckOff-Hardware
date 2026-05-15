@@ -141,6 +141,6 @@ Plans:
 - [x] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) — function names preserved for the unstable_cache rewrite, so the route files require no further edits (Wave 3)
 - [x] 13-04-PLAN.md — (SUPERSEDED) Verification gate for Upstash implementation (Wave 4)
 - [x] 13-05-PLAN.md — Rewrite the 3 lib/cache/*.ts wrappers using unstable_cache + revalidateTag; delete lib/cache/redis.ts (Wave 1)
-- [ ] 13-06-PLAN.md — Run npm uninstall @upstash/redis; remove Upstash section from .env.example (Wave 2)
+- [x] 13-06-PLAN.md — Run npm uninstall @upstash/redis; remove Upstash section from .env.example (Wave 2)
 - [ ] 13-07-PLAN.md — Verification gate: automated structural checks + 13-VERIFICATION.md + human smoke test under next build && next start (Wave 3)
 **UI hint**: no
