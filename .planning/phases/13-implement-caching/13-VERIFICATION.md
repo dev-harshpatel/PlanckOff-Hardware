@@ -3,17 +3,17 @@
 **Verified:** 2026-05-15T12:15:28Z
 **Replanning:** Switched from Upstash Redis (Plans 13-01..13-04) to Next.js `unstable_cache` (Plans 13-05..13-07)
 **TS Baseline:** .planning/tsc-baseline.txt
-**Status:** PASS_AUTO + PENDING_FUNCTIONAL (structural checks complete; functional smoke test awaits Task 2 checkpoint)
+**Status:** PASS (structural + functional both complete; human smoke test approved 2026-05-15)
 
 ## Summary
 
 | Requirement | Structural | Functional | Notes |
 |-------------|------------|------------|-------|
-| CACHE-01 | PASS | PENDING | unstable_cache wrappers with correct TTLs |
-| CACHE-02 | PASS | PENDING | revalidateTag invalidation in all write paths |
-| CACHE-03 | PASS | N/A | tags & keyParts match D-11 |
+| CACHE-01 | PASS | PASS | unstable_cache wrappers with correct TTLs; cache hits confirmed under next build && next start |
+| CACHE-02 | PASS | PASS | revalidateTag invalidation in all write paths; create-project cycle confirmed fresh data on refresh |
+| CACHE-03 | PASS | PASS | tags & keyParts match D-11; per-project door schedule isolation confirmed |
 | CACHE-04 | PASS | N/A | server-only structural enforcement (Next.js + deleted redis.ts) |
-| CACHE-05 | PASS | PENDING | no env vars; structurally fail-open |
+| CACHE-05 | PASS | PASS | no env vars; fail-open confirmed — app loads normally without UPSTASH credentials |
 
 ## tsc --noEmit Diff
 
@@ -133,7 +133,7 @@ Status: PASS
 - Structural fail-open: a cache miss in `unstable_cache` simply calls the wrapped function — no error path, no env-var-absence failure mode (RESEARCH § State of the Art). No Upstash credentials are required at runtime.
 
 Structural status: PASS
-Functional status: PENDING (Task 2 smoke test)
+Functional status: PASS (approved 2026-05-15 — no UPSTASH env vars present; app loads normally; no UPSTASH-related errors in server logs)
 
 ## Route files unchanged (Plan 13-03 invariant preserved)
 
@@ -146,18 +146,21 @@ Last commit on each (from `git log --oneline -5 -- <file>`):
 
 No new commits to these files in Plans 13-05 or 13-06: CONFIRMED. All last commits are from 13-03.
 
-## Pending functional half (Task 2)
+## Functional smoke test results (Task 2 — approved 2026-05-15)
 
-The CACHE-05 functional half + CACHE-01/CACHE-02 runtime behavior require a `next build && next start` smoke test — see Task 2 checkpoint instructions.
+Human smoke test conducted under `next build && next start`. All functional checks PASS:
 
-Steps required:
-1. `npm run build && npm run start` — confirm zero new build errors; server starts on http://localhost:3000.
-2. Confirm `.env.local` has NO `UPSTASH_REDIS_REST_URL` or `UPSTASH_REDIS_REST_TOKEN`.
-3. Log in and load projects list — confirm no UPSTASH-related errors in server logs (CACHE-05 functional).
-4. Reload projects page within 30s — second `/api/projects` should be a cache hit (CACHE-01 functional, projects).
-5. Create a new project → refresh → confirm it still appears (CACHE-02 functional, projects).
-6. Open a project's door schedule → navigate away → navigate back within 30s → cache hit (CACHE-01 functional, door schedule).
-7. Open two different projects → confirm each shows its own door schedule (CACHE-03 per-project isolation, Pitfall 1 guard).
+| Check | Result |
+|-------|--------|
+| Build succeeded (zero new errors) | YES |
+| CACHE-05 functional (no env vars, no UPSTASH errors) | PASS |
+| CACHE-01 functional — projects list cache hit (30s window) | PASS |
+| CACHE-02 functional — create project, refresh, new project still appears | PASS |
+| CACHE-01 functional — door schedule cache hit after navigate-away | PASS |
+| CACHE-03 per-project isolation — Project A and Project B show own schedules | PASS |
+| Any unexpected console errors | NO |
+
+Human response: "approved" — all functional checks passed.
 
 ## Deviations from plan
 
