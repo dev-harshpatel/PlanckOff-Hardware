@@ -1,65 +1,34 @@
-import { getRedisClient } from '@/lib/cache/redis';
+import { unstable_cache, revalidateTag } from 'next/cache';
 import { getAllProjects } from '@/lib/db/projects';
 import type { Project } from '@/types';
 
 /**
  * Projects list cache wrapper (server-only).
- * Key:  projects:all
- * TTL:  30 minutes (1800s) — D-09; rebuilt on any create/delete/restore.
+ *
+ * Mechanism: Next.js `unstable_cache` from `next/cache` (D-01).
+ * Tag:       'projects' (D-11)
+ * KeyParts:  ['projects-all'] (D-11) — no per-call differentiation; full-list snapshot.
+ * TTL:       1800s = 30 minutes (D-09 revalidate option — fallback, not primary consistency).
+ *
+ * NEVER import this file from client components — `unstable_cache` is enforced
+ * server-only by Next.js (CACHE-04).
+ *
+ * Note: In `next dev`, the Data Cache is disabled; every request hits Supabase.
+ * Caching activates in `next build && next start` and on Vercel (RESEARCH Pitfall 2).
  */
 type DbResult<T> = { data: T | null; error: { message: string } | null };
 
-const CACHE_KEY = 'projects:all';
-const TTL_SECONDS = 30 * 60;
+export const getCachedProjects = unstable_cache(
+  async (): Promise<DbResult<Project[]>> => getAllProjects(),
+  ['projects-all'],
+  { tags: ['projects'], revalidate: 1800 }
+);
 
 /**
- * Cache-aside read for the active projects list.
- * Same DbResult shape as getAllProjects().
- * Fail-open on Redis errors (CACHE-05).
+ * Invalidates the projects-list cache. Called after successful project
+ * create, soft-delete, hard-delete, or restore. Synchronous in Next.js 15;
+ * existing call sites `await invalidateProjects()` work via harmless `await void`.
  */
-export async function getCachedProjects(): Promise<DbResult<Project[]>> {
-  try {
-    const redis = getRedisClient();
-    const cached = await redis.get<Project[]>(CACHE_KEY);
-    if (cached !== null && cached !== undefined) {
-      return { data: cached, error: null };
-    }
-  } catch (err) {
-    console.error(
-      '[cache:projects] Redis get failed — falling through to Supabase:',
-      err,
-    );
-  }
-
-  const result = await getAllProjects();
-
-  if (!result.error) {
-    try {
-      const redis = getRedisClient();
-      await redis.set(CACHE_KEY, result.data, { ex: TTL_SECONDS });
-    } catch (err) {
-      console.error(
-        '[cache:projects] Redis set failed — cache not populated:',
-        err,
-      );
-    }
-  }
-
-  return result;
-}
-
-/**
- * Deletes the projects list cache key.
- * Called after successful project create, soft-delete, hard-delete, or restore.
- */
-export async function invalidateProjects(): Promise<void> {
-  try {
-    const redis = getRedisClient();
-    await redis.del(CACHE_KEY);
-  } catch (err) {
-    console.error(
-      '[cache:projects] Redis del failed — cache key may be stale:',
-      err,
-    );
-  }
+export function invalidateProjects(): void {
+  revalidateTag('projects');
 }
