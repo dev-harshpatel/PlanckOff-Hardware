@@ -107,6 +107,7 @@ Plans:
 ### v3.0 Performance Optimization (Phase 12+)
 
 - [x] **Phase 12: Re-render & Fetch Audit** — Audit and eliminate unnecessary React re-renders, redundant Supabase API calls, and duplicate data fetches across the application (completed 2013-05-15)
+- [ ] **Phase 13: Implement Caching** — Introduce a Redis caching layer for the 3 core data sources so all downstream derived/merged data is served from cache on repeat fetches
 
 ### Phase 12: Re-render & Fetch Audit
 **Goal**: Unnecessary React re-renders, redundant Supabase API calls, and duplicate data fetches are identified and eliminated across the application — resulting in a measurably snappier application with lower Supabase read usage
@@ -122,3 +123,15 @@ Plans:
 - [x] 12-02-PLAN.md — ProjectView callback stabilization: useMemo on hardwareActiveTask/doorActiveTask, useCallback on cancel handlers, elevation handlers, formatElapsed (Wave 1)
 - [ ] 12-03-PLAN.md — Pricing page useEffect dep fix + 12-VERIFICATION.md gate + human smoke test (Wave 2)
 **UI hint**: yes
+
+### Phase 13: Implement Caching
+**Goal**: A Redis caching layer is added at each of the 3 core data-source fetch points (door schedule, master hardware, projects list) so all downstream derived/merged data is served from cache on repeat fetches — pages that previously had a loading delay render data noticeably faster on repeat visits, and cache is always consistent (invalidated on every write)
+**Depends on**: Phase 12 (stable fetch and re-render baseline before adding caching)
+**Requirements**: CACHE-01, CACHE-02, CACHE-03, CACHE-04, CACHE-05
+**Success Criteria** (what must be TRUE):
+  1. Each of the 3 core data-source API routes serves data from Redis cache on cache hit; on miss it fetches from Supabase, populates cache with appropriate TTL, then returns
+  2. Every write operation (create/update/delete) for a given source correctly invalidates the relevant cache key(s) before returning — no stale data is ever served after a write
+  3. Cache keys are namespaced per data source (e.g. `door-schedule:{projectId}`, `master-hardware:all`, `projects:all`) with no collisions
+  4. Redis client is initialized and used exclusively in API route handlers — never imported or called from client-side code
+  5. Application behaviour is identical to pre-cache: no functional regressions in auth flows, data access, or export functionality
+**Plans**: TBD
