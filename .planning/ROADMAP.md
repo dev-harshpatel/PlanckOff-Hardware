@@ -137,7 +137,7 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [x] 13-01-PLAN.md — Install @upstash/redis, document env vars, create lib/cache/redis.ts singleton (Wave 1)
-- [ ] 13-02-PLAN.md — Create the 3 cache-aside wrappers (doorSchedule, masterHardware, projects) in lib/cache/ (Wave 2)
-- [ ] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) (Wave 3)
+- [x] 13-02-PLAN.md — Create the 3 cache-aside wrappers (doorSchedule, masterHardware, projects) in lib/cache/ (Wave 2)
+- [x] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) (Wave 3)
 - [ ] 13-04-PLAN.md — Verification gate: automated structural checks + 13-VERIFICATION.md + human smoke test checkpoint (Wave 4)
 **UI hint**: no

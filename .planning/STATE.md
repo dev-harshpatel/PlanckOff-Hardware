@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: File Modularization
 current_phase: 13
 status: executing
-last_updated: "2026-05-15T15:42:00.000Z"
+last_updated: "2026-05-15T10:29:14.194Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -195,6 +195,8 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 | Phase 12 P02 | 3min | 2 tasks | 1 files |
 | Phase 12 P01 | 20 min | 2 tasks | 2 files |
 | Phase 13 P01 | 8min | 2 tasks | 4 files |
+| Phase 13 P02 | 12min | 3 tasks | 3 files |
+| Phase 13 P03 | 15min | 3 tasks | 5 files |
 
 ## History
 
@@ -232,3 +234,5 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 - 2026-05-14: Phase 11 Plan 02 complete — PricingReportConfig.tsx wired to consume ProposalTab; 354-line inline proposal block replaced with <ProposalTab ... /> passing all 37 props; PricingReportConfig reduced from 781 to 469 lines; VER-01/02/03 PASS; PRICING-01/PRICING-02 closed; Phase 11 complete; v2.0 File Modularization milestone COMPLETE (commit 08ab9b8)
 - 2026-05-15: Phase 12 Plan 01 complete — ProjectContext.tsx addProject and restoreProjectFn made optimistic (PERF-03); all 8 action callbacks wrapped in useCallback; Provider value memoized with useMemo (PERF-01); lib/realtime/dedupSet.ts created in worktree (Rule 3 deviation); PERF-01 and PERF-03 requirements closed (commits 3f85bca, e1d6dff)
 - 2026-05-15: Phase 13 Plan 01 complete — @upstash/redis@1.38.0 installed; lib/cache/redis.ts created with lazy-init getRedisClient() singleton; .env.example documents UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (server-only); CACHE-04 closed (commits cbd0373, 1bb82ff)
+- 2026-05-15: Phase 13 Plan 02 complete — lib/cache/doorSchedule.ts (76 lines), lib/cache/masterHardware.ts (69 lines), lib/cache/projects.ts (65 lines) created; all 6 getCached*/invalidate* functions with correct D-11 keys and D-09 TTLs; fail-open Redis error handling (CACHE-05); zero new tsc errors; CACHE-01/CACHE-03 closed (commits d5e8f90, 9fc443e, 49d5e69)
+- 2026-05-15: Phase 13 Plan 03 complete — 5 API route files wired to Redis cache layer; 3 read-path swaps (getCachedProjects, getCachedDoorSchedule, getCachedMasterHardware); 9 write-path invalidations across projects, door schedule, master hardware routes; PATCH door schedule invalidation included (CACHE-02 correctness); paginated master-hardware path preserved uncached (Pitfall 5); CACHE-02/CACHE-05 closed (commits 478b87f, 07d8013, d735f4a)
