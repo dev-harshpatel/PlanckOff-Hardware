@@ -134,4 +134,10 @@ Plans:
   3. Cache keys are namespaced per data source (e.g. `door-schedule:{projectId}`, `master-hardware:all`, `projects:all`) with no collisions
   4. Redis client is initialized and used exclusively in API route handlers — never imported or called from client-side code
   5. Application behaviour is identical to pre-cache: no functional regressions in auth flows, data access, or export functionality
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [x] 13-01-PLAN.md — Install @upstash/redis, document env vars, create lib/cache/redis.ts singleton (Wave 1)
+- [ ] 13-02-PLAN.md — Create the 3 cache-aside wrappers (doorSchedule, masterHardware, projects) in lib/cache/ (Wave 2)
+- [ ] 13-03-PLAN.md — Wire 5 API routes: GET cache reads + 9 write-path invalidations (POST/PUT/DELETE/PATCH) (Wave 3)
+- [ ] 13-04-PLAN.md — Verification gate: automated structural checks + 13-VERIFICATION.md + human smoke test checkpoint (Wave 4)
+**UI hint**: no

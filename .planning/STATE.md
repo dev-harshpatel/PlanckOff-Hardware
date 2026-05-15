@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Performance Optimization
-current_phase: 12
-status: completed
-last_updated: "2026-05-15T04:47:01.644Z"
+milestone: v2.0
+milestone_name: File Modularization
+current_phase: 13
+status: executing
+last_updated: "2026-05-15T15:42:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -16,15 +16,15 @@ progress:
 
 **Project:** PlanckOff Hardware
 **Last Updated:** 2026-05-14
-**Current Phase:** 12
-**Status:** Milestone complete
+**Current Phase:** 13
+**Status:** Executing Phase 13
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-13)
 
 **Core value:** Accurate, professionally formatted hardware specifications and exports that match exactly what the user sees in the application.
-**Current focus:** Phase 12 — re-render-fetch-audit
+**Current focus:** Phase 13 — implement-caching
 
 ---
 
@@ -148,6 +148,7 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 | PricingHierarchyView import removed from PricingReportConfig.tsx in Plan 11-02 — dead code after proposal block extraction; only used in ProposalTab.tsx now | 2026-05-14 | Auto-fixed as Rule 1 deviation during Plan 11-02 execution |
 | addProject and restoreProjectFn use optimistic local state append/prepend (PERF-03) — eliminates GET /api/projects after every project create/restore | 2026-05-15 | mirrors deleteProject's existing optimistic filter; Realtime echo dedup correctly short-circuits |
 | All 8 ProjectContext action callbacks wrapped in useCallback + Provider value memoized with useMemo (PERF-01) — stops 6 consumer re-renders on every internal state change | 2026-05-15 | 13 total useCallback usages; contextValue useMemo with full dep array |
+| Lazy-init singleton pattern in getRedisClient() (Phase 13-01) — Redis client initialized inside function body not at module level | 2026-05-15 | Avoids Next.js build-time static analysis failure when Upstash env vars absent; mirrors createSupabaseAdminClient() pattern |
 
 ---
 
@@ -193,6 +194,7 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 | Phase 11 P11-02 | 12min | 1 tasks | 1 files |
 | Phase 12 P02 | 3min | 2 tasks | 1 files |
 | Phase 12 P01 | 20 min | 2 tasks | 2 files |
+| Phase 13 P01 | 8min | 2 tasks | 4 files |
 
 ## History
 
@@ -229,3 +231,4 @@ Known gaps carried forward: RT manual tests deferred, useOptimisticDoorWrite not
 - 2026-05-14: Phase 11 Plan 01 complete — ProposalTab.tsx (474 lines) created as sibling in components/pricing/; named export ProposalTab with 40-prop interface; verbatim JSX from lines 356-709 of PricingReportConfig.tsx; D-16 cohesion exception; zero new tsc errors; PricingReportConfig.tsx unchanged (781 lines); wiring deferred to Plan 11-02 (commit fd33c74)
 - 2026-05-14: Phase 11 Plan 02 complete — PricingReportConfig.tsx wired to consume ProposalTab; 354-line inline proposal block replaced with <ProposalTab ... /> passing all 37 props; PricingReportConfig reduced from 781 to 469 lines; VER-01/02/03 PASS; PRICING-01/PRICING-02 closed; Phase 11 complete; v2.0 File Modularization milestone COMPLETE (commit 08ab9b8)
 - 2026-05-15: Phase 12 Plan 01 complete — ProjectContext.tsx addProject and restoreProjectFn made optimistic (PERF-03); all 8 action callbacks wrapped in useCallback; Provider value memoized with useMemo (PERF-01); lib/realtime/dedupSet.ts created in worktree (Rule 3 deviation); PERF-01 and PERF-03 requirements closed (commits 3f85bca, e1d6dff)
+- 2026-05-15: Phase 13 Plan 01 complete — @upstash/redis@1.38.0 installed; lib/cache/redis.ts created with lazy-init getRedisClient() singleton; .env.example documents UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (server-only); CACHE-04 closed (commits cbd0373, 1bb82ff)

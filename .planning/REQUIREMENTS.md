@@ -73,6 +73,15 @@ Milestone goal: Audit and eliminate unnecessary React re-renders, redundant Supa
 - [ ] **PERF-02**: No `useEffect` hook triggers a Supabase fetch with an overly-broad or missing dependency array; data shared across sibling components is fetched once at the top level and passed down — siblings do not independently fetch the same data on mount; if the same endpoint is called twice within a short window, the second call waits for the first (fetch deduplication)
 - [x] **PERF-03**: Write operations (create/update/delete) update local React state directly without triggering a full dataset re-fetch; UI-only state changes (tab switches, filter toggles, modal open/close, sort/column-visibility) do not cause any Supabase read calls
 
+
+### Caching Layer (CACHE)
+
+- [ ] **CACHE-01**: Each of the 3 core data-source API routes (`GET /api/projects`, `GET /api/projects/[id]/door-schedule`, `GET /api/master-hardware?export=true`) serves data from Redis cache on cache hit; on miss it fetches from Supabase, populates the cache with the appropriate TTL (5 min door schedule, 30 min projects, 60 min master hardware — D-09), then returns
+- [ ] **CACHE-02**: Every write operation (POST/PUT/DELETE) for a given cached source correctly invalidates the relevant cache key(s) before returning the HTTP response — no stale data is ever served after a write; includes POST /api/projects, all 3 DELETE branches (soft/hard/restore) on /api/projects/[id], POST + PATCH on /api/projects/[id]/door-schedule, and POST/PUT/DELETE on master-hardware
+- [ ] **CACHE-03**: Cache keys are colon-namespaced per data source: `door-schedule:{projectId}`, `master-hardware:all`, `projects:all` — no collisions, no app-level prefix (D-11/D-12)
+- [x] **CACHE-04**: Redis client (`lib/cache/redis.ts`) is initialized and used exclusively in server-side code (API route handlers and `lib/cache/` wrappers) — never imported from client components, contexts, hooks, views, workers, or services
+- [ ] **CACHE-05**: Application behaviour is identical to pre-cache — no functional regressions in auth flows, data access, or export functionality; absent Upstash env vars trigger fail-open (cache wrappers fall through to Supabase and log the error)
+
 ---
 
 ## Out of Scope
@@ -110,14 +119,21 @@ Milestone goal: Audit and eliminate unnecessary React re-renders, redundant Supa
 | HOOK-03 | Phase 10 | Complete |
 | PRICING-01 | Phase 11 | Complete |
 | PRICING-02 | Phase 11 | Complete |
+| CACHE-01 | Phase 13 | Not started |
+| CACHE-02 | Phase 13 | Not started |
+| CACHE-03 | Phase 13 | Not started |
+| CACHE-04 | Phase 13 | Not started |
+| CACHE-05 | Phase 13 | Not started |
 
 **Coverage:**
 - v2.0 requirements: 18 total
-- Mapped to phases: 18 ✓
+- v3.0 requirements (PERF): 3 total
+- v3.0 requirements (CACHE): 5 total
+- Mapped to phases: 26 ✓
 - Unmapped: 0 ✓
 
 > **VER gate note:** VER-01/VER-02/VER-03 are assigned to Phase 8 as their canonical phase for traceability. These gates apply as exit criteria within every split phase (8, 9, 10, 11) — each split plan must satisfy all three before being marked complete.
 
 ---
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-05-13 — traceability populated by roadmapper (v2.0 roadmap)*
+*Last updated: 2026-05-15 — CACHE requirements added for Phase 13 (v3.0 caching layer)*
