@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
 import { reviewPendingBatch } from '@/lib/db/masterHardware';
+import { invalidateMasterHardware } from '@/lib/cache/masterHardware';
 
 // POST /api/master-hardware/pending/review
 // Body: { ids: string[]; action: 'approve' | 'reject' }
@@ -30,5 +31,6 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (action === 'approve') invalidateMasterHardware();
   return NextResponse.json({ data });
 });

@@ -33,6 +33,7 @@ export const PUT = withRoleAuth(
 
     const { data, error } = await updateProject(id, updates);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    invalidateProjects();
     return NextResponse.json({ data });
   },
 );
