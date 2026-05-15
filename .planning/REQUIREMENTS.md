@@ -76,9 +76,9 @@ Milestone goal: Audit and eliminate unnecessary React re-renders, redundant Supa
 
 ### Caching Layer (CACHE)
 
-- [ ] **CACHE-01**: Each of the 3 core data-source API routes (`GET /api/projects`, `GET /api/projects/[id]/door-schedule`, `GET /api/master-hardware?export=true`) serves data from Redis cache on cache hit; on miss it fetches from Supabase, populates the cache with the appropriate TTL (5 min door schedule, 30 min projects, 60 min master hardware — D-09), then returns
+- [x] **CACHE-01**: Each of the 3 core data-source API routes (`GET /api/projects`, `GET /api/projects/[id]/door-schedule`, `GET /api/master-hardware?export=true`) serves data from Redis cache on cache hit; on miss it fetches from Supabase, populates the cache with the appropriate TTL (5 min door schedule, 30 min projects, 60 min master hardware — D-09), then returns
 - [ ] **CACHE-02**: Every write operation (POST/PUT/DELETE) for a given cached source correctly invalidates the relevant cache key(s) before returning the HTTP response — no stale data is ever served after a write; includes POST /api/projects, all 3 DELETE branches (soft/hard/restore) on /api/projects/[id], POST + PATCH on /api/projects/[id]/door-schedule, and POST/PUT/DELETE on master-hardware
-- [ ] **CACHE-03**: Cache keys are colon-namespaced per data source: `door-schedule:{projectId}`, `master-hardware:all`, `projects:all` — no collisions, no app-level prefix (D-11/D-12)
+- [x] **CACHE-03**: Cache keys are colon-namespaced per data source: `door-schedule:{projectId}`, `master-hardware:all`, `projects:all` — no collisions, no app-level prefix (D-11/D-12)
 - [x] **CACHE-04**: Redis client (`lib/cache/redis.ts`) is initialized and used exclusively in server-side code (API route handlers and `lib/cache/` wrappers) — never imported from client components, contexts, hooks, views, workers, or services
 - [ ] **CACHE-05**: Application behaviour is identical to pre-cache — no functional regressions in auth flows, data access, or export functionality; absent Upstash env vars trigger fail-open (cache wrappers fall through to Supabase and log the error)
 
