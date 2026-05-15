@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
 import {
-  getMasterHardwareItems,
   getMasterHardwareItemsPaginated,
   createMasterHardwareItem,
   type MasterHardwareSortKey,
 } from '@/lib/db/masterHardware';
+import { getCachedMasterHardware, invalidateMasterHardware } from '@/lib/cache/masterHardware';
 
 const VALID_SORT_KEYS: MasterHardwareSortKey[] = ['name', 'manufacturer', 'description', 'finish'];
 
@@ -15,7 +15,7 @@ export const GET = withAuth(async (req: NextRequest, _ctx: AuthContext) => {
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get('export') === 'true') {
-    const { data, error } = await getMasterHardwareItems();
+    const { data, error } = await getCachedMasterHardware();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ data });
   }
@@ -68,5 +68,6 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await invalidateMasterHardware();
   return NextResponse.json({ data }, { status: 201 });
 });
