@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { parseDoorSchedule, type DoorScheduleResult } from '@/services/doorScheduleService';
 import { upsertDoorScheduleImport, getDoorScheduleImport, type DoorScheduleRow } from '@/lib/db/hardware';
+import { getCachedDoorSchedule, invalidateDoorSchedule } from '@/lib/cache/doorSchedule';
 
 // ---------------------------------------------------------------------------
 // Debug output (DEV only)
@@ -36,7 +37,7 @@ function saveExcelDebugFiles(projectId: string, filename: string, result: DoorSc
 export const GET = withAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
-    const { data, error } = await getDoorScheduleImport(projectId);
+    const { data, error } = await getCachedDoorSchedule(projectId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ data });
   },
@@ -105,6 +106,8 @@ export const POST = withAuth(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await invalidateDoorSchedule(projectId);
 
     console.log(
       `[door-schedule] Saved → project=${projectId}  file="${filename}"  ` +
@@ -177,6 +180,8 @@ export const PATCH = withAuth(
     });
 
     if (saveError) return NextResponse.json({ error: saveError.message }, { status: 500 });
+
+    await invalidateDoorSchedule(projectId);
 
     console.log(`[door-schedule] PATCH door="${doorTag}" project=${projectId}`);
     return NextResponse.json({ data: { doorTag, updated: true } });
