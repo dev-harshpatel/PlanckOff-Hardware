@@ -8,6 +8,7 @@ import {
   hardDeleteProject,
   restoreProject,
 } from '@/lib/db/projects';
+import { invalidateProjects } from '@/lib/cache/projects';
 import type { Project } from '@/types';
 
 export const GET = withAuth(
@@ -46,18 +47,21 @@ export const DELETE = withRoleAuth(
     if (searchParams.get('restore') === 'true') {
       const { error } = await restoreProject(id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await invalidateProjects();
       return NextResponse.json({ success: true, action: 'restored' });
     }
 
     if (searchParams.get('hard') === 'true') {
       const { error } = await hardDeleteProject(id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await invalidateProjects();
       return NextResponse.json({ success: true, action: 'permanently_deleted' });
     }
 
     // Default: soft delete
     const { error } = await softDeleteProject(id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await invalidateProjects();
     return NextResponse.json({ success: true, action: 'trashed' });
   },
 );

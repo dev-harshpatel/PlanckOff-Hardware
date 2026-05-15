@@ -5,6 +5,7 @@ import {
   updateMasterHardwareItem,
   deleteMasterHardwareItem,
 } from '@/lib/db/masterHardware';
+import { invalidateMasterHardware } from '@/lib/cache/masterHardware';
 
 // PUT /api/master-hardware/[id] — update an item
 export const PUT = withAuth(async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
@@ -32,6 +33,7 @@ export const PUT = withAuth(async (req: NextRequest, _ctx: AuthContext, params?:
 
   const { data, error } = await updateMasterHardwareItem(id, payload);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await invalidateMasterHardware();
   return NextResponse.json({ data });
 });
 
@@ -40,5 +42,6 @@ export const DELETE = withAuth(async (_req: NextRequest, _ctx: AuthContext, para
   const id = params?.id as string;
   const { error } = await deleteMasterHardwareItem(id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await invalidateMasterHardware();
   return NextResponse.json({ success: true });
 });
