@@ -76,6 +76,7 @@ function Avatar({ initials, role }: { initials: string; role: RoleName }) {
     Administrator: 'bg-purple-100 text-purple-700',
     'Team Lead':   'bg-[var(--primary-bg-hover)] text-[var(--primary-text)]',
     Estimator:     'bg-[var(--success-bg)] text-[var(--success-text)]',
+    Client:        'bg-blue-100 text-blue-700',
   };
   return (
     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${colors[role]}`}>

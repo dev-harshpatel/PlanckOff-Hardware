@@ -1,5 +1,5 @@
 // RoleName lives here — imported by types/team.ts to avoid circular deps.
-export type RoleName = 'Administrator' | 'Team Lead' | 'Estimator';
+export type RoleName = 'Administrator' | 'Team Lead' | 'Estimator' | 'Client';
 
 export interface Admin {
   id: string;
