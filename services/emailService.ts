@@ -62,8 +62,8 @@ export async function sendInviteEmail(
   const htmlBody = buildInviteHtml({ toName, role, inviterName, inviteLink, logoBase64 });
   const textBody = buildInvitePlainText({ toName, role, inviterName, inviteLink });
 
-  // Instantiate SES client inside the function (not at module level) to match
-  // the createSupabaseAdminClient() lazy-init pattern and avoid build-time failures.
+  // Instantiate SES client inside the function (not at module level) — avoids
+  // Next.js static analysis failures when AWS env vars are absent at build time.
   const client = new SESClient({
     region: process.env.AWS_REGION ?? 'us-east-1',
     credentials: {
