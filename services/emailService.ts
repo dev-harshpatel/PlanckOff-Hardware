@@ -1,6 +1,3 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
@@ -28,7 +25,6 @@ interface InviteTemplateParams {
   role: string;
   inviterName?: string;
   inviteLink: string;
-  logoBase64: string;
 }
 
 /**
@@ -53,13 +49,7 @@ export async function sendInviteEmail(
 
   const inviteLink = `${APP_URL}/set-password?token=${inviteToken}`;
 
-  // Read logo inside the function (not at module load) to avoid Next.js static
-  // analysis failures when public/images/logo.png might be absent at build time.
-  const logoBase64 = readFileSync(
-    join(process.cwd(), 'public', 'images', 'logo.png'),
-  ).toString('base64');
-
-  const htmlBody = buildInviteHtml({ toName, role, inviterName, inviteLink, logoBase64 });
+  const htmlBody = buildInviteHtml({ toName, role, inviterName, inviteLink });
   const textBody = buildInvitePlainText({ toName, role, inviterName, inviteLink });
 
   // Instantiate SES client inside the function (not at module level) — avoids
@@ -96,7 +86,7 @@ export async function sendInviteEmail(
  * @internal
  */
 function buildInviteHtml(params: InviteTemplateParams): string {
-  const { toName, role, inviterName, inviteLink, logoBase64 } = params;
+  const { toName, role, inviterName, inviteLink } = params;
   const inviterDisplay = inviterName ?? 'A team member';
 
   return `<!DOCTYPE html>
@@ -115,7 +105,7 @@ function buildInviteHtml(params: InviteTemplateParams): string {
           <!-- Header -->
           <tr>
             <td style="background-color:#2563eb;padding:32px;text-align:center;">
-              <img src="data:image/png;base64,${logoBase64}" alt="PlanckOff" height="48" style="display:block;margin:0 auto 12px;">
+              <img src="${APP_URL}/images/logo.png" alt="PlanckOff" height="48" style="display:block;margin:0 auto 12px;">
               <h1 style="color:#ffffff;font-size:24px;margin:0;font-weight:700;letter-spacing:-0.5px;">PlanckOff</h1>
             </td>
           </tr>
@@ -184,7 +174,7 @@ function buildInviteHtml(params: InviteTemplateParams): string {
  * Used by email clients that do not render HTML.
  * @internal
  */
-function buildInvitePlainText(params: Omit<InviteTemplateParams, 'logoBase64'>): string {
+function buildInvitePlainText(params: InviteTemplateParams): string {
   const { toName, role, inviterName, inviteLink } = params;
   const inviterDisplay = inviterName ?? 'A team member';
 
