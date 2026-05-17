@@ -38,10 +38,10 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: '/api/team/set-password',  public: true,  description: 'Set password after invite' },
 
   // Authenticated — all roles
-  { path: '/',               minRole: 'Estimator', description: 'Dashboard' },
-  { path: '/project',        minRole: 'Estimator', description: 'Project workspace' },
+  { path: '/',               minRole: 'Client',    description: 'Dashboard (Client read-only access)' },
+  { path: '/project',        minRole: 'Client',    description: 'Project workspace (Client read-only access)' },
   { path: '/database',       minRole: 'Estimator', description: 'Hardware database' },
-  { path: '/api/auth/me',    minRole: 'Estimator', description: 'Current user info' },
+  { path: '/api/auth/me',    minRole: 'Client',    description: 'Current user info (all authenticated users)' },
   { path: '/api/ai',         minRole: 'Estimator', description: 'AI generation routes' },
   { path: '/api/export',     minRole: 'Estimator', description: 'Export routes' },
 
