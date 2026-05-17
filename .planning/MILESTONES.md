@@ -1,5 +1,25 @@
 # Milestones
 
+## v3.0 Performance Optimization (Shipped: 2026-05-17)
+
+**Phases completed:** 2 phases (12-13), 6 active plans
+**Timeline:** 2026-05-15 (1 day)
+
+**Key accomplishments:**
+
+1. `ProjectContext.tsx`: all 8 action callbacks stabilized with `useCallback`; Provider value memoized with `useMemo` — stops 6 consumer re-renders on unrelated internal state changes (PERF-01)
+2. `addProject`/`restoreProjectFn` made optimistic — eliminates GET /api/projects re-fetch after every project create/restore (PERF-03)
+3. `ProjectView.tsx`: `useMemo` on `hardwareActiveTask`/`doorActiveTask`; `useCallback` on 6 prop callbacks — stops `HardwareSetsManager`/`DoorScheduleManager` from re-rendering on unrelated parent state
+4. Pricing page `useEffect` dep array fixed (`[id, addToast]`) — closes PERF-02 concrete gap; double-fetch via `subscribeOnly` accepted as tech debt
+5. Three `unstable_cache` wrappers (projects/300s, masterHardware/3600s, doorSchedule/1800s) with 9 `revalidateTag` write-path invalidations — CACHE-01/02/03 all PASS
+6. `@upstash/redis` removed — zero external cache deps; app loads fail-open with no `UPSTASH_*` env vars (CACHE-04/05 PASS; human smoke test approved)
+
+### Known Gaps (accepted as tech debt)
+
+- **PERF-02 partial:** pricing page double-fetch (subscribeOnly hook option), cross-page data sharing via shared hook, `React.memo` on `DoorTableRow` — documented in `12-VERIFICATION.md`
+
+---
+
 ## v2.0 File Modularization (Shipped: 2026-05-17)
 
 **Phases completed:** 5 phases (7-11), 14 plans

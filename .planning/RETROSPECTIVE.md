@@ -2,6 +2,51 @@
 
 ---
 
+## Milestone: v3.0 — Performance Optimization
+
+**Shipped:** 2026-05-17
+**Phases:** 2 (12-13) | **Plans:** 6 active | **Timeline:** 1 day (2026-05-15)
+
+### What Was Built
+
+1. `ProjectContext.tsx` — all 8 action callbacks in `useCallback`; Provider value in `useMemo`; `addProject`/`restoreProjectFn` made optimistic
+2. `ProjectView.tsx` — `useMemo` on derived task values; `useCallback` on 6 prop callbacks passed to child managers
+3. Pricing page `useEffect` dep array fixed (`[id, addToast]`)
+4. Three `unstable_cache` wrappers (`lib/cache/`) with `revalidateTag` invalidation on all 9 write paths
+5. `@upstash/redis` removed — zero external cache deps; `next/cache` is server-only and requires no env vars
+
+### What Worked
+
+- **unstable_cache pivot** was the right call — scrapping 4 Upstash Redis plans mid-phase and starting fresh with `unstable_cache` (Plans 13-01 through 13-04 superseded by 13-05) saved significant infra complexity. Zero env vars, zero external deps, enforced server-only by Next.js.
+- **Human smoke test gate** at the end of both phases gave real confidence — functional cache hit/miss verification can't be automated with greps alone.
+- **1-day execution** — both phases ran cleanly; performance changes are surgical and don't introduce debugging cycles.
+
+### What Was Inefficient
+
+- **MILESTONES.md CLI extraction noise (again)** — same problem as v2.0: SUMMARY.md files don't have `one_liner` frontmatter filled, so the CLI outputs "One-liner:" headers verbatim. Required manual cleanup for the second time. The `one_liner` field in SUMMARY.md frontmatter must be filled at plan completion time.
+- **Plans 13-01 through 13-04 superseded mid-phase** — the initial Redis approach required 4 plans before being replaced. Upfront research into `unstable_cache` availability in Next.js 15 would have avoided this. Research phase should explicitly check whether a native solution exists before recommending an external dependency.
+- **REQUIREMENTS.md deleted too early** — the v2.0 archival deleted REQUIREMENTS.md which also contained v3.0 requirements. The v3.0 archive (this milestone) required reconstructing requirements from memory. Requirements for the active next milestone should not be stored in the same REQUIREMENTS.md as the milestone being archived.
+
+### Patterns Established
+
+- **`unstable_cache` + `revalidateTag` pattern:** module-level `const getCached* = unstable_cache(fetchFn, keyParts, { revalidate, tags })` for reads; synchronous `revalidateTag(tag)` before returning from write routes.
+- **Pitfall 1 guard:** `projectId` must be a function argument to `getCachedDoorSchedule`, NOT in `keyParts` — otherwise all projects share the same cache entry.
+- **Optimistic local state pattern:** `setProjects(prev => [...prev, json.data!])` for appends; Realtime INSERT echo handler short-circuits when item already present.
+
+### Key Lessons
+
+1. The `one_liner` frontmatter in SUMMARY.md is used by the CLI to populate MILESTONES.md — fill it at plan completion or the milestone archival requires manual cleanup.
+2. Research phases should check for native framework solutions before proposing external packages. `unstable_cache` was available in Next.js 15 all along; Upstash was unnecessary.
+3. Active next-milestone requirements should not share a REQUIREMENTS.md file with the milestone being archived — they'll get deleted too.
+
+### Cost Observations
+
+- Model: balanced profile (Sonnet 4.6)
+- Timeline: 1 day (2026-05-15)
+- Notable: Phase 13 required a mid-phase pivot (Upstash → unstable_cache) — sunk cost on 4 superseded plans
+
+---
+
 ## Milestone: v2.0 — File Modularization
 
 **Shipped:** 2026-05-17
@@ -105,3 +150,4 @@
 |-----------|--------|-------|------|---------|---------|
 | v1.0 Export Polish MVP | 6 | 29 | 7 | 69 | Phase 3 never executed pre-audit; RT manual tests deferred |
 | v2.0 File Modularization | 5 | 14 | 2 | ~30 | ROADMAP checkboxes not ticked for 12-03/13-07 at execution time |
+| v3.0 Performance Optimization | 2 | 6 | 1 | ~15 | Plans 13-01..13-04 superseded mid-phase (Upstash → unstable_cache pivot) |
