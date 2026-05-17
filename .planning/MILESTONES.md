@@ -1,5 +1,22 @@
 # Milestones
 
+## v2.0 File Modularization (Shipped: 2026-05-17)
+
+**Phases completed:** 5 phases (7-11), 14 plans
+**Timeline:** 2026-05-13 → 2026-05-14 (2 days)
+
+**Key accomplishments:**
+
+1. Pre-split cleanup — dead `exportDoorScheduleToPDF` (190 lines) deleted; `DoorScheduleExportConfig` and `HardwareSetExportConfig` extracted to `types/`; tsc baseline snapshot saved for zero-regression diffing
+2. `DoorScheduleConfig.tsx` (996 lines) split into 4-file sub-directory: barrel index.tsx, ColumnAccordion.tsx, GroupedTable.tsx, useDoorScheduleDownload.tsx hook (D-16 exception at 437 lines)
+3. `HardwareSetConfig.tsx` (780 lines) split into 4-file sub-directory: barrel index.tsx, HardwareGroupTable.tsx, hardwareConstants.ts, hardwareHelpers.ts
+4. `excelExportService.ts` (709 lines) split into 3-domain sub-directory with named-export barrel: doorScheduleExcel.ts (186 lines), hardwareSetExcel.ts (193 lines), multiSheetWorkbook.ts (334 lines, D-16)
+5. `useDoorTableState.tsx` (883 lines) split into 6-file sub-directory: orchestrator index.tsx, columnDefinitions, filterState, columnVisibility, rowSelection, cellEditState — all 68 return values preserved
+6. `PricingReportConfig.tsx` (781 lines) reduced to 469 lines by extracting `ProposalTab.tsx` (474 lines, D-16) as purely presentational sibling component with 37 props
+7. VER-01/02/03 PASS across all 5 split phases — zero new tsc errors, correct `'use client'` directives, explicit default exports in all barrels
+
+---
+
 ## v1.0 Export Polish MVP (Shipped: 2026-05-13)
 
 **Phases completed:** 6 phases, 29 plans
