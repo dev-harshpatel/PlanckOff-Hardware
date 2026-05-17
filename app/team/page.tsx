@@ -46,6 +46,12 @@ const ROLE_GROUPS: { role: RoleName; label: string; icon: React.ReactNode; iconB
     icon: <Users className="w-4 h-4 text-green-600" />,
     iconBg: 'bg-[var(--success-bg)]',
   },
+  {
+    role: 'Client',
+    label: 'Clients',
+    icon: <User className="w-4 h-4 text-blue-600" />,
+    iconBg: 'bg-blue-100',
+  },
 ];
 
 // ---------------------------------------------------------------------------
