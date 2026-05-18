@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { FileSpreadsheet } from 'lucide-react';
 import type { Door, HardwareSet, ElevationType } from '@/types';
 import { transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
+import { filterExcludedDoors } from '@/utils/reportFilters';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 function totalDoorQuantity(doors: Door[]): number {
@@ -49,7 +50,7 @@ export default function DoorScheduleReportPage() {
           : [];
 
         const loadedDoors: Door[] = dsJson?.data?.scheduleJson
-          ? transformDoors(dsJson.data.scheduleJson, sets)
+          ? filterExcludedDoors(transformDoors(dsJson.data.scheduleJson, sets))
           : [];
 
         setHardwareSets(sets);

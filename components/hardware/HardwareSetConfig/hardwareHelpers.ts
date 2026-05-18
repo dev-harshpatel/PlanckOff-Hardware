@@ -182,35 +182,101 @@ export function buildDoorFieldGroups(
     .filter(g => g.items.length > 0);
 }
 
+function getGroupKeyPart(
+  option: GroupByOption,
+  door: Door,
+  item: HardwareItem,
+  setName: string,
+): string {
+  switch (option) {
+    case 'set':              return setName || '(No Set)';
+    case 'type':             return item.name?.split(' ')[0]?.toUpperCase() || '(Other)';
+    case 'manufacturer':     return item.manufacturer?.trim() || '(No Manufacturer)';
+    case 'buildingTag':      return door.buildingTag?.trim() || '(Unassigned)';
+    case 'buildingLocation': return door.buildingLocation?.trim() || '(Unassigned)';
+    case 'doorMaterial':     return door.doorMaterial?.trim() || '(Unassigned)';
+    case 'flat':             return 'All Items';
+  }
+}
+
+function buildCompoundGroups(
+  hardwareSets: HardwareSet[],
+  doors: Door[],
+  groupBy: GroupByOption[],
+): HardwareGroup[] {
+  const setMap = new Map(hardwareSets.map(s => [s.name.toLowerCase(), s]));
+  const groupMap = new Map<string, Map<string, HardwareItemUsage>>();
+
+  for (const door of doors) {
+    const setName = getDoorHwSetName(door);
+    if (!setName) continue;
+    const set = setMap.get(setName.toLowerCase());
+    if (!set) continue;
+
+    for (const item of set.items) {
+      const compoundKey = groupBy.map(opt => getGroupKeyPart(opt, door, item, set.name)).join(' · ');
+      const itemKey = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+
+      if (!groupMap.has(compoundKey)) groupMap.set(compoundKey, new Map());
+      const itemMap = groupMap.get(compoundKey)!;
+
+      if (!itemMap.has(itemKey)) {
+        itemMap.set(itemKey, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
+      }
+      const usage = itemMap.get(itemKey)!;
+      if (!usage.doorTags.includes(door.doorTag)) {
+        usage.doorTags.push(door.doorTag);
+        usage.doorQuantitySum += (door.quantity || 1);
+        const mat = door.doorMaterial?.trim();
+        if (mat && !usage.doorMaterials.includes(mat)) usage.doorMaterials.push(mat);
+      }
+      usage.totalQuantity += item.quantity * (door.quantity || 1);
+      if (!usage.sets.includes(set.name)) usage.sets.push(set.name);
+    }
+  }
+
+  return Array.from(groupMap.entries())
+    .map(([label, itemMap]) => ({ label, items: Array.from(itemMap.values()) }))
+    .filter(g => g.items.length > 0);
+}
+
 export function buildHardwareGroups(
   hardwareSets: HardwareSet[],
   doors: Door[],
   usageStats: HardwareItemUsage[],
-  groupBy: GroupByOption,
+  groupBy: GroupByOption[],
 ): HardwareGroup[] {
-  if (groupBy === 'set')  return buildSetGroups(hardwareSets, doors);
-  if (groupBy === 'flat') return [{ label: 'All Items', items: usageStats }];
+  if (groupBy.length === 0 || groupBy.includes('flat')) {
+    return [{ label: 'All Items', items: usageStats }];
+  }
 
-  if (groupBy === 'buildingTag')      return buildDoorFieldGroups(hardwareSets, doors, 'buildingTag');
-  if (groupBy === 'buildingLocation') return buildDoorFieldGroups(hardwareSets, doors, 'buildingLocation');
-  if (groupBy === 'doorMaterial')     return buildDoorFieldGroups(hardwareSets, doors, 'doorMaterial');
+  if (groupBy.length === 1) {
+    const single = groupBy[0];
+    if (single === 'set')              return buildSetGroups(hardwareSets, doors);
+    if (single === 'buildingTag')      return buildDoorFieldGroups(hardwareSets, doors, 'buildingTag');
+    if (single === 'buildingLocation') return buildDoorFieldGroups(hardwareSets, doors, 'buildingLocation');
+    if (single === 'doorMaterial')     return buildDoorFieldGroups(hardwareSets, doors, 'doorMaterial');
 
-  if (groupBy === 'manufacturer') {
+    if (single === 'manufacturer') {
+      const map = new Map<string, HardwareItemUsage[]>();
+      for (const u of usageStats) {
+        const key = u.item.manufacturer?.trim() || '(No Manufacturer)';
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(u);
+      }
+      return Array.from(map.entries()).map(([label, items]) => ({ label, items }));
+    }
+
+    // single === 'type' — derive from first word of item name
     const map = new Map<string, HardwareItemUsage[]>();
     for (const u of usageStats) {
-      const key = u.item.manufacturer?.trim() || '(No Manufacturer)';
+      const key = u.item.name?.split(' ')[0]?.toUpperCase() || '(Other)';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(u);
     }
     return Array.from(map.entries()).map(([label, items]) => ({ label, items }));
   }
 
-  // groupBy === 'type' — derive from first word of item name
-  const map = new Map<string, HardwareItemUsage[]>();
-  for (const u of usageStats) {
-    const key = u.item.name?.split(' ')[0]?.toUpperCase() || '(Other)';
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(u);
-  }
-  return Array.from(map.entries()).map(([label, items]) => ({ label, items }));
+  // Multiple options — compound door-level grouping
+  return buildCompoundGroups(hardwareSets, doors, groupBy);
 }

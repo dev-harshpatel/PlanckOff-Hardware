@@ -71,7 +71,6 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         prepGenerating,
         prepErrors,
         sortConfig,
-        doorCounts,
         doorQuantityTotals,
         filteredAndSortedSets,
         isAllSelected,
@@ -326,7 +325,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                             {/* Data rows */}
                             {!isLoading && filteredAndSortedSets.map(set => {
                                 const isExpanded = expandedRows.has(set.id);
-                                const doorCount = doorCounts.get(set.id) || 0;
+                                const doorCount = doorQuantityTotals.get(set.id) || 0;
                                 const hasZeroQtyItem = set.items.some(item => !item.quantity || item.quantity <= 0);
                                 const assignedDoors = doors.filter(d =>
                                     d.assignedHardwareSet?.id === set.id &&

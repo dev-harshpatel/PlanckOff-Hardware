@@ -7,6 +7,7 @@ import { DollarSign } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
+import { filterExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useToast } from '@/contexts/ToastContext';
@@ -55,15 +56,17 @@ export default function PricingReportPage() {
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
           const { hardwareSets: mergedSets, doors: finalDoors } = transformFromFinalJson(finalData);
-          sets = mergedSets;
-          loadedDoors = finalDoors;
+          loadedDoors = filterExcludedDoors(finalDoors);
+          sets = filterSetsWithNoDoors(mergedSets, loadedDoors);
         } else {
           const hwRes = await fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' });
           const hwJson = hwRes.ok ? await hwRes.json() : null;
           if (hwJson?.data?.extractedJson) sets = transformHardwareSets(hwJson.data.extractedJson);
-          loadedDoors = dsJson?.data?.scheduleJson
+          const allDoors = dsJson?.data?.scheduleJson
             ? transformDoors(dsJson.data.scheduleJson, sets)
             : [];
+          loadedDoors = filterExcludedDoors(allDoors);
+          sets = filterSetsWithNoDoors(sets, loadedDoors);
         }
 
         setHardwareSets(sets);

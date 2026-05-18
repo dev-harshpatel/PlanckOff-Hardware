@@ -49,7 +49,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
   const [requiredColumns, setRequiredColumns] = useState<string[]>(
     REQUIRED_COLUMN_DEFS.map(c => c.id),
   );
-  const [groupBy, setGroupBy]                 = useState<GroupByOption>('set');
+  const [groupBy, setGroupBy]                 = useState<GroupByOption[]>(['set']);
   const [usageDisplay, setUsageDisplay]       = useState<string[]>(['all']);
   const [format, setFormat]                   = useState<ExportFormat>('xlsx');
   const [previewReady, setPreviewReady]         = useState(false);
@@ -103,7 +103,15 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
   }, []);
 
   const handleGroupByChange = useCallback((val: GroupByOption) => {
-    setGroupBy(val);
+    setGroupBy(prev => {
+      if (val === 'flat') return ['flat'];
+      const withoutFlat = prev.filter(v => v !== 'flat');
+      if (withoutFlat.includes(val)) {
+        const next = withoutFlat.filter(v => v !== val);
+        return next.length > 0 ? next : [val];
+      }
+      return [...withoutFlat, val];
+    });
     setPreviewReady(false);
   }, []);
 
@@ -318,12 +326,10 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
               {GROUPING_OPTIONS.map(opt => (
                 <label key={opt.id} className="flex items-start gap-2.5 cursor-pointer px-3 py-2 hover:bg-[var(--primary-bg)] transition-colors group border-b border-[var(--border)] last:border-b-0">
                   <input
-                    type="radio"
-                    name="groupBy"
-                    value={opt.id}
-                    checked={groupBy === opt.id}
+                    type="checkbox"
+                    checked={groupBy.includes(opt.id)}
                     onChange={() => handleGroupByChange(opt.id)}
-                    className="w-3.5 h-3.5 border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0 mt-0.5"
+                    className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0 mt-0.5"
                   />
                   <div className="min-w-0">
                     <span className="text-xs font-medium text-[var(--text-secondary)] group-hover:text-[var(--primary-text)] transition-colors block">{opt.label}</span>

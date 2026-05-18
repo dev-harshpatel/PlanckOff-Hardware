@@ -70,11 +70,18 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     return defaults.length > 0 ? defaults : allColumnIds;
   });
 
-  const toggleColumn   = useCallback((id: string) => setSelectedColumns(p => p.includes(id) ? p.filter(c => c !== id) : [...p, id]), []);
+  const toggleColumn   = useCallback((id: string) => setSelectedColumns(p => {
+    if (p.includes(id)) return p.filter(c => c !== id);
+    const next = new Set([...p, id]);
+    return allColumnIds.filter(colId => next.has(colId));
+  }), [allColumnIds]);
   const selectSection  = useCallback((sk: SectionKey) => {
     const g = columnGroups.find(cg => cg.sectionKey === sk);
-    if (g) setSelectedColumns(p => [...new Set([...p, ...g.cols.map(c => c.id)])]);
-  }, [columnGroups]);
+    if (g) setSelectedColumns(p => {
+      const next = new Set([...p, ...g.cols.map(c => c.id)]);
+      return allColumnIds.filter(colId => next.has(colId));
+    });
+  }, [columnGroups, allColumnIds]);
   const clearSection   = useCallback((sk: SectionKey) => {
     const g = columnGroups.find(cg => cg.sectionKey === sk);
     if (g) { const ids = new Set(g.cols.map(c => c.id)); setSelectedColumns(p => p.filter(c => !ids.has(c))); }

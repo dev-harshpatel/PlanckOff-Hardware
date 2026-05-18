@@ -86,6 +86,7 @@ export function extractDoorFields(door: Door): Record<string, string> {
     doorGauge:         (door.doorGauge           ?? '').trim(),
     doorFinish:        (door.doorFinish          ?? '').trim(),
     doorElevationType: (door.elevationTypeId     ?? '').trim(),
+    prep:              (door.assignedHardwareSet?.prep ?? door.hardwarePrep ?? '').trim(),
   };
 }
 
