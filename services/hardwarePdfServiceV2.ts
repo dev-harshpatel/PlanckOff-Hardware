@@ -112,7 +112,8 @@ RULES:
 - If a note or special instruction applies to a set, put it in the notes field.
 - Items marked "By Others" — include them, set description to "By Others".
 - Skip any door-index or door-to-set mapping tables at the start of the document — only extract the set/group definitions.
-- Return results in the JSON format defined by the response schema.`;
+- Return results in the JSON format defined by the response schema.
+- When a [CONTEXT] block appears at the top of the text: those pages were already processed. Use them only to identify which set was being listed when that section ended — then continue extracting items for that set from the pages that follow [END CONTEXT]. Do NOT emit set entries for items that appear exclusively inside the [CONTEXT] block.`;
 
 const USER_PROMPT = 'Extract all hardware sets from this document. Return every set and every item within each set.';
 
@@ -402,8 +403,11 @@ async function tier2Extract(
 
     console.log(`[hardwarePdf:t2] → Batch ${idx + 1}/${batches.length}: pages ${batch.startPage}–${batch.endPage} — sending to ${MODEL}…`);
 
+    const continuationNote = batch.hasContextPrefix
+      ? ' (context from previous section prepended — see [CONTEXT] block)'
+      : '';
     const batchPrompt =
-      `Pages ${batch.startPage}–${batch.endPage} of ${pageCount}:\n\n${batch.text}`;
+      `Pages ${batch.startPage}–${batch.endPage} of ${pageCount}${continuationNote}:\n\n${batch.text}`;
 
     const raw = await callOpenRouterForSets(client, [
       { role: 'system', content: SYSTEM_PROMPT },
