@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import type { CompanySettings } from '@/lib/db/companySettings';
 import type { DoorPricingGroup, HardwarePricingGroup } from '@/utils/pricingGrouping';
 import { buildExportFilename } from '@/utils/exportFilename';
+import { PDF_ERRORS } from '@/constants/errors';
+import type { Toast } from '@/types';
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
@@ -44,6 +46,7 @@ interface UsePricingExportParams {
   taxSubtotal: number;
   totalAfterTax: number;
   remarks: string;
+  addToast: (toast: Omit<Toast, 'id'>) => void;
 }
 
 export function usePricingExport({
@@ -76,187 +79,207 @@ export function usePricingExport({
   taxSubtotal,
   totalAfterTax,
   remarks,
+  addToast,
 }: UsePricingExportParams) {
   const handleDownloadExcel = useCallback(async (sections: ExportSections) => {
-    const { utils, writeFile } = await import('xlsx-js-style');
+    try {
+      const { utils, writeFile } = await import('xlsx-js-style');
 
-    const makeSheet = <T extends { totalPrice: number }>(
-      rows: T[],
-      total: number,
-      toRow: (g: T) => Record<string, string | number>,
-    ) => {
-      const dataRows = rows.map(toRow);
-      const ws = utils.json_to_sheet(dataRows);
-      const nextRow = dataRows.length + 2;
-      utils.sheet_add_aoa(ws, [['', 'Total', '', fmt.format(total)]], { origin: nextRow });
-      return ws;
-    };
+      const makeSheet = <T extends { totalPrice: number }>(
+        rows: T[],
+        total: number,
+        toRow: (g: T) => Record<string, string | number>,
+      ) => {
+        const dataRows = rows.map(toRow);
+        const ws = utils.json_to_sheet(dataRows);
+        const nextRow = dataRows.length + 2;
+        utils.sheet_add_aoa(ws, [['', 'Total', '', fmt.format(total)]], { origin: nextRow });
+        return ws;
+      };
 
-    const wb = utils.book_new();
+      const wb = utils.book_new();
 
-    if (companySettings?.companyName) {
-      const co = companySettings;
-      const coverRows: [string, string][] = [
-        ['Project',      projectName],
-        ['',             ''],
-        ['Company',      co.companyName],
-      ];
-      if (co.websiteUrl) coverRows.push(['Website', co.websiteUrl]);
-      if (co.email)      coverRows.push(['Email',   co.email]);
-      if (co.phone)      coverRows.push(['Phone',   co.phone]);
-      if (co.address)    coverRows.push(['Address', co.address]);
-      const coverParts = [co.province, co.country].filter(Boolean).join(', ');
-      if (coverParts)    coverRows.push(['',        coverParts]);
-      utils.book_append_sheet(wb, utils.aoa_to_sheet(coverRows), 'Company');
+      if (companySettings?.companyName) {
+        const co = companySettings;
+        const coverRows: [string, string][] = [
+          ['Project',      projectName],
+          ['',             ''],
+          ['Company',      co.companyName],
+        ];
+        if (co.websiteUrl) coverRows.push(['Website', co.websiteUrl]);
+        if (co.email)      coverRows.push(['Email',   co.email]);
+        if (co.phone)      coverRows.push(['Phone',   co.phone]);
+        if (co.address)    coverRows.push(['Address', co.address]);
+        const coverParts = [co.province, co.country].filter(Boolean).join(', ');
+        if (coverParts)    coverRows.push(['',        coverParts]);
+        utils.book_append_sheet(wb, utils.aoa_to_sheet(coverRows), 'Company');
+      }
+
+      if (sections.doors) {
+        utils.book_append_sheet(wb,
+          makeSheet(doorGroups, doorTotal, g => ({
+            'Description': withPrep(g),
+            'Total Qty':   g.totalQty,
+            'Unit Price':  g.unitPrice,
+            'Total Price': g.totalPrice,
+          })),
+          'Doors',
+        );
+      }
+      if (sections.frames) {
+        utils.book_append_sheet(wb,
+          makeSheet(frameGroups, frameTotal, g => ({
+            'Description': withPrep(g),
+            'Total Qty':   g.totalQty,
+            'Unit Price':  g.unitPrice,
+            'Total Price': g.totalPrice,
+          })),
+          'Frames',
+        );
+      }
+      if (sections.hardware) {
+        utils.book_append_sheet(wb,
+          makeSheet(hardwareGroups, hwTotal, g => ({
+            'Item Name':      g.item.name          ?? '',
+            'Description':    g.item.description   ?? '',
+            'Manufacturer':   g.item.manufacturer  ?? '',
+            'Finish':         g.item.finish        ?? '',
+            'Total Qty':      g.totalQty,
+            'Door Materials': g.doorMaterials.join(', '),
+            'Unit Price':     g.unitPrice,
+            'Total Price':    g.totalPrice,
+          })),
+          'Hardware',
+        );
+      }
+
+      if (wb.SheetNames.length === 0) return; // nothing selected
+      writeFile(wb, buildExportFilename(projectName, 'pricing-report', 'xlsx'));
+    } catch (err) {
+      console.error('[usePricingExport] Excel export failed:', err);
+      addToast({
+        type: 'error',
+        message: PDF_ERRORS.EXPORT_FAILED.message,
+        details: PDF_ERRORS.EXPORT_FAILED.action,
+      });
     }
-
-    if (sections.doors) {
-      utils.book_append_sheet(wb,
-        makeSheet(doorGroups, doorTotal, g => ({
-          'Description': withPrep(g),
-          'Total Qty':   g.totalQty,
-          'Unit Price':  g.unitPrice,
-          'Total Price': g.totalPrice,
-        })),
-        'Doors',
-      );
-    }
-    if (sections.frames) {
-      utils.book_append_sheet(wb,
-        makeSheet(frameGroups, frameTotal, g => ({
-          'Description': withPrep(g),
-          'Total Qty':   g.totalQty,
-          'Unit Price':  g.unitPrice,
-          'Total Price': g.totalPrice,
-        })),
-        'Frames',
-      );
-    }
-    if (sections.hardware) {
-      utils.book_append_sheet(wb,
-        makeSheet(hardwareGroups, hwTotal, g => ({
-          'Item Name':      g.item.name          ?? '',
-          'Description':    g.item.description   ?? '',
-          'Manufacturer':   g.item.manufacturer  ?? '',
-          'Finish':         g.item.finish        ?? '',
-          'Total Qty':      g.totalQty,
-          'Door Materials': g.doorMaterials.join(', '),
-          'Unit Price':     g.unitPrice,
-          'Total Price':    g.totalPrice,
-        })),
-        'Hardware',
-      );
-    }
-
-    if (wb.SheetNames.length === 0) return; // nothing selected
-    writeFile(wb, buildExportFilename(projectName, 'pricing-report', 'xlsx'));
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName, addToast]);
 
   const handleDownloadPdf = useCallback(async (sections: ExportSections) => {
-    const { default: jsPDF } = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
 
-    const doc = new jsPDF({ orientation: 'landscape' });
-    type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
-    const d = doc as DocWithAutoTable;
+      const doc = new jsPDF({ orientation: 'landscape' });
+      type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
+      const d = doc as DocWithAutoTable;
 
-    const nextY = (offset = 0) => (d.lastAutoTable?.finalY ?? 0) + offset;
-    const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
+      const nextY = (offset = 0) => (d.lastAutoTable?.finalY ?? 0) + offset;
+      const totalRowStyle = { fontStyle: 'bold' as const, fillColor: [240, 243, 250] as [number, number, number] };
 
-    let currentY = 10;
+      let currentY = 10;
 
-    if (companySettings?.companyName) {
-      const co = companySettings;
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(co.companyName, 14, 12);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      const lines: string[] = [];
-      if (co.websiteUrl || co.email) lines.push([co.websiteUrl, co.email].filter(Boolean).join('  |  '));
-      if (co.phone) lines.push(co.phone);
-      const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
-      if (addrParts) lines.push(addrParts);
-      lines.forEach((line, i) => doc.text(line, 14, 18 + i * 5));
-      currentY = 18 + lines.length * 5 + 4;
-      doc.setDrawColor(180, 180, 180);
-      doc.line(14, currentY, doc.internal.pageSize.width - 14, currentY);
-      currentY += 6;
-    }
+      if (companySettings?.companyName) {
+        const co = companySettings;
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text(co.companyName, 14, 12);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        const lines: string[] = [];
+        if (co.websiteUrl || co.email) lines.push([co.websiteUrl, co.email].filter(Boolean).join('  |  '));
+        if (co.phone) lines.push(co.phone);
+        const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
+        if (addrParts) lines.push(addrParts);
+        lines.forEach((line, i) => doc.text(line, 14, 18 + i * 5));
+        currentY = 18 + lines.length * 5 + 4;
+        doc.setDrawColor(180, 180, 180);
+        doc.line(14, currentY, doc.internal.pageSize.width - 14, currentY);
+        currentY += 6;
+      }
 
-    let firstSection = true;
+      let firstSection = true;
 
-    if (sections.doors) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, startY);
-      autoTable(doc, {
-        startY: startY + 6,
-        head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
-        body: [
-          ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
-          ['', '', 'Total', fmt.format(doorTotal)],
-        ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-        },
+      if (sections.doors) {
+        const startY = firstSection ? currentY : nextY(12);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Doors — Total: ${fmt.format(doorTotal)}`, 14, startY);
+        autoTable(doc, {
+          startY: startY + 6,
+          head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+          body: [
+            ...doorGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+            ['', '', 'Total', fmt.format(doorTotal)],
+          ],
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [60, 80, 120] },
+          didParseCell: (data) => {
+            if (data.row.index === doorGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+          },
+        });
+        firstSection = false;
+      }
+
+      if (sections.frames) {
+        const startY = firstSection ? currentY : nextY(12);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, startY);
+        autoTable(doc, {
+          startY: (firstSection ? startY : nextY(18)),
+          head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
+          body: [
+            ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
+            ['', '', 'Total', fmt.format(frameTotal)],
+          ],
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [60, 80, 120] },
+          didParseCell: (data) => {
+            if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+          },
+        });
+        firstSection = false;
+      }
+
+      if (sections.hardware) {
+        const startY = firstSection ? currentY : nextY(12);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, startY);
+        autoTable(doc, {
+          startY: (firstSection ? startY : nextY(18)),
+          head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
+          body: [
+            ...hardwareGroups.map(g => [
+              g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
+              g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
+            ]),
+            ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
+          ],
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [60, 80, 120] },
+          didParseCell: (data) => {
+            if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
+          },
+        });
+        firstSection = false;
+      }
+
+      if (firstSection) return; // nothing selected
+      doc.save(buildExportFilename(projectName, 'pricing-report', 'pdf'));
+    } catch (err) {
+      console.error('[usePricingExport] PDF export failed:', err);
+      addToast({
+        type: 'error',
+        message: PDF_ERRORS.EXPORT_FAILED.message,
+        details: PDF_ERRORS.EXPORT_FAILED.action,
       });
-      firstSection = false;
     }
-
-    if (sections.frames) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Frames — Total: ${fmt.format(frameTotal)}`, 14, startY);
-      autoTable(doc, {
-        startY: (firstSection ? startY : nextY(18)),
-        head: [['Description', 'Total Qty', 'Unit Price', 'Total Price']],
-        body: [
-          ...frameGroups.map(g => [withPrep(g), g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice)]),
-          ['', '', 'Total', fmt.format(frameTotal)],
-        ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === frameGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-        },
-      });
-      firstSection = false;
-    }
-
-    if (sections.hardware) {
-      const startY = firstSection ? currentY : nextY(12);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Hardware — Total: ${fmt.format(hwTotal)}`, 14, startY);
-      autoTable(doc, {
-        startY: (firstSection ? startY : nextY(18)),
-        head: [['Item Name', 'Description', 'Manufacturer', 'Finish', 'Qty', 'Unit Price', 'Total Price']],
-        body: [
-          ...hardwareGroups.map(g => [
-            g.item.name ?? '', g.item.description ?? '', g.item.manufacturer ?? '', g.item.finish ?? '',
-            g.totalQty, fmt.format(g.unitPrice), fmt.format(g.totalPrice),
-          ]),
-          ['', '', '', '', '', 'Total', fmt.format(hwTotal)],
-        ],
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [60, 80, 120] },
-        didParseCell: (data) => {
-          if (data.row.index === hardwareGroups.length) Object.assign(data.cell.styles, totalRowStyle);
-        },
-      });
-      firstSection = false;
-    }
-
-    if (firstSection) return; // nothing selected
-    doc.save(buildExportFilename(projectName, 'pricing-report', 'pdf'));
-  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName]);
+  }, [doorGroups, frameGroups, hardwareGroups, doorTotal, frameTotal, hwTotal, companySettings, projectName, addToast]);
 
   const handleDownloadProposalPdf = useCallback(async () => {
+    try {
     const { default: jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
@@ -542,6 +565,14 @@ export function usePricingExport({
     }
 
     doc.save(buildExportFilename(projectName || 'project', 'proposal', 'pdf'));
+    } catch (err) {
+      console.error('[usePricingExport] Proposal PDF export failed:', err);
+      addToast({
+        type: 'error',
+        message: PDF_ERRORS.EXPORT_FAILED.message,
+        details: PDF_ERRORS.EXPORT_FAILED.action,
+      });
+    }
   }, [
     companySettings, projectName,
     proposalDoorBase, proposalFrameBase, proposalHwBase,
@@ -551,7 +582,7 @@ export function usePricingExport({
     extraExpenses, extraExpensesTotal,
     taxRows, taxSubtotal, totalAfterTax,
     remarks,
-    hiddenProposalTables, doorGroups, frameGroups, hwSetList,
+    hiddenProposalTables, doorGroups, frameGroups, hwSetList, addToast,
   ]);
 
   return { handleDownloadExcel, handleDownloadPdf, handleDownloadProposalPdf };

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { Project, HardwareItem, AppSettings, NewProjectData } from '../types';
 import { initialMasterInventory } from '@/constants/inventory';
 import { ERRORS } from '@/constants/errors';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { isOwnWrite, markPendingWrite } from '@/lib/realtime/dedupSet';
 
 interface ProjectContextType {
   projects: Project[];
@@ -15,6 +16,7 @@ interface ProjectContextType {
   appSettings: AppSettings;
   addProject: (data: NewProjectData, doorFile?: File, hwFile?: File) => Promise<void>;
   updateProject: (project: Project) => void;
+  updateProjectFromRealtime: (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => void;
   deleteProject: (id: string) => void;
   restoreProject: (id: string) => void;
   permDeleteProject: (id: string) => void;
@@ -32,6 +34,33 @@ const DEFAULT_SETTINGS: AppSettings = {
   model: 'gemini-2.5-flash',
   geminiApiKey: '',
 };
+
+/**
+ * Client-side mirror of lib/db/projects.ts toProject(). Maps a snake_case
+ * Supabase Realtime row payload to the camelCase Project domain type.
+ * Kept in sync with the server-side helper — both must update if the
+ * projects table schema changes.
+ */
+function projectRowToProject(row: Record<string, unknown>): Project {
+  return {
+    id:             row.id as string,
+    name:           (row.name as string) ?? '',
+    client:         (row.client as string) ?? '',
+    location:       (row.location as string) ?? '',
+    country:        (row.country as string) ?? undefined,
+    province:       (row.province as string) ?? undefined,
+    description:    (row.description as string) ?? '',
+    projectNumber:  (row.project_number as string) ?? '',
+    status:         ((row.status as Project['status']) ?? 'Active'),
+    dueDate:        (row.due_date as string) ?? undefined,
+    assignedTo:     (row.assigned_to as string) ?? undefined,
+    createdAt:      new Date(row.created_at as string),
+    updatedAt:      new Date(row.updated_at as string),
+    lastModified:   row.updated_at as string,
+    elevationTypes: (row.elevation_types as Project['elevationTypes']) ?? [],
+    deletedAt:      (row.deleted_at as string) ?? undefined,
+  };
+}
 
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { addToast } = useToast();
@@ -93,7 +122,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   // Actions
   // ---------------------------------------------------------------------------
 
-  const addProject = async (projectData: NewProjectData, _doorFile?: File, _hwFile?: File) => {
+  /**
+   * Optimistic append: mirrors deleteProject's optimistic filter pattern.
+   * After POST succeeds, appends the server-confirmed project directly to local
+   * state instead of re-fetching the entire list. The Realtime INSERT echo handler
+   * in updateProjectFromRealtime will find the project already present via
+   * `prev.find(p => p.id === id)` and short-circuit correctly.
+   */
+  const addProject = useCallback(async (projectData: NewProjectData, _doorFile?: File, _hwFile?: File) => {
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -105,15 +141,17 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const json = (await res.json()) as { data?: Project; error?: string };
       if (!res.ok) throw new Error(json.error ?? ERRORS.GENERAL.SAVE_FAILED.message);
 
-      await fetchProjects();
+      if (json.data) {
+        setProjects(prev => [...prev, json.data!]);
+      }
       addToast({ type: 'success', message: `Project "${json.data!.name}" created.` });
     } catch (error: unknown) {
       addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
       throw error;
     }
-  };
+  }, [addToast]);
 
-  const updateProject = async (updatedProject: Project) => {
+  const updateProject = useCallback(async (updatedProject: Project) => {
     try {
       // Strip large domain arrays before sending to the project metadata API —
       // the API only persists metadata columns (name, status, etc.) and ignores
@@ -139,12 +177,67 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       };
 
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? merged : p));
+
+      // Mark our own write so the Realtime echo is skipped (lib/realtime/dedupSet).
+      const rawUpdatedAt = (json.data as { updatedAt?: Date | string } | undefined)?.updatedAt;
+      const updatedAtStr = rawUpdatedAt instanceof Date
+        ? rawUpdatedAt.toISOString()
+        : typeof rawUpdatedAt === 'string'
+          ? rawUpdatedAt
+          : undefined;
+      if (updatedAtStr) {
+        markPendingWrite('projects', updatedProject.id, updatedAtStr);
+      }
     } catch {
       addToast({ type: 'error', message: ERRORS.GENERAL.SAVE_FAILED.message, details: ERRORS.GENERAL.SAVE_FAILED.action });
     }
-  };
+  }, [addToast]);
 
-  const deleteProject = async (id: string) => {
+  const updateProjectFromRealtime = useCallback(
+    (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
+      // DELETE: remove from list.
+      if (payload.eventType === 'DELETE') {
+        const oldId = payload.old?.id;
+        if (typeof oldId === 'string') {
+          setProjects(prev => prev.filter(p => p.id !== oldId));
+        }
+        return;
+      }
+
+      const row = payload.new ?? {};
+      const id = typeof row.id === 'string' ? row.id : '';
+      const updatedAt = typeof row.updated_at === 'string' ? row.updated_at : '';
+      if (!id) return;
+
+      // Skip echoes of our own writes.
+      if (updatedAt && isOwnWrite('projects', id, updatedAt)) return;
+
+      const incoming = projectRowToProject(row);
+
+      setProjects(prev => {
+        const existing = prev.find(p => p.id === id);
+        if (!existing) {
+          // INSERT: append to list. New project from another tab.
+          return [...prev, incoming];
+        }
+        // UPDATE: preserve domain arrays (hardwareSets, doors, elevationTypes) from the
+        // local entry — the Realtime payload only carries metadata columns.
+        return prev.map(p =>
+          p.id === id
+            ? {
+                ...incoming,
+                hardwareSets:   existing.hardwareSets,
+                doors:          existing.doors,
+                elevationTypes: incoming.elevationTypes ?? existing.elevationTypes,
+              }
+            : p,
+        );
+      });
+    },
+    [],
+  );
+
+  const deleteProject = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}`, {
         method: 'DELETE',
@@ -162,25 +255,36 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [projects, addToast]);
 
-  const restoreProjectFn = async (id: string) => {
+  /**
+   * Optimistic restore: mirrors deleteProject's optimistic filter pattern.
+   * After DELETE ?restore=true succeeds, removes from local trash state and
+   * prepends the restored project (minus deletedAt) to active projects directly,
+   * instead of re-fetching the entire list via fetchProjects().
+   */
+  const restoreProjectFn = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}?restore=true`, {
         method: 'DELETE',
         credentials: 'include',
       });
       if (!res.ok) throw new Error(ERRORS.GENERAL.SAVE_FAILED.message);
+      const restored = trash.find(p => p.id === id);
       setTrash(prev => prev.filter(p => p.id !== id));
-      await fetchProjects();
+      if (restored) {
+        // Strip deletedAt before re-adding to active list
+        const { deletedAt: _del, ...activeProject } = restored;
+        setProjects(prev => [activeProject as Project, ...prev]);
+      }
       addToast({ type: 'success', message: 'Project restored successfully.' });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [trash, addToast]);
 
-  const permDeleteProject = async (id: string) => {
+  const permDeleteProject = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/projects/${id}?hard=true`, {
         method: 'DELETE',
@@ -193,43 +297,51 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
     }
-  };
+  }, [addToast]);
 
   // Inventory — keep in localStorage for now (Phase 1.3 will migrate this)
-  const updateInventory = (items: HardwareItem[]) => {
+  const updateInventory = useCallback((items: HardwareItem[]) => {
     setMasterInventory(items);
     localStorage.setItem('tve_master_inventory', JSON.stringify(items));
-  };
+  }, []);
 
   const addToInventory = useCallback((items: HardwareItem[]) => {
     setMasterInventory(prev => [...prev, ...items]);
   }, []);
 
-  const overwriteInventory = (items: HardwareItem[]) => setMasterInventory(items);
+  const overwriteInventory = useCallback((items: HardwareItem[]) => setMasterInventory(items), []);
 
-  const saveSettings = (newSettings: AppSettings) => {
+  const saveSettings = useCallback((newSettings: AppSettings) => {
     setAppSettings(newSettings);
     localStorage.setItem('tve_app_settings', JSON.stringify(newSettings));
-  };
+  }, []);
+
+  const contextValue = useMemo<ProjectContextType>(() => ({
+    projects,
+    projectsHydrated,
+    masterInventory,
+    trash,
+    appSettings,
+    addProject,
+    updateProject,
+    updateProjectFromRealtime,
+    deleteProject,
+    restoreProject: restoreProjectFn,
+    permDeleteProject,
+    fetchTrashed,
+    updateInventory,
+    addToInventory,
+    overwriteInventory,
+    saveSettings,
+  }), [
+    projects, projectsHydrated, masterInventory, trash, appSettings,
+    addProject, updateProject, updateProjectFromRealtime,
+    deleteProject, restoreProjectFn, permDeleteProject, fetchTrashed,
+    updateInventory, addToInventory, overwriteInventory, saveSettings,
+  ]);
 
   return (
-    <ProjectContext.Provider value={{
-      projects,
-      projectsHydrated,
-      masterInventory,
-      trash,
-      appSettings,
-      addProject,
-      updateProject,
-      deleteProject,
-      restoreProject: restoreProjectFn,
-      permDeleteProject,
-      fetchTrashed,
-      updateInventory,
-      addToInventory,
-      overwriteInventory,
-      saveSettings,
-    }}>
+    <ProjectContext.Provider value={contextValue}>
       {children}
     </ProjectContext.Provider>
   );

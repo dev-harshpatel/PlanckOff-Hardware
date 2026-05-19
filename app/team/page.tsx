@@ -46,6 +46,12 @@ const ROLE_GROUPS: { role: RoleName; label: string; icon: React.ReactNode; iconB
     icon: <Users className="w-4 h-4 text-green-600" />,
     iconBg: 'bg-[var(--success-bg)]',
   },
+  {
+    role: 'Client',
+    label: 'Clients',
+    icon: <User className="w-4 h-4 text-blue-600" />,
+    iconBg: 'bg-blue-100',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -76,6 +82,7 @@ function Avatar({ initials, role }: { initials: string; role: RoleName }) {
     Administrator: 'bg-purple-100 text-purple-700',
     'Team Lead':   'bg-[var(--primary-bg-hover)] text-[var(--primary-text)]',
     Estimator:     'bg-[var(--success-bg)] text-[var(--success-text)]',
+    Client:        'bg-blue-100 text-blue-700',
   };
   return (
     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${colors[role]}`}>

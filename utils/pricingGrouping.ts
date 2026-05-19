@@ -86,6 +86,7 @@ export function extractDoorFields(door: Door): Record<string, string> {
     doorGauge:         (door.doorGauge           ?? '').trim(),
     doorFinish:        (door.doorFinish          ?? '').trim(),
     doorElevationType: (door.elevationTypeId     ?? '').trim(),
+    prep:              (door.assignedHardwareSet?.prep ?? door.hardwarePrep ?? '').trim(),
   };
 }
 
@@ -354,12 +355,41 @@ export function filterDoorGroups(
   groups: DoorPricingGroup[],
   filters: { material: string[]; floor: string[]; building: string[]; prep: string[] },
 ): DoorPricingGroup[] {
-  return groups.filter(g =>
-    (filters.material.length === 0 || filters.material.some(m => g.materials.includes(m))) &&
-    (filters.floor.length    === 0 || filters.floor.some(f => g.floors.includes(f)))       &&
-    (filters.building.length === 0 || filters.building.some(b => g.buildings.includes(b))) &&
-    (filters.prep.length     === 0 || filters.prep.some(p => g.prep.includes(p))),
-  );
+  const noFilters =
+    filters.material.length === 0 &&
+    filters.floor.length    === 0 &&
+    filters.building.length === 0 &&
+    filters.prep.length     === 0;
+  if (noFilters) return groups;
+
+  const result: DoorPricingGroup[] = [];
+  for (const g of groups) {
+    const matching = g.doors.filter(d => {
+      const mat   = (d.doorMaterial ?? '').trim();
+      const floor = (d.buildingLocation ?? d.location ?? '').trim();
+      const bldg  = (d.buildingTag ?? '').trim();
+      const prep  = (d.assignedHardwareSet?.prep ?? d.hardwarePrep ?? '').trim();
+      return (
+        (filters.material.length === 0 || filters.material.includes(mat))  &&
+        (filters.floor.length    === 0 || filters.floor.includes(floor))   &&
+        (filters.building.length === 0 || filters.building.includes(bldg)) &&
+        (filters.prep.length     === 0 || filters.prep.includes(prep))
+      );
+    });
+    if (matching.length === 0) continue;
+    const qty = matching.reduce((s, d) => s + (d.quantity != null && d.quantity > 0 ? d.quantity : 1), 0);
+    result.push({
+      ...g,
+      doors:      matching,
+      totalQty:   qty,
+      totalPrice: g.unitPrice * qty,
+      materials:  [...new Set(matching.map(d => (d.doorMaterial ?? '').trim()).filter(Boolean))],
+      floors:     [...new Set(matching.map(d => (d.buildingLocation ?? d.location ?? '').trim()).filter(Boolean))],
+      buildings:  [...new Set(matching.map(d => (d.buildingTag ?? '').trim()).filter(Boolean))],
+      prep:       [...new Set(matching.map(d => (d.assignedHardwareSet?.prep ?? d.hardwarePrep ?? '').trim()).filter(Boolean))],
+    });
+  }
+  return result;
 }
 
 export function filterHardwareGroups(

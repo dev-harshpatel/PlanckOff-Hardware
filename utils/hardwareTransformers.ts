@@ -166,7 +166,7 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
         return leafCount !== undefined ? (leafCount > 1 ? 'Pair' : 'Single') : undefined;
       })(),
       buildingTag:      bi?.['BUILDING TAG']        ?? d?.['BUILDING TAG']       ?? row.buildingTag,
-      buildingLocation: bi?.['BUILDING LOCATION']   ?? d?.['BUILDING LOCATION']  ?? row.buildingLocation,
+      buildingLocation: bi?.['BUILDING LOCATION']   ?? d?.['BUILDING LOCATION']  ?? row.buildingLocation ?? row.buildingArea,
       handing:          (bi?.['HAND OF OPENINGS']   ?? d?.['HAND OF OPENINGS']   ?? row.handOfOpenings) as Door['handing'],
       operation:        bi?.['DOOR OPERATION']      ?? d?.['DOOR OPERATION']     ?? row.doorOperation,
       leafCount: parseLeafCountValue(rawLeafCount),
@@ -306,7 +306,7 @@ export function transformFromFinalJson(
         thicknessDisplay: rawThickness?.trim() || undefined,
 
         buildingTag: bi?.['BUILDING TAG'] ?? ds?.['BUILDING TAG'],
-        buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'],
+        buildingLocation: bi?.['BUILDING LOCATION'] ?? ds?.['BUILDING LOCATION'] ?? door.buildingArea,
         handing: (bi?.['HAND OF OPENINGS'] ?? ds?.['HAND OF OPENINGS']) as Door['handing'],
         operation: bi?.['DOOR OPERATION'] ?? ds?.['DOOR OPERATION'],
         excludeReason: bi?.['EXCLUDE REASON'] ?? ds?.['EXCLUDE REASON'] ?? door.excludeReason,

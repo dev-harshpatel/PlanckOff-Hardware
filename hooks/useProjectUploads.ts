@@ -5,6 +5,7 @@ import { HardwareSet, Door, Toast, ValidationReport } from '../types';
 import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
 import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
+import { autoCreateVariants } from '../utils/autoVariantUtils';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
@@ -589,10 +590,15 @@ export function useProjectUploads({
             ? transformDoors(dsJson.data.scheduleJson, freshSets)
             : doors;
 
-        setHardwareSets(freshSets);
-        setDoors(freshDoors);
+        // Auto-split sets where assigned doors have differing profiles
+        // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
+        // Largest profile group keeps the original set; each minority group becomes a .v1/.v2 variant.
+        const { sets: autoSets, doors: autoDoors } = autoCreateVariants(freshSets, freshDoors);
+
+        setHardwareSets(autoSets);
+        setDoors(autoDoors);
         isInitialMount.current = true;
-        saveToFinalJson(freshSets, freshDoors).catch(() => {});
+        saveToFinalJson(autoSets, autoDoors).catch(() => {});
 
         const matched = mergeStats.matchedDoorCount;
         const unmatched = mergeStats.unmatchedDoorCount;

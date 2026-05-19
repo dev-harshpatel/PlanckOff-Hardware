@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type { Door, HardwareSet } from '@/types';
 import {
   groupDoors, groupFrames, groupHardwareItems,
-  applyPrices, filterDoorGroups, filterHardwareGroups, uniqueValues, uniquePreps,
+  applyPrices, filterDoorGroups, uniqueValues, uniquePreps,
   type DoorPricingGroup, type HardwarePricingGroup, type PriceMap,
   type VariantOverrideMap,
 } from '@/utils/pricingGrouping';
@@ -168,12 +168,30 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const proposalFloors    = useMemo(() => Array.from(new Set([...doorFloors, ...frameFloors])).sort(),       [doorFloors, frameFloors]);
   const proposalBuildings = useMemo(() => Array.from(new Set([...doorBuildings, ...frameBuildings])).sort(), [doorBuildings, frameBuildings]);
 
-  const visibleDoors    = useMemo(() => filterDoorGroups(doorGroups,  filters), [doorGroups,  filters]);
-  const visibleFrames   = useMemo(() => filterDoorGroups(frameGroups, filters), [frameGroups, filters]);
-  const visibleHardware = useMemo(
-    () => filterHardwareGroups(hardwareGroups, { material: filters.material, building: filters.building, floor: filters.floor }),
-    [hardwareGroups, filters.material, filters.building, filters.floor],
-  );
+  const visibleDoors  = useMemo(() => filterDoorGroups(doorGroups,  filters), [doorGroups,  filters]);
+  const visibleFrames = useMemo(() => filterDoorGroups(frameGroups, filters), [frameGroups, filters]);
+
+  const filteredDoorsForHw = useMemo(() => {
+    const hasFilter = filters.material.length > 0 || filters.floor.length > 0 || filters.building.length > 0;
+    if (!hasFilter) return doors;
+    return doors.filter(d => {
+      const mat   = (d.doorMaterial ?? '').trim();
+      const floor = (d.buildingLocation ?? d.location ?? '').trim();
+      const bldg  = (d.buildingTag ?? '').trim();
+      return (
+        (filters.material.length === 0 || filters.material.includes(mat))  &&
+        (filters.floor.length    === 0 || filters.floor.includes(floor))   &&
+        (filters.building.length === 0 || filters.building.includes(bldg))
+      );
+    });
+  }, [doors, filters.material, filters.floor, filters.building]);
+
+  const visibleHardware = useMemo(() => {
+    const groups = filteredDoorsForHw === doors
+      ? rawHardwareGroups
+      : groupHardwareItems(hardwareSets, filteredDoorsForHw);
+    return applyPrices(groups, prices, 'hardware');
+  }, [hardwareSets, filteredDoorsForHw, doors, rawHardwareGroups, prices]);
 
   const doorTotal  = useMemo(() => calcTotal(visibleDoors),    [visibleDoors]);
   const frameTotal = useMemo(() => calcTotal(visibleFrames),   [visibleFrames]);
@@ -218,8 +236,8 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
     return result;
   }, [doors, hardwareGroups]);
 
-  const totalDoorCount  = useMemo(() => visibleDoors.reduce((s, g) => s + g.doors.length, 0),    [visibleDoors]);
-  const totalFrameCount = useMemo(() => visibleFrames.reduce((s, g) => s + g.doors.length, 0),   [visibleFrames]);
+  const totalDoorCount  = useMemo(() => visibleDoors.reduce((s, g) => s + g.totalQty, 0),    [visibleDoors]);
+  const totalFrameCount = useMemo(() => visibleFrames.reduce((s, g) => s + g.totalQty, 0),   [visibleFrames]);
   const totalHwCount    = useMemo(() => visibleHardware.reduce((s, g) => s + g.totalQty, 0),     [visibleHardware]);
 
   const currentMaterials = activeTab === 'door' ? doorMaterials : activeTab === 'frame' ? frameMaterials : hwMaterials;

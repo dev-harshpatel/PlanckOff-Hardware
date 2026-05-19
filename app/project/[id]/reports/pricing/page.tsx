@@ -1,13 +1,17 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { DollarSign } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
+import { filterExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
+import { useProjectData } from '@/hooks/useProjectData';
+import { useToast } from '@/contexts/ToastContext';
+import { ERRORS } from '@/constants/errors';
 
 const PricingReportConfig = dynamic(() => import('@/components/pricing/PricingReportConfig'), { ssr: false });
 
@@ -18,6 +22,16 @@ export default function PricingReportPage() {
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [projectName, setProjectName] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // useProjectData is called for Realtime channel subscription only (setPricingItemsCallback, setPricingProposalCallback).
+  // addToast is wired in so subscription errors surface as toasts.
+  const noopSaveRef = useRef<((sets: HardwareSet[], doors: Door[]) => Promise<void>) | null>(null);
+  const { addToast } = useToast();
+  const { setPricingItemsCallback, setPricingProposalCallback } = useProjectData({
+    projectId: id ?? '',
+    addToast,
+    saveToFinalJsonRef: noopSaveRef,
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -38,31 +52,35 @@ export default function PricingReportPage() {
         setProjectName(projJson?.data?.name ?? '');
 
         let sets: HardwareSet[] = [];
+        let loadedDoors: Door[] = [];
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
-          const { hardwareSets: mergedSets } = transformFromFinalJson(finalData);
-          sets = mergedSets;
+          const { hardwareSets: mergedSets, doors: finalDoors } = transformFromFinalJson(finalData);
+          loadedDoors = filterExcludedDoors(finalDoors);
+          sets = filterSetsWithNoDoors(mergedSets, loadedDoors);
         } else {
           const hwRes = await fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' });
           const hwJson = hwRes.ok ? await hwRes.json() : null;
           if (hwJson?.data?.extractedJson) sets = transformHardwareSets(hwJson.data.extractedJson);
+          const allDoors = dsJson?.data?.scheduleJson
+            ? transformDoors(dsJson.data.scheduleJson, sets)
+            : [];
+          loadedDoors = filterExcludedDoors(allDoors);
+          sets = filterSetsWithNoDoors(sets, loadedDoors);
         }
-
-        const loadedDoors: Door[] = dsJson?.data?.scheduleJson
-          ? transformDoors(dsJson.data.scheduleJson, sets)
-          : [];
 
         setHardwareSets(sets);
         setDoors(loadedDoors);
       } catch (err) {
         console.error('[PricingReport] Load failed:', err);
+        addToast({ type: 'error', message: ERRORS.GENERAL.UNEXPECTED.message, details: ERRORS.GENERAL.UNEXPECTED.action });
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [id]);
+  }, [id, addToast]);
 
   if (loading) {
     return <ReportPageSkeleton badgeWidth="w-32" rows={7} />;
@@ -84,6 +102,8 @@ export default function PricingReportPage() {
           doors={doors}
           hardwareSets={hardwareSets}
           projectName={projectName}
+          registerPricingItemsCallback={setPricingItemsCallback}
+          registerPricingProposalCallback={setPricingProposalCallback}
         />
       </div>
     </div>

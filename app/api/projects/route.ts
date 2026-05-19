@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
-import { getAllProjects, createProject } from '@/lib/db/projects';
+import { createProject } from '@/lib/db/projects';
+import { getCachedProjects, invalidateProjects } from '@/lib/cache/projects';
 import type { NewProjectData } from '@/types';
 
 export const GET = withAuth(async (_req: NextRequest, { user }: AuthContext) => {
-  const { data, error } = await getAllProjects();
+  const { data, error } = await getCachedProjects();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
 });
@@ -24,5 +25,6 @@ export const POST = withRoleAuth(['Administrator', 'Team Lead'], async (req: Nex
 
   const { data, error } = await createProject({ ...body, createdBy: user.id });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await invalidateProjects();
   return NextResponse.json({ data }, { status: 201 });
 });

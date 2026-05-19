@@ -37,8 +37,14 @@ export const PUT = withAuth(
       return NextResponse.json({ error: 'remarks must be a string.' }, { status: 400 });
     }
 
-    const { error } = await upsertProposalProfit(projectId, { profit_door, profit_frame, profit_hardware, allocate_expenses, remarks });
+    const { data, error } = await upsertProposalProfit(projectId, { profit_door, profit_frame, profit_hardware, allocate_expenses, remarks });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ data: { ok: true } });
+    if (!data)  return NextResponse.json({ error: 'Upsert returned no row.' }, { status: 500 });
+    return NextResponse.json({
+      data: {
+        project_id: data.project_id,
+        updated_at: data.updated_at,
+      },
+    });
   },
 );

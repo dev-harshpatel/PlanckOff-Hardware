@@ -7,16 +7,18 @@ import { useEffect, useState } from 'react';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 import type { HardwareSet, Door } from '@/types';
 import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransformers';
+import { filterExcludedFromFinalJson, filterExcludedDoors } from '@/utils/reportFilters';
 import { Package } from 'lucide-react';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 const SubmittalGenerator = dynamic(() => import('@/components/submittals/SubmittalGenerator'), { ssr: false });
 
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
+  const activeDoors = filterExcludedDoors(doors);
   return hardwareSets
     .filter(set => set.items?.length > 0)
     .map((set): MergedHardwareSet => {
-      const matchedDoors = doors.filter(
+      const matchedDoors = activeDoors.filter(
         d =>
           d.assignedHardwareSet?.id === set.id ||
           d.assignedHardwareSet?.name === set.name ||
@@ -52,7 +54,8 @@ function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): Merge
         })),
         doors: mergedDoors,
       };
-    });
+    })
+    .filter(set => set.doors.length > 0);
 }
 
 export default function SubmittalPackagePage() {
@@ -74,7 +77,7 @@ export default function SubmittalPackagePage() {
         const apiData = json?.data?.finalJson;
 
         if (apiData && apiData.length > 0) {
-          setFinalJson(apiData);
+          setFinalJson(filterExcludedFromFinalJson(apiData));
           setSource('api');
           return;
         }

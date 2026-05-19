@@ -97,6 +97,9 @@ tmp/
 CLAUDE.md
 
 
-.claude/worktress/
+.claude/worktrees/
 .claude/settings.local.json
 
+.claude/settings.local.json
+.claude/worktrees/
+.claude/

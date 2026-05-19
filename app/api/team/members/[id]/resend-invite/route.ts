@@ -63,9 +63,10 @@ export const POST = withRoleAuth(
 
     // Send the invitation email
     const { error: emailErr } = await sendInviteEmail({
-      toEmail:    member.email,
-      toName:     member.name,
-      role:       member.role,
+      toEmail:     member.email,
+      toName:      member.name,
+      inviterName: user.name,
+      role:        member.role,
       inviteToken,
     });
 

@@ -7,6 +7,8 @@ interface UseProjectRealtimeOptions {
   projectId: string;
   /** Called when door_schedule_imports changes for this project. */
   onDoorScheduleChange: () => void;
+  /** Fired when the Supabase subscribe callback yields a non-null `err`. Plan 06-02 wires this to a toast. */
+  onError?: (err: Error) => void;
 }
 
 /**
@@ -20,9 +22,12 @@ interface UseProjectRealtimeOptions {
 export function useProjectRealtime({
   projectId,
   onDoorScheduleChange,
+  onError,
 }: UseProjectRealtimeOptions) {
   const onDoorScheduleChangeRef = useRef(onDoorScheduleChange);
   onDoorScheduleChangeRef.current = onDoorScheduleChange;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!projectId) return;
@@ -43,7 +48,12 @@ export function useProjectRealtime({
           onDoorScheduleChangeRef.current();
         },
       )
-      .subscribe();
+      .subscribe((_status, err) => {
+        if (err) {
+          console.error('[useProjectRealtime] subscription error:', err);
+          onErrorRef.current?.(err as Error);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

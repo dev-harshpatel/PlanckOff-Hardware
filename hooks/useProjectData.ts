@@ -272,7 +272,17 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         }
     }, [projectId]);
 
-    useProjectRealtime({ projectId, onDoorScheduleChange: reloadDoorSchedule });
+    useProjectRealtime({
+        projectId,
+        onDoorScheduleChange: reloadDoorSchedule,
+        onError: (_err) => {
+            addToast({
+                type: 'error',
+                message: ERRORS.REALTIME.SUBSCRIPTION_FAILED.message,
+                details: ERRORS.REALTIME.SUBSCRIPTION_FAILED.action,
+            });
+        },
+    });
 
     return {
         hardwareSets,

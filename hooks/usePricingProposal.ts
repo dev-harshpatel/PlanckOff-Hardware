@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { isOwnWrite, markPendingWrite } from '@/lib/realtime/dedupSet';
 
 interface UsePricingProposalParams {
   projectId: string;
@@ -95,6 +96,38 @@ export function usePricingProposal({
       .catch(console.error);
   }, [projectId]);
 
+  const handlePricingProposalChange = useCallback(
+    (payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
+      // DELETE: only happens via project CASCADE — leave state alone, the project view will unmount.
+      if (payload.eventType === 'DELETE') return;
+
+      const row = payload.new ?? {};
+      const projectIdInRow = typeof row.project_id === 'string' ? row.project_id : '';
+      const updatedAt      = typeof row.updated_at === 'string' ? row.updated_at : '';
+      // project_id is the PK on this table — use it as identity.
+      if (projectIdInRow && updatedAt && isOwnWrite('project_pricing_proposal', projectIdInRow, updatedAt)) return;
+
+      const profitDoor     = typeof row.profit_door === 'number' ? row.profit_door : 0;
+      const profitFrame    = typeof row.profit_frame === 'number' ? row.profit_frame : 0;
+      const profitHardware = typeof row.profit_hardware === 'number' ? row.profit_hardware : 0;
+      const allocate       = typeof row.allocate_expenses === 'boolean' ? row.allocate_expenses : false;
+      const remarksValue   = typeof row.remarks === 'string' ? row.remarks : '';
+
+      const next = {
+        door:     profitDoor     > 0 ? String(profitDoor)     : '',
+        frame:    profitFrame    > 0 ? String(profitFrame)    : '',
+        hardware: profitHardware > 0 ? String(profitHardware) : '',
+      };
+      setProfitPct(next);
+      latestProfitPct.current = next;
+      setAllocateExpenses(allocate);
+      latestAllocate.current = allocate;
+      setRemarks(remarksValue);
+      latestRemarks.current = remarksValue;
+    },
+    [],
+  );
+
   const saveProposalSettings = useCallback(() => {
     if (profitDebounce.current) clearTimeout(profitDebounce.current);
     profitDebounce.current = setTimeout(() => {
@@ -110,7 +143,17 @@ export function usePricingProposal({
           allocate_expenses: latestAllocate.current,
           remarks:           latestRemarks.current,
         }),
-      }).catch(console.error);
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const json = (await res.json()) as { data?: { project_id?: string; updated_at?: string } };
+          const projectIdEcho = json.data?.project_id;
+          const updatedAtEcho = json.data?.updated_at;
+          if (projectIdEcho && updatedAtEcho) {
+            markPendingWrite('project_pricing_proposal', projectIdEcho, updatedAtEcho);
+          }
+        })
+        .catch(console.error);
     }, 800);
   }, [projectId]);
 
@@ -260,6 +303,7 @@ export function usePricingProposal({
     handleAddExpense,
     handleExpenseChange,
     handleRemoveExpense,
+    handlePricingProposalChange,
     proposalDoorTotal,
     proposalFrameTotal,
     proposalHwTotal,

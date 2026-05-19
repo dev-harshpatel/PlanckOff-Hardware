@@ -102,8 +102,8 @@ export function useHardwareSetsManager({
                 if (sortConfig.key === 'name') {
                     return sortConfig.direction === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
                 } else if (sortConfig.key === 'doors') {
-                    const countA = doorCounts.get(a.id) || 0;
-                    const countB = doorCounts.get(b.id) || 0;
+                    const countA = doorQuantityTotals.get(a.id) || 0;
+                    const countB = doorQuantityTotals.get(b.id) || 0;
                     return sortConfig.direction === 'asc' ? countA - countB : countB - countA;
                 } else if (sortConfig.key === 'items') {
                     return sortConfig.direction === 'asc' ? a.items.length - b.items.length : b.items.length - a.items.length;
@@ -127,7 +127,7 @@ export function useHardwareSetsManager({
             });
         }
         return result;
-    }, [hardwareSets, searchQuery, sortConfig, doorCounts]);
+    }, [hardwareSets, searchQuery, sortConfig, doorQuantityTotals]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -283,7 +283,6 @@ export function useHardwareSetsManager({
         prepGenerating,
         prepErrors,
         sortConfig,
-        doorCounts,
         doorQuantityTotals,
         filteredAndSortedSets,
         isAllSelected,

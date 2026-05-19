@@ -35,6 +35,10 @@ export async function* extractTextGenerator(file: File, batchSize: number = 20):
 
         console.log(`PDF Loaded: ${numPages} pages. Starting generator...`);
 
+        // Last page text from the previous batch — prepended as context so the
+        // AI can continue hardware sets that straddle a batch boundary.
+        let prevPageContextText = '';
+
         for (let i = 0; i < numPages; i += batchSize) {
             const batchPromises = [];
             const start = i;
@@ -55,17 +59,28 @@ export async function* extractTextGenerator(file: File, batchSize: number = 20):
             }
 
             const batchResults = await Promise.all(batchPromises);
-            
-            // Re-assemble in order (though Promise.all preserves order of promises, the index check is extra safety)
-            const batchText = batchResults
-                .sort((a, b) => a.index - b.index)
-                .map(r => r.text)
-                .join('\n\n');
+
+            // Re-assemble in order
+            const sorted = batchResults.sort((a, b) => a.index - b.index);
+            const batchText = sorted.map(r => r.text).join('\n\n');
+
+            // Build final text: prepend previous-batch context when available
+            let yieldText = batchText;
+            if (prevPageContextText) {
+                yieldText =
+                    `[CONTEXT: last page from previous section — for continuity only, do NOT re-extract]\n` +
+                    prevPageContextText +
+                    `\n[END CONTEXT — extract only from the pages below]\n\n` +
+                    batchText;
+            }
+
+            // Save last page of this batch as context for the next iteration
+            prevPageContextText = sorted[sorted.length - 1]?.text ?? '';
 
             const progress = Math.round((end / numPages) * 100);
 
             yield {
-                text: batchText,
+                text: yieldText,
                 startPage: start + 1,
                 endPage: end,
                 totalPages: numPages,

@@ -70,7 +70,7 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
         // Core identification
         doorTag:              ['doortag', 'door tag', 'door#', 'tag', 'mark', 'doornumber', 'doorid', 'opening', 'door no', 'door no.'],
         buildingTag:          ['buildingtag', 'building tag', 'bldg tag', 'bldgtag', 'building#', 'bldg#'],
-        buildingLocation:     ['buildinglocation', 'building location', 'bldg location', 'bldglocation'],
+        buildingLocation:     ['buildinglocation', 'building location', 'bldg location', 'bldglocation', 'buildingn area', 'building area', 'buildingarea'],
         location:             ['location', 'doorlocation', 'door location', 'room', 'room name'],
         quantity:             ['quantity', 'qty', 'q', 'count'],
         handing:              ['handofopenings', 'hand of openings', 'handing', 'handofopening'],

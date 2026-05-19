@@ -5,6 +5,7 @@ import { HardwareSet, Door, Project, Toast } from '../types';
 import type { MergedHardwareSet, MergedDoor, TrashItem } from '@/lib/db/hardware';
 import { captureTrainingExample } from '../services/mlOpsService';
 import type { SaveStatus } from '../components/shared/SaveStatusIndicator';
+import { GENERAL_ERRORS } from '@/constants/errors';
 
 interface UseProjectPersistenceOptions {
     projectId: string;
@@ -15,6 +16,7 @@ interface UseProjectPersistenceOptions {
     onProjectUpdate: (project: Project) => void;
     isInitialMount: React.MutableRefObject<boolean>;
     hasPendingUndoRef: React.MutableRefObject<boolean>;
+    addToast: (toast: Omit<Toast, 'id'>) => void;
 }
 
 export function useProjectPersistence({
@@ -26,6 +28,7 @@ export function useProjectPersistence({
     onProjectUpdate,
     isInitialMount,
     hasPendingUndoRef,
+    addToast,
 }: UseProjectPersistenceOptions) {
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
@@ -143,9 +146,14 @@ export function useProjectPersistence({
                 body: JSON.stringify({ finalJson, trashJson: currentTrash }),
             });
         } catch (err) {
-            console.warn('[saveToFinalJson] Failed to persist final JSON:', err);
+            console.error('[saveToFinalJson] Failed to persist final JSON:', err);
+            addToast({
+                type: 'error',
+                message: GENERAL_ERRORS.SAVE_FAILED.message,
+                details: GENERAL_ERRORS.SAVE_FAILED.action,
+            });
         }
-    }, [projectId]);
+    }, [projectId, addToast]);
 
     const saveToHardwarePdf = useCallback(async (currentSets: HardwareSet[]): Promise<void> => {
         try {
@@ -170,9 +178,14 @@ export function useProjectPersistence({
                 body: JSON.stringify({ extractedJson }),
             });
         } catch (err) {
-            console.warn('[saveToHardwarePdf] Failed to persist hardware PDF extraction:', err);
+            console.error('[saveToHardwarePdf] Failed to persist hardware PDF extraction:', err);
+            addToast({
+                type: 'error',
+                message: GENERAL_ERRORS.SAVE_FAILED.message,
+                details: GENERAL_ERRORS.SAVE_FAILED.action,
+            });
         }
-    }, [projectId]);
+    }, [projectId, addToast]);
 
     const performSave = useCallback(() => {
         if (hasPendingUndoRef.current) return;
