@@ -161,20 +161,46 @@ export async function extractPdfText(
 
 /**
  * Batch extracted pages into groups for AI processing.
- * Returns arrays of page text strings, each batch being `batchSize` pages.
+ *
+ * @param pages        Extracted pages from the PDF.
+ * @param batchSize    Number of content pages per batch.
+ * @param overlapPages Number of pages from the end of the previous batch to
+ *                     prepend as context. Prevents hardware sets that span a
+ *                     page boundary from being split across AI calls.
  */
 export function batchPages(
   pages: ExtractedPage[],
   batchSize = 10,
-): Array<{ text: string; startPage: number; endPage: number }> {
-  const batches: Array<{ text: string; startPage: number; endPage: number }> = [];
+  overlapPages = 1,
+): Array<{ text: string; startPage: number; endPage: number; hasContextPrefix: boolean }> {
+  const batches: Array<{ text: string; startPage: number; endPage: number; hasContextPrefix: boolean }> = [];
 
   for (let i = 0; i < pages.length; i += batchSize) {
     const slice = pages.slice(i, i + batchSize);
+    const contentText = slice.map((p) => p.text).join('\n\n');
+
+    let text = contentText;
+    let hasContextPrefix = false;
+
+    if (i > 0 && overlapPages > 0) {
+      const contextSlice = pages.slice(Math.max(0, i - overlapPages), i);
+      const contextText = contextSlice.map((p) => p.text).join('\n\n');
+      // Clearly mark the context so the AI knows these pages were already
+      // processed and exist only to maintain continuity for sets that span
+      // the page boundary.
+      text =
+        `[CONTEXT: last ${contextSlice.length} page(s) from previous section — for continuity only, do NOT re-extract these]\n` +
+        contextText +
+        `\n[END CONTEXT — extract only from the pages below]\n\n` +
+        contentText;
+      hasContextPrefix = true;
+    }
+
     batches.push({
-      text: slice.map((p) => p.text).join('\n\n'),
+      text,
       startPage: slice[0].pageNumber,
       endPage: slice[slice.length - 1].pageNumber,
+      hasContextPrefix,
     });
   }
 

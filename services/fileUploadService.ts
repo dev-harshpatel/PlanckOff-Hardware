@@ -293,10 +293,13 @@ export const processHardwareSetFile = async (
     
     // PDF (AI) - CHUNKED
     if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-         let allSets: HardwareSet[] = [];
-         
+         // Keyed by lowercased set name — merges items from continuation pages
+         // into the same set instead of creating a duplicate that the validator
+         // would drop.
+         const setMap = new Map<string, HardwareSet>();
+
          const generator = extractTextGenerator(file, 10);
-         
+
          for await (const batch of generator) {
              if (signal?.aborted) {
                  if (signal.reason === 'stop') break;
@@ -304,17 +307,30 @@ export const processHardwareSetFile = async (
              }
 
              onProgress?.(`Analyzing Pages ${batch.startPage}-${batch.endPage}`, batch.progress);
-             
+
             // Analyze chunk
             const report = await extractHardwareSetsFromText(batch.text, undefined, apiKey, undefined, settings);
-            
-            // Emit chunk data
+
+            // Merge by set name so cross-page continuations aren't treated as duplicates
             if (report.data && report.data.length > 0) {
-                onData?.(report.data);
-                allSets = [...allSets, ...report.data];
+                const newSets: HardwareSet[] = [];
+                for (const incoming of report.data) {
+                    const key = incoming.name.trim().toLowerCase();
+                    const existing = setMap.get(key);
+                    if (existing) {
+                        existing.items = [...existing.items, ...incoming.items];
+                        if (incoming.description && !existing.description) {
+                            existing.description = incoming.description;
+                        }
+                    } else {
+                        setMap.set(key, { ...incoming, items: [...incoming.items] });
+                        newSets.push(incoming);
+                    }
+                }
+                if (newSets.length > 0) onData?.(newSets);
             }
         }
-        return validateHardwareSets(allSets);
+        return validateHardwareSets(Array.from(setMap.values()));
    } 
    // ...
    // Word (DOCX) (AI)
