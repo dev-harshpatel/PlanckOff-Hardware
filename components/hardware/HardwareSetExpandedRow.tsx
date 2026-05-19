@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getDoorConflicts, formatDimension } from '../../utils/hardwareUtils';
 import type { AssignedDoorConflictMap } from '../../utils/doorValidation';
+import { DimensionBadge } from './DimensionBadge';
+import { resolveDimension } from '../../utils/dimensionRules';
 
 const renderConflictIcon = (message: string, isCritical: boolean) => {
     if (isCritical) return <AlertCircle className="w-3 h-3 text-red-600 inline-block ml-1" />;
@@ -86,7 +88,17 @@ export function HardwareSetExpandedRow({
 
                     {/* Components tab */}
                     <TabsContent value="components">
-                        {set.items.length > 0 ? (
+                        {set.items.length > 0 ? (() => {
+                            // Pick a representative door for dimension calculation.
+                            // If all assigned doors share the same width+height we use that.
+                            // If dimensions vary we fall back to the first door and flag it.
+                            const firstDoor = assignedDoors[0] ?? null;
+                            const allSameDimensions = assignedDoors.length > 1 && assignedDoors.every(
+                                d => d.width === firstDoor!.width && d.height === firstDoor!.height,
+                            );
+                            const repDoor = firstDoor;
+                            const dimensionsVary = assignedDoors.length > 1 && !allSameDimensions;
+                            return (
                             <div className="rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--bg)]">
                                 <table className="w-full text-xs">
                                     <thead className="bg-[var(--bg-subtle)] border-b border-[var(--border)]">
@@ -114,7 +126,24 @@ export function HardwareSetExpandedRow({
                                                 <td className="px-3 py-2 text-[var(--text-faint)]">
                                                     {item.manufacturer || '—'}
                                                 </td>
-                                                <td className="px-3 py-2 text-[var(--text-muted)]">{item.description}</td>
+                                                <td className="px-3 py-2 text-[var(--text-muted)]">
+                                                    {item.description}
+                                                    {repDoor && !dimensionsVary && (
+                                                        <DimensionBadge
+                                                            itemName={item.name}
+                                                            door={repDoor}
+                                                            isPair={(repDoor.leafCount ?? 1) > 1}
+                                                        />
+                                                    )}
+                                                    {repDoor && dimensionsVary && resolveDimension(item.name, repDoor) && (
+                                                        <span
+                                                            className="inline-flex items-center ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border-subtle)] whitespace-nowrap align-middle"
+                                                            title="Assigned doors have different dimensions — see Assigned Doors tab"
+                                                        >
+                                                            varies
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="px-3 py-2 text-right">
                                                     <span className="font-mono text-xs bg-[var(--bg-muted)] text-[var(--text-secondary)] px-2 py-0.5 rounded">
                                                         {item.finish || '—'}
@@ -132,7 +161,8 @@ export function HardwareSetExpandedRow({
                                     </tbody>
                                 </table>
                             </div>
-                        ) : (
+                            );
+                        })() : (
                             <div className="text-center py-8 text-[var(--text-faint)] text-sm">No components in this set</div>
                         )}
                     </TabsContent>
