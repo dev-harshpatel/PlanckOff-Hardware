@@ -62,14 +62,14 @@ If door dimensions are not available in the document, leave these tokens as-is i
 HARDWARE SIZING RULES:
 The following hardware items must have their dimensions automatically recalculated whenever door width or door height is known. Apply these rules to resolve "x length" and any dimension in the description:
 
-Continuous Hinge  → length = Door Height − 1"
-Kick Plate width  → Single door: Door Width − 2"  |  Pair door: Door Width − 1" (per leaf)
-Sweep             → length = Door Width
-Door Bottom       → length = Door Width
-Weatherstrip      → length = (2 × Door Height) + Door Width   [also applies to Gasketing]
-Threshold         → length = Door Width
-Sensor            → length = Opening Width
-Mtg. Stile / Meeting Stile → height = Door Height
+Continuous Hinge  → length = Door Height − 1" // Total should be in Inches
+Kick Plate width  → Single door: Door Width − 2"  |  Pair door: Door Width − 1" (per leaf) //Total should be in Inches
+Sweep             → length = Door Width // Total should be in Inches
+Door Bottom       → length = Door Width // Total should be in Inches
+Weatherstrip      → length = (2 × Door Height) + Door Width   [also applies to Gasketing] // Total should be in Feet
+Threshold         → length = Door Width // Total should be in Inches
+Sensor            → length = Opening Width // Total should be in Inches
+Mtg. Stile / Meeting Stile → height = Door Height // Total should be in Inches
 EXTRACT ALL hardware sets found in the document. Do not skip any.
 
 DIMENSION PLACEHOLDER RULES:
@@ -87,14 +87,14 @@ If door dimensions are not available in the document, leave these tokens as-is i
 HARDWARE SIZING RULES:
 The following hardware items must have their dimensions automatically recalculated whenever door width or door height is known. Apply these rules to resolve "x length" and any dimension in the description:
 
-Continuous Hinge  → length = Door Height − 1"
-Kick Plate width  → Single door: Door Width − 2"  |  Pair door: Door Width − 1" (per leaf)
-Sweep             → length = Door Width
-Door Bottom       → length = Door Width
-Weatherstrip      → length = (2 × Door Height) + Door Width   [also applies to Gasketing]
-Threshold         → length = Door Width
-Sensor            → length = Opening Width
-Mtg. Stile / Meeting Stile → height = Door Height
+Continuous Hinge  → length = Door Height − 1" // Total should be in Inches
+Kick Plate width  → Single door: Door Width − 2"  |  Pair door: Door Width − 1" (per leaf) // Total should be in Inches
+Sweep             → length = Door Width // Total should be in Inches
+Door Bottom       → length = Door Width // Total should be in Inches
+Weatherstrip      → length = (2 × Door Height) + Door Width   [also applies to Gasketing] // Total should be in Feet
+Threshold         → length = Door Width // Total should be in Inches
+Sensor            → length = Opening Width // Total should be in Inches
+Mtg. Stile / Meeting Stile → height = Door Height // Total should be in Inches
 
 Reference hardware models (update only the dimension token, keep manufacturer/model intact):
 Sensor            BEA Superscan          — dimension = Opening Width

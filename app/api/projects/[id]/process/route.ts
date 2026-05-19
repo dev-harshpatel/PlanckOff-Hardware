@@ -25,6 +25,7 @@ import {
   upsertHardwarePdfExtraction,
   upsertProjectHardwareFinal,
 } from '@/lib/db/hardware';
+import { invalidateDoorSchedule } from '@/lib/cache/doorSchedule';
 import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
@@ -133,6 +134,8 @@ export const POST = withAuth(
     if (scheduleError) {
       return NextResponse.json({ error: scheduleError.message }, { status: 500 });
     }
+
+    invalidateDoorSchedule(projectId);
 
     // ── Step 3: Extract hardware sets from PDF ────────────────────────────
     const pdfBuffer = Buffer.from(await pdfField.arrayBuffer());

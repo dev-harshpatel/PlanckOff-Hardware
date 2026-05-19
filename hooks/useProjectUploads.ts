@@ -533,13 +533,19 @@ export function useProjectUploads({
                 ? transformHardwareSets(hwFreshJson.data.extractedJson) : [];
             const freshDoors = dsFreshJson?.data?.scheduleJson
                 ? transformDoors(dsFreshJson.data.scheduleJson, freshSets) : [];
-            if (freshSets.length > 0) { setHardwareSets(freshSets); isInitialMount.current = true; }
-            if (freshDoors.length > 0) { setDoors(freshDoors); isInitialMount.current = true; }
-            saveToFinalJson(freshSets, freshDoors).catch(() => {});
+
+            // Auto-split sets where assigned doors have differing profiles
+            // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
+            const { sets: autoSets, doors: autoDoors, variantsCreated } = autoCreateVariants(freshSets, freshDoors);
+
+            if (autoSets.length > 0) { setHardwareSets(autoSets); isInitialMount.current = true; }
+            if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
+            saveToFinalJson(autoSets, autoDoors).catch(() => {});
 
             setCombinedProgress(100);
             setCombinedCurrentStep('Complete');
-            addLog('success', `Done! ${freshDoors.length} doors loaded — ${matchedDoorCount} linked to sets, ${unmatchedDoorCount} unmatched.`);
+            const variantNote = variantsCreated > 0 ? ` ${variantsCreated} auto-variant${variantsCreated !== 1 ? 's' : ''} created.` : '';
+            addLog('success', `Done! ${autoDoors.length} doors loaded — ${matchedDoorCount} linked to sets, ${unmatchedDoorCount} unmatched.${variantNote}`);
 
             addToast({
                 type: 'success',
@@ -590,15 +596,10 @@ export function useProjectUploads({
             ? transformDoors(dsJson.data.scheduleJson, freshSets)
             : doors;
 
-        // Auto-split sets where assigned doors have differing profiles
-        // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
-        // Largest profile group keeps the original set; each minority group becomes a .v1/.v2 variant.
-        const { sets: autoSets, doors: autoDoors } = autoCreateVariants(freshSets, freshDoors);
-
-        setHardwareSets(autoSets);
-        setDoors(autoDoors);
+        setHardwareSets(freshSets);
+        setDoors(freshDoors);
         isInitialMount.current = true;
-        saveToFinalJson(autoSets, autoDoors).catch(() => {});
+        saveToFinalJson(freshSets, freshDoors).catch(() => {});
 
         const matched = mergeStats.matchedDoorCount;
         const unmatched = mergeStats.unmatchedDoorCount;

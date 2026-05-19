@@ -95,5 +95,5 @@ export function autoCreateVariants(
         }
     }
 
-    return { sets: updatedSets, doors: updatedDoors };
+    return { sets: updatedSets, doors: updatedDoors, variantsCreated: seq };
 }
