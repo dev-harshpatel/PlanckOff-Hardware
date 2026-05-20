@@ -127,15 +127,15 @@ export function HardwareSetExpandedRow({
                                                     {item.manufacturer || '—'}
                                                 </td>
                                                 <td className="px-3 py-2 text-[var(--text-muted)]">
-                                                    {item.description}
-                                                    {repDoor && !dimensionsVary && (
+                                                    {item.processedDescription ?? item.description}
+                                                    {repDoor && !dimensionsVary && !item.processedDescription && (
                                                         <DimensionBadge
                                                             itemName={item.name}
                                                             door={repDoor}
                                                             isPair={(repDoor.leafCount ?? 1) > 1}
                                                         />
                                                     )}
-                                                    {repDoor && dimensionsVary && resolveDimension(item.name, repDoor) && (
+                                                    {repDoor && dimensionsVary && !item.processedDescription && resolveDimension(item.name, repDoor) && (
                                                         <span
                                                             className="inline-flex items-center ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border-subtle)] whitespace-nowrap align-middle"
                                                             title="Assigned doors have different dimensions — see Assigned Doors tab"

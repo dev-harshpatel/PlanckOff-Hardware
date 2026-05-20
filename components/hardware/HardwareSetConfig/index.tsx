@@ -65,7 +65,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
       const setName = set.name.toLowerCase();
       const doorsWithSet = doors.filter(d => getDoorHwSetName(d)?.toLowerCase() === setName);
       set.items.forEach(item => {
-        const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+        const key = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
         if (!map.has(key)) map.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
         const usage = map.get(key)!;
         doorsWithSet.forEach(door => {

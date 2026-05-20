@@ -29,7 +29,7 @@ function itemsFingerprint(items: HardwareItem[]): string {
       q: item.qty,
       m: (item.manufacturer || '').trim().toLowerCase(),
       f: (item.finish || '').trim().toLowerCase(),
-      d: (item.description || '').trim().toLowerCase(),
+      d: (item.processedDescription ?? item.description ?? '').trim().toLowerCase(),
     }));
   return JSON.stringify(normalized);
 }
@@ -205,8 +205,8 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({ finalJson, proj
                               <td style={{ padding: '7px 8px', fontWeight: 700, color: '#0f172a', verticalAlign: 'top' }}>{item.qty}</td>
                               <td style={{ padding: '7px 8px', verticalAlign: 'top' }}>
                                 <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.item}</div>
-                                {item.description && (
-                                  <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>{item.description}</div>
+                                {(item.processedDescription ?? item.description) && (
+                                  <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>{item.processedDescription ?? item.description}</div>
                                 )}
                               </td>
                               <td style={{ padding: '7px 8px', color: '#64748b', fontSize: 10, verticalAlign: 'top' }}>{item.manufacturer || '—'}</td>

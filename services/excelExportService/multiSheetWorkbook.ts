@@ -157,7 +157,7 @@ function createComprehensiveHardwareScheduleSheet(
             const row = [
                 '', // Empty for set name column
                 item.name,
-                item.description || '',
+                (item.processedDescription ?? item.description) || '',
                 item.manufacturer || '',
                 item.modelNumber || '',
                 item.finish || '',

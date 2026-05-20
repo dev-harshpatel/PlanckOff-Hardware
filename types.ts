@@ -56,6 +56,7 @@ export interface HardwareItem {
   multipliedQuantity?: number; // quantity × number of doors assigned to the set
   manufacturer: string;
   description: string;
+  processedDescription?: string; // dimension-resolved description; display as processedDescription ?? description
   finish: string;
   
   // Phase 21: Standards Compliance & Enhanced Specifications

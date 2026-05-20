@@ -25,14 +25,12 @@ export interface DimensionResult {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/** Convert raw inches to X'-Y" format, e.g. 83 → 6'-11" */
-function inchesToFeetInches(inches: number): string {
-  const feet = Math.floor(inches / 12);
-  const remaining = Math.round(inches % 12);
-  return remaining === 0 ? `${feet}'-0"` : `${feet}'-${remaining}"`;
+/** Express raw inches as a plain inch value, e.g. 83 → 83" */
+function formatInches(inches: number): string {
+  return `${Math.round(inches)}"`;
 }
 
-/** Convert raw inches to nearest whole linear foot, e.g. 204 → 17 LF */
+/** Convert raw inches to nearest whole linear foot, e.g. 252 → 21 LF */
 function inchesToLinearFeet(inches: number): string {
   return `${Math.round(inches / 12)} LF`;
 }
@@ -138,30 +136,30 @@ type RuleFn = (door: Door, isPair: boolean) => DimensionResult;
 
 const RULES: Record<string, RuleFn> = {
   continuous_hinge: (door) => ({
-    value: inchesToFeetInches(door.height - 1),
+    value: formatInches(door.height - 1),
     rule: 'H − 1"',
   }),
 
   kick_plate: (door, isPair) => {
     const w = isPair ? door.width - 1 : door.width - 2;
     return {
-      value: `${inchesToFeetInches(w)} × 10"`,
+      value: `${formatInches(w)} × 10"`,
       rule: isPair ? 'W − 1" per leaf (pair) × 10"' : 'W − 2" × 10"',
     };
   },
 
   sweep: (door) => ({
-    value: inchesToFeetInches(door.width),
+    value: formatInches(door.width),
     rule: 'W',
   }),
 
   door_bottom: (door) => ({
-    value: inchesToFeetInches(door.width),
+    value: formatInches(door.width),
     rule: 'W',
   }),
 
   threshold: (door) => ({
-    value: inchesToFeetInches(door.width),
+    value: formatInches(door.width),
     rule: 'W',
   }),
 
@@ -176,14 +174,14 @@ const RULES: Record<string, RuleFn> = {
   },
 
   meeting_stile: (door) => ({
-    value: inchesToFeetInches(door.height),
+    value: formatInches(door.height),
     rule: 'H',
   }),
 
   sensor: (door, isPair) => {
     const openingWidth = isPair ? door.width * 2 : door.width;
     return {
-      value: inchesToFeetInches(openingWidth),
+      value: formatInches(openingWidth),
       rule: isPair ? '2 × W (pair opening)' : 'W (opening width)',
     };
   },
@@ -217,7 +215,13 @@ export function resolveDimension(
 /**
  * Replace dimension placeholder tokens in a description string.
  *
- * Tokens: "x width", "x height", "x length", "x 2-height"
+ * Tokens handled:
+ *   "x width"            → door width in inches
+ *   "x req width"        → door width in inches  ("x req. width" variant too)
+ *   "x height"           → door height in inches
+ *   "x 2-height"         → 2 × door height in inches
+ *   "x length"           → item dimension rule value (e.g. H-1" for hinges)
+ *
  * If no tokens are found the original string is returned unchanged.
  */
 export function resolveDescriptionPlaceholders(
@@ -228,14 +232,22 @@ export function resolveDescriptionPlaceholders(
 ): string {
   if (!door.width || !door.height) return description;
 
-  const w   = inchesToFeetInches(door.width);
-  const h   = inchesToFeetInches(door.height);
-  const h2  = inchesToFeetInches(2 * door.height);
+  const w   = formatInches(door.width);
+  const h   = formatInches(door.height);
+  const h2  = formatInches(2 * door.height);
   const dim = resolveDimension(itemName, door, isPair);
 
-  return description
-    .replace(/x\s*2-height/gi, h2)
-    .replace(/x\s*height/gi,   h)
-    .replace(/x\s*width/gi,    w)
-    .replace(/x\s*length/gi,   dim?.value ?? 'x length');
+  const replaced = description
+    .replace(/x\s*2-height/gi,          h2)
+    .replace(/x\s*height/gi,            h)
+    // "x req. width" / "x req width" — PDF variant meaning "× required width"
+    .replace(/x\s*req\.?\s*width/gi,    w)
+    .replace(/x\s*width/gi,             w)
+    .replace(/x\s*length/gi,            dim?.value ?? 'x length');
+
+  // No dimension tokens found, but item has a known rule → append computed value
+  if (replaced === description && dim !== null) {
+    return `${description} [${dim.value}]`;
+  }
+  return replaced;
 }

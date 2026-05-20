@@ -178,7 +178,7 @@ const ReportDataPreview: React.FC<ReportDataPreviewProps> = ({
                     // Required columns
                     const row: any[] = [
                         item.name,
-                        item.description || '-',
+                        (item.processedDescription ?? item.description) || '-',
                         item.manufacturer || '-',
                         item.finish || '-',
                         doorTags || 'Not assigned'

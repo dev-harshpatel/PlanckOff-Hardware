@@ -9,6 +9,7 @@ export interface HardwareItem {
   item: string;
   manufacturer: string;
   description: string;
+  processedDescription?: string; // dimension-resolved description; display as processedDescription ?? description
   finish: string;
   multipliedQuantity?: number; // qty × number of doors assigned to this set
 }

@@ -22,7 +22,7 @@ export const calculateHardwareUsage = (
 
   hardwareSets.forEach(set => {
     set.items.forEach(item => {
-      const key = `${item.name}|${item.description || ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+      const key = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
 
       if (!itemUsageMap.has(key)) {
         itemUsageMap.set(key, {

@@ -6,6 +6,7 @@ import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
 import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
 import { autoCreateVariants } from '../utils/autoVariantUtils';
+import { resolveAllSets } from '../utils/descriptionResolver';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
@@ -538,9 +539,12 @@ export function useProjectUploads({
             // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
             const { sets: autoSets, doors: autoDoors, variantsCreated } = autoCreateVariants(freshSets, freshDoors);
 
-            if (autoSets.length > 0) { setHardwareSets(autoSets); isInitialMount.current = true; }
+            // Resolve dimension placeholders now that every set has homogeneous door dimensions.
+            const resolvedSets = resolveAllSets(autoSets, autoDoors);
+
+            if (resolvedSets.length > 0) { setHardwareSets(resolvedSets); isInitialMount.current = true; }
             if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
-            saveToFinalJson(autoSets, autoDoors).catch(() => {});
+            saveToFinalJson(resolvedSets, autoDoors).catch(() => {});
 
             setCombinedProgress(100);
             setCombinedCurrentStep('Complete');
@@ -596,10 +600,11 @@ export function useProjectUploads({
             ? transformDoors(dsJson.data.scheduleJson, freshSets)
             : doors;
 
-        setHardwareSets(freshSets);
+        const resolvedAssignSets = resolveAllSets(freshSets, freshDoors);
+        setHardwareSets(resolvedAssignSets);
         setDoors(freshDoors);
         isInitialMount.current = true;
-        saveToFinalJson(freshSets, freshDoors).catch(() => {});
+        saveToFinalJson(resolvedAssignSets, freshDoors).catch(() => {});
 
         const matched = mergeStats.matchedDoorCount;
         const unmatched = mergeStats.unmatchedDoorCount;
@@ -644,7 +649,9 @@ export function useProjectUploads({
             }
         }
 
-        setHardwareSets(updatedHardwareSets);
+        // Re-run resolver for any set whose door assignments just changed.
+        const resolvedReassignSets = resolveAllSets(updatedHardwareSets, updatedDoors);
+        setHardwareSets(resolvedReassignSets);
         setDoors(updatedDoors);
     };
 
