@@ -115,8 +115,11 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   useEffect(() => {
     fetchProjects();
-    fetchTrashed();
-  }, [fetchProjects, fetchTrashed]);
+    // Client users cannot access the trash endpoint — skip the fetch to avoid 403 noise.
+    if (currentUser?.role !== 'Client') {
+      fetchTrashed();
+    }
+  }, [fetchProjects, fetchTrashed, currentUser?.role]);
 
   // ---------------------------------------------------------------------------
   // Actions

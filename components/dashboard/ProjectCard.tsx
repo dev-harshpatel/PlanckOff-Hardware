@@ -176,6 +176,7 @@ export function ProjectCard({
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
                     <div className="flex items-center gap-2 min-w-0" ref={assignMenuRef}>
+                        {userRole !== 'Client' && (<>
                         {assignedMember ? (
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
@@ -221,6 +222,7 @@ export function ProjectCard({
                                 )}
                             </div>
                         )}
+                    </>)}
                     </div>
                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />

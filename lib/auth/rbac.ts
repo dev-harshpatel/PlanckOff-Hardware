@@ -40,10 +40,16 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Authenticated — all roles
   { path: '/',               minRole: 'Client',    description: 'Dashboard (Client read-only access)' },
   { path: '/project',        minRole: 'Client',    description: 'Project workspace (Client read-only access)' },
-  { path: '/database',       minRole: 'Estimator', description: 'Hardware database' },
+  { path: '/database',       minRole: 'Client',    description: 'Hardware database (Client read-only)' },
   { path: '/api/auth/me',    minRole: 'Client',    description: 'Current user info (all authenticated users)' },
   { path: '/api/ai',         minRole: 'Estimator', description: 'AI generation routes' },
-  { path: '/api/export',     minRole: 'Estimator', description: 'Export routes' },
+  { path: '/api/export',     minRole: 'Client',    description: 'Export routes' },
+
+  // Projects API — Client can list/view their assigned projects.
+  // /api/projects/trash is listed explicitly so the longer-prefix rule blocks Client
+  // from accessing it even though /api/projects matches as a shorter prefix.
+  { path: '/api/projects',       minRole: 'Client',                            description: 'Projects list and workspace (scoped in handler for Client)' },
+  { path: '/api/projects/trash', allowedRoles: ['Administrator', 'Team Lead'], description: 'Project trash (Admin/Team Lead only)' },
 
   // Team management — Administrator + Team Lead
   { path: '/team',              allowedRoles: ['Administrator', 'Team Lead'], description: 'Team management page' },

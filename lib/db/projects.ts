@@ -61,6 +61,38 @@ const BASE_SELECT = `
   due_date, assigned_to, deleted_at, created_by, created_at, updated_at, elevation_types
 `;
 
+export async function getProjectsForClient(clientId: string): Promise<DbResult<Project[]>> {
+  try {
+    const db = createSupabaseAdminClient();
+
+    // Step 1: resolve which project IDs this Client is assigned to.
+    // We do a two-step query because PostgREST join-level filtering
+    // (.eq on a related table column) is unreliable across versions.
+    const { data: assignments, error: assignErr } = await db
+      .from('client_project_assignments')
+      .select('project_id')
+      .eq('client_id', clientId);
+
+    if (assignErr) return { data: null, error: { message: assignErr.message } };
+    if (!assignments || assignments.length === 0) return { data: [], error: null };
+
+    const projectIds = (assignments as { project_id: string }[]).map((a) => a.project_id);
+
+    // Step 2: fetch only those projects (excluding soft-deleted ones).
+    const { data, error } = await db
+      .from('projects')
+      .select(BASE_SELECT)
+      .in('id', projectIds)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data as unknown as ProjectRow[]).map(toProject), error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
 export async function getAllProjects(): Promise<DbResult<Project[]>> {
   try {
     const db = createSupabaseAdminClient();

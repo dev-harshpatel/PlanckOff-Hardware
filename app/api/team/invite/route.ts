@@ -7,6 +7,7 @@ import {
   updateTeamMember,
   getRoleIdByName,
 } from '@/lib/db/team';
+import { assignProjectsToClient } from '@/lib/db/clientProjectAssignments';
 import { sendInviteEmail } from '@/services/emailService';
 import { canInviteRole, isRoleName } from '@/constants/roles';
 import type { RoleName } from '@/types/auth';
@@ -15,6 +16,8 @@ interface InviteBody {
   name: string;
   email: string;
   role: string;
+  /** Required when role is 'Client' — one or more project IDs to assign. */
+  projectIds?: string[];
 }
 
 /**
@@ -36,7 +39,7 @@ export const POST = withRoleAuth(
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
     }
 
-    const { name, email, role } = body;
+    const { name, email, role, projectIds } = body;
     if (!name || !email || !role) {
       return NextResponse.json({ error: 'name, email, and role are required.' }, { status: 400 });
     }
@@ -52,6 +55,15 @@ export const POST = withRoleAuth(
       );
     }
 
+    if (role === 'Client') {
+      if (!projectIds || projectIds.length === 0) {
+        return NextResponse.json(
+          { error: 'At least one project must be assigned when inviting a Client.' },
+          { status: 400 },
+        );
+      }
+    }
+
     // Generate invite token + expiry
     const inviteToken = crypto.randomUUID();
     const inviteExpiresAt = new Date();
@@ -62,6 +74,10 @@ export const POST = withRoleAuth(
     const { data: existing } = await getTeamMemberByEmail(email);
 
     let memberId: string;
+
+    // assignedById is null when the inviter is an admin (admins live in a
+    // separate table and have no row in team_members to reference).
+    const assignedById = user.isAdmin ? null : user.id;
 
     if (existing) {
       // Member exists — only allow resend if still Invited
@@ -80,6 +96,14 @@ export const POST = withRoleAuth(
         return NextResponse.json({ error: updateErr.message }, { status: 500 });
       }
       memberId = existing.id;
+
+      // Refresh project assignments for re-invited Clients
+      if (role === 'Client' && projectIds?.length) {
+        const { error: assignErr } = await assignProjectsToClient(memberId, projectIds, assignedById);
+        if (assignErr) {
+          return NextResponse.json({ error: assignErr.message }, { status: 500 });
+        }
+      }
     } else {
       // Create new member
       const { data: roleId, error: roleErr } = await getRoleIdByName(role);
@@ -109,6 +133,14 @@ export const POST = withRoleAuth(
         return NextResponse.json({ error: createErr?.message ?? 'Failed to create member.' }, { status: 500 });
       }
       memberId = newMember.id;
+
+      // Assign projects for new Client invites
+      if (role === 'Client' && projectIds?.length) {
+        const { error: assignErr } = await assignProjectsToClient(memberId, projectIds, assignedById);
+        if (assignErr) {
+          return NextResponse.json({ error: assignErr.message }, { status: 500 });
+        }
+      }
     }
 
     // Send invitation email

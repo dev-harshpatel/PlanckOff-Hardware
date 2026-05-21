@@ -34,16 +34,17 @@ export function AppShell({ children }: AppShellProps) {
     setIsMounted(true);
   }, []);
 
-  // Fetch pending hardware count — refresh whenever processing completes or pathname changes
+  // Fetch pending hardware count — refresh whenever processing completes or pathname changes.
+  // Client users don't have access to the hardware database, so skip this fetch for them.
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || currentUser?.role === 'Client') return;
     fetch('/api/master-hardware/pending', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then((json: { data?: unknown[] } | null) => {
         if (json?.data) setPendingCount(json.data.length);
       })
       .catch(() => {});
-  }, [isAuthenticated, pathname, widget.isProcessing]);
+  }, [isAuthenticated, currentUser?.role, pathname, widget.isProcessing]);
 
   useKeyboardShortcuts([
     {
