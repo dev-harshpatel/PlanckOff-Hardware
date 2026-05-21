@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateSession } from '@/lib/auth/session';
 import { hasRoleAccess } from '@/lib/auth/rbac';
 import { AUTH_CONFIG, COOKIE_CONFIG } from '@/constants/auth';
+import { isClientAssignedToProject } from '@/lib/db/clientProjectAssignments';
 import type { AuthUser } from '@/types/auth';
 import type { TeamMemberWithRole } from '@/types/team';
 import type { RoleName } from '@/types/auth';
@@ -104,6 +105,60 @@ export function withRoleAuth(allowedRoles: RoleName[], handler: AuthenticatedHan
     const response = await handler(
       request,
       { user: session.user, teamMember: session.teamMember },
+      params,
+    );
+
+    if (session.shouldRefreshCookie && session.sessionToken) {
+      setAuthCookie(response, session.sessionToken);
+    }
+
+    return response;
+  };
+}
+
+/**
+ * Wraps a handler that operates on a specific project. Enforces:
+ *  - Clients can only access projects in `client_project_assignments` (D-01, D-02)
+ *  - Clients are blocked from all non-GET methods on project sub-routes (D-03)
+ *  - Non-Client roles (Estimator, Team Lead, Administrator) retain org-wide access (D-02)
+ *
+ * Uses 404 (not 403) for both "not assigned" and "missing projectId" Client paths
+ * to avoid leaking project existence to unauthorised Clients.
+ */
+export function withProjectAuth(handler: AuthenticatedHandler) {
+  return async (request: NextRequest, routeContext?: { params?: Promise<RouteParams> | RouteParams }) => {
+    const session = await validateSession();
+
+    if (!session.isValid || !session.user) {
+      return NextResponse.json(
+        { error: session.error ?? 'Unauthorized' },
+        { status: session.statusCode },
+      );
+    }
+
+    const params = routeContext?.params ? await routeContext.params : undefined;
+    const projectId = params?.id as string | undefined;
+    const user = session.user;
+
+    // D-03: Block Client write operations on all project sub-routes
+    if (user.role === 'Client' && request.method !== 'GET') {
+      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+    }
+
+    // D-01/D-02: Scope Client reads to assigned projects (404 not 403 — RESEARCH Pitfall 2)
+    if (user.role === 'Client') {
+      if (!projectId) {
+        return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+      }
+      const allowed = await isClientAssignedToProject(user.id, projectId);
+      if (!allowed) {
+        return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+      }
+    }
+
+    const response = await handler(
+      request,
+      { user, teamMember: session.teamMember },
       params,
     );
 
