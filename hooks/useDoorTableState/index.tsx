@@ -41,7 +41,19 @@ export function useDoorTableState({
     [tasks]);
     const hasUploadErrors = lastErrorTask?.result && ((lastErrorTask.result.errors?.length ?? 0) > 0 || (lastErrorTask.result.warnings?.length ?? 0) > 0);
     const hasRowErrors = doors.some(d => d.status === 'error');
-    const validSetNames = useMemo(() => new Set(hardwareSets.map(s => s.name.trim().toLowerCase())), [hardwareSets]);
+    const validSetNames = useMemo(() => {
+        const names = new Set<string>();
+        for (const s of hardwareSets) {
+            const full = s.name.trim().toLowerCase();
+            names.add(full);
+            // Comma-space-normalized: "s2,s4,s5..." matches set named "s2, s4, s5..."
+            names.add(full.replace(/\s*,\s*/g, ','));
+            // Also accept the code prefix so "P200" is valid when the set is named "P200 – Elevator Lobby"
+            const sepIdx = full.search(/[\s\-–—_]/);
+            if (sepIdx > 0) names.add(full.slice(0, sepIdx));
+        }
+        return names;
+    }, [hardwareSets]);
 
     const filterState = useFilterState({ doors });
     const colVis = useColumnVisibility({ projectId, addToast });

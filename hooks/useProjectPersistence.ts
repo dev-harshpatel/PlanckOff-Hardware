@@ -57,7 +57,8 @@ export function useProjectPersistence({
         try {
             const finalJson: MergedHardwareSet[] = currentSets.map((set): MergedHardwareSet => {
                 const matchedDoors = currentDoors.filter((d) =>
-                    (d.providedHardwareSet ?? '').trim().toLowerCase() === set.name.trim().toLowerCase()
+                    d.assignedHardwareSet?.id === set.id ||
+                    (d.assignedHardwareSet?.name ?? '').trim().toLowerCase() === set.name.trim().toLowerCase()
                 );
 
                 const mergedDoors: MergedDoor[] = matchedDoors.map((d): MergedDoor => ({

@@ -51,6 +51,14 @@ function normalize(code: string): string {
 }
 
 /**
+ * Normalize comma spacing for multi-value name comparison.
+ * "S2,S4,S5 and S6" and "S2, S4, S5 and S6" both → "s2,s4,s5 and s6"
+ */
+function normalizeCommaSpaces(s: string): string {
+  return s.replace(/\s*,\s*/g, ',').trim().toLowerCase();
+}
+
+/**
  * Strip the variant suffix (everything after the first ".").
  * "SE02a.W" → "se02a"
  * "CA01"    → "ca01"  (no dot, unchanged)
@@ -74,12 +82,22 @@ function prefixName(code: string): string {
  */
 function matchSetName(
   hwSet: string,
-  setIndex: Map<string, string>, // normalized key → original setName
-  prefixIndex: Map<string, string[]>,
-): { setName: string; matchType: 'exact' | 'prefix' } | null {
+  setIndex: Map<string, string>,       // normalized key → original setName
+  prefixIndex: Map<string, string[]>,  // stripped prefix → [setNames]
+  tokenIndex: Map<string, string>,     // individual token from multi-value name → setName
+): { setName: string; matchType: 'exact' | 'prefix'; warning?: string } | null {
   // 1. Exact (case-insensitive)
   const exact = setIndex.get(normalize(hwSet));
   if (exact) return { setName: exact, matchType: 'exact' };
+
+  // 1.5. Comma-space-normalized match — "S2,S4,S5 and S6" matches "S2, S4, S5 and S6"
+  //      (Excel may omit spaces after commas that the PDF name includes)
+  const normComma = normalizeCommaSpaces(hwSet);
+  for (const [, originalName] of setIndex) {
+    if (normalizeCommaSpaces(originalName) === normComma) {
+      return { setName: originalName, matchType: 'exact' };
+    }
+  }
 
   // 2. Numeric equivalence — "1" should match "001", "07" should match "007"
   // Excel sheets use plain numbers while the PDF extractor zero-pads to 3 digits.
@@ -93,11 +111,55 @@ function matchSetName(
     }
   }
 
-  // 3. Prefix (strip trailing letters) — only use if exactly one set matches
+  // 3. Starts-with match — PDF set names often include a trailing description after
+  //    a separator, e.g. "P200 – Elevator Lobby" should match Excel hwSet "P200".
+  //    Only accept if the next character after the code is a recognised separator
+  //    (space, hyphen, en-dash, em-dash, comma) to avoid false matches like "P2" → "P200 …".
+  const normHwSet = normalize(hwSet);
+  const startsWithMatches: string[] = [];
+  for (const [normKey, originalName] of setIndex) {
+    if (normKey.startsWith(normHwSet) && normKey.length > normHwSet.length) {
+      const nextChar = normKey[normHwSet.length];
+      if (/[\s\-–—_,]/.test(nextChar)) {
+        startsWithMatches.push(originalName);
+      }
+    }
+  }
+  if (startsWithMatches.length === 1) return { setName: startsWithMatches[0], matchType: 'exact' };
+  if (startsWithMatches.length > 1) {
+    // Ambiguous — multiple sets share this code prefix. Pick the shortest name
+    // (most general — fewest extra characters after the code) and warn.
+    const best = startsWithMatches.reduce((a, b) => a.length <= b.length ? a : b);
+    return {
+      setName: best,
+      matchType: 'prefix',
+      warning: `hwSet "${hwSet}" matched multiple sets (${startsWithMatches.join(', ')}) — picked "${best}" (shortest name); verify manually.`,
+    };
+  }
+
+  // 4. Reverse token match — the PDF set name is itself a comma/and-separated list
+  //    of codes, e.g. door "S2" should match set "S2, S4, S5, S6, S7, S8, S9 and S10".
+  const tokenMatch = tokenIndex.get(normalize(hwSet));
+  if (tokenMatch) return { setName: tokenMatch, matchType: 'exact' };
+
+  // 5. Prefix (strip trailing lowercase letters) — only use if exactly one set matches
   const prefix = prefixIndex.get(prefixName(hwSet));
   if (prefix && prefix.length === 1) return { setName: prefix[0], matchType: 'prefix' };
 
   return null;
+}
+
+/**
+ * Split a hwSet field that may contain multiple comma/and-separated codes.
+ * "P106, P109, P111" → ["P106", "P109", "P111"]
+ * "S2,S4,S5 and S6"  → ["S2", "S4", "S5", "S6"]
+ * "P200"             → ["P200"]
+ */
+function parseHwSetCodes(hwSet: string): string[] {
+  return hwSet
+    .split(/,|\band\b/i)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +260,8 @@ export function mergeHardwareData(
 
   // Build lookup indexes from PDF sets
   const setIndex = new Map<string, string>();      // exact normalized → original setName
-  const prefixIndex = new Map<string, string[]>(); // prefix → [setNames]
+  const prefixIndex = new Map<string, string[]>(); // stripped prefix → [setNames]
+  const tokenIndex = new Map<string, string>();    // individual token → setName (multi-value names only)
 
   for (const set of pdfSets) {
     const norm = normalize(set.setName);
@@ -210,6 +273,20 @@ export function mergeHardwareData(
     const existing = prefixIndex.get(prefix) ?? [];
     existing.push(set.setName);
     prefixIndex.set(prefix, existing);
+
+    // Token index: if the set name is a comma/and-separated list of codes (e.g. "S2, S4, S5 and S6"),
+    // index each individual token so a door with hwSet "S2" can find this set.
+    if (/,|\band\b/i.test(set.setName)) {
+      const tokens = parseHwSetCodes(set.setName);
+      // Only treat as a multi-code name when every token looks like a set code
+      // (short, alphanumeric — not prose like "Hinge and Lever").
+      if (tokens.every(t => /^[A-Za-z0-9._-]{1,10}$/.test(t))) {
+        for (const token of tokens) {
+          const normToken = normalize(token);
+          if (!tokenIndex.has(normToken)) tokenIndex.set(normToken, set.setName);
+        }
+      }
+    }
   }
 
   // Build a map of setName → matched doors
@@ -222,27 +299,44 @@ export function mergeHardwareData(
   let matchedDoorCount = 0;
 
   for (const [scheduleOrder, row] of doorRows.entries()) {
-    const hwSet = row.hwSet?.trim();
+    const hwSetRaw = row.hwSet?.trim();
 
     // Skip rows with no hwSet or NOTE# placeholders
-    if (!hwSet || hwSet.toUpperCase().startsWith('NOTE#') || hwSet === '-') {
+    if (!hwSetRaw || hwSetRaw.toUpperCase().startsWith('NOTE#') || hwSetRaw === '-') {
       continue;
     }
 
-    const match = matchSetName(hwSet, setIndex, prefixIndex);
-
-    if (match) {
-      const mergedDoor = toMergedDoor(row, match.setName, scheduleOrder);
-      doorsBySet.get(match.setName)!.push(mergedDoor);
+    // Try the whole hwSet value first — this directly handles cases where the Excel
+    // cell contains the full multi-value set name, e.g. "S2,S4,S5,S6,S7,S8,S9 and S10"
+    // which should match the PDF set "S2, S4, S5, S6, S7, S8, S9 and S10" directly.
+    const wholeMatch = matchSetName(hwSetRaw, setIndex, prefixIndex, tokenIndex);
+    if (wholeMatch) {
+      doorsBySet.get(wholeMatch.setName)!.push(toMergedDoor(row, wholeMatch.setName, scheduleOrder));
       matchedDoorCount++;
-
-      if (match.matchType === 'prefix') {
-        warnings.push(
-          `Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by prefix (trailing letters stripped) — verify this is correct.`,
-        );
+      if (wholeMatch.warning) {
+        warnings.push(`Door ${row.doorTag}: ${wholeMatch.warning}`);
+      } else if (wholeMatch.matchType === 'prefix') {
+        warnings.push(`Door ${row.doorTag}: hwSet "${hwSetRaw}" matched set "${wholeMatch.setName}" by prefix — verify this is correct.`);
       }
-    } else {
-      unmatchedDoorCodes.add(hwSet);
+      continue;
+    }
+
+    // Whole value didn't match — split comma/and-separated codes and assign the door
+    // to every matched set individually, e.g. "P106, P109, P111" → three sets.
+    const codes = parseHwSetCodes(hwSetRaw);
+    for (const hwSet of codes) {
+      const match = matchSetName(hwSet, setIndex, prefixIndex, tokenIndex);
+      if (match) {
+        doorsBySet.get(match.setName)!.push(toMergedDoor(row, match.setName, scheduleOrder));
+        matchedDoorCount++;
+        if (match.warning) {
+          warnings.push(`Door ${row.doorTag}: ${match.warning}`);
+        } else if (match.matchType === 'prefix') {
+          warnings.push(`Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by prefix — verify this is correct.`);
+        }
+      } else {
+        unmatchedDoorCodes.add(hwSet);
+      }
     }
   }
 
