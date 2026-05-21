@@ -93,11 +93,40 @@ function matchSetName(
     }
   }
 
-  // 3. Prefix (strip trailing letters) — only use if exactly one set matches
+  // 3. Starts-with match — PDF set names often include a trailing description after
+  //    a separator, e.g. "P200 – Elevator Lobby" should match Excel hwSet "P200".
+  //    Only accept if the next character after the code is a recognised separator
+  //    (space, hyphen, en-dash, em-dash) to avoid false matches like "P2" → "P200 …".
+  const normHwSet = normalize(hwSet);
+  const startsWithMatches: string[] = [];
+  for (const [normKey, originalName] of setIndex) {
+    if (normKey.startsWith(normHwSet) && normKey.length > normHwSet.length) {
+      const nextChar = normKey[normHwSet.length];
+      if (/[\s\-–—_]/.test(nextChar)) {
+        startsWithMatches.push(originalName);
+      }
+    }
+  }
+  if (startsWithMatches.length === 1) return { setName: startsWithMatches[0], matchType: 'exact' };
+
+  // 4. Prefix (strip trailing letters) — only use if exactly one set matches
   const prefix = prefixIndex.get(prefixName(hwSet));
   if (prefix && prefix.length === 1) return { setName: prefix[0], matchType: 'prefix' };
 
   return null;
+}
+
+/**
+ * Split a hwSet field that may contain multiple comma/and-separated codes.
+ * "P106, P109, P111" → ["P106", "P109", "P111"]
+ * "S2,S4,S5 and S6"  → ["S2", "S4", "S5", "S6"]
+ * "P200"             → ["P200"]
+ */
+function parseHwSetCodes(hwSet: string): string[] {
+  return hwSet
+    .split(/,|\band\b/i)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -222,27 +251,33 @@ export function mergeHardwareData(
   let matchedDoorCount = 0;
 
   for (const [scheduleOrder, row] of doorRows.entries()) {
-    const hwSet = row.hwSet?.trim();
+    const hwSetRaw = row.hwSet?.trim();
 
     // Skip rows with no hwSet or NOTE# placeholders
-    if (!hwSet || hwSet.toUpperCase().startsWith('NOTE#') || hwSet === '-') {
+    if (!hwSetRaw || hwSetRaw.toUpperCase().startsWith('NOTE#') || hwSetRaw === '-') {
       continue;
     }
 
-    const match = matchSetName(hwSet, setIndex, prefixIndex);
+    // A hwSet cell may contain multiple comma/and-separated codes, e.g.
+    // "P106, P109, P111" — assign the door to every matched set.
+    const codes = parseHwSetCodes(hwSetRaw);
 
-    if (match) {
-      const mergedDoor = toMergedDoor(row, match.setName, scheduleOrder);
-      doorsBySet.get(match.setName)!.push(mergedDoor);
-      matchedDoorCount++;
+    for (const hwSet of codes) {
+      const match = matchSetName(hwSet, setIndex, prefixIndex);
 
-      if (match.matchType === 'prefix') {
-        warnings.push(
-          `Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by prefix (trailing letters stripped) — verify this is correct.`,
-        );
+      if (match) {
+        const mergedDoor = toMergedDoor(row, match.setName, scheduleOrder);
+        doorsBySet.get(match.setName)!.push(mergedDoor);
+        matchedDoorCount++;
+
+        if (match.matchType === 'prefix') {
+          warnings.push(
+            `Door ${row.doorTag}: hwSet "${hwSet}" matched set "${match.setName}" by prefix (trailing letters stripped) — verify this is correct.`,
+          );
+        }
+      } else {
+        unmatchedDoorCodes.add(hwSet);
       }
-    } else {
-      unmatchedDoorCodes.add(hwSet);
     }
   }
 

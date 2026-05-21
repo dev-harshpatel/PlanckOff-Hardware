@@ -46,5 +46,20 @@ export function matchHardwareSet(
     }
   }
 
+  // 3. Starts-with separator — PDF set names often have trailing descriptions,
+  //    e.g. "P200 – Elevator Lobby". Match "P200" against it by checking that
+  //    the next character after the code is a separator, not another alphanumeric.
+  const normCode = normalize(providedName);
+  const startsWithMatches: HardwareSet[] = [];
+  for (const [normKey, set] of setIndex) {
+    if (normKey.startsWith(normCode) && normKey.length > normCode.length) {
+      const next = normKey[normCode.length];
+      if (/[\s\-–—_]/.test(next)) startsWithMatches.push(set);
+    }
+  }
+  if (startsWithMatches.length === 1) {
+    return { set: startsWithMatches[0], confidence: 'high', reason: 'Prefix Match' };
+  }
+
   return null;
 }

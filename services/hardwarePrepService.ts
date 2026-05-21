@@ -81,7 +81,7 @@ export async function generatePrepForAllSets(
   if (sets.length === 0) return {};
 
   const setsDescription = sets
-    .map(set => `## Set: ${set.setName}${set.notes ? `  (Notes: ${set.notes})` : ''}\n${setItemLines(set)}`)
+    .map(set => `## ${set.setName}${set.notes ? `  (Notes: ${set.notes})` : ''}\n${setItemLines(set)}`)
     .join('\n\n');
 
   const prompt = `You are a certified architectural hardware consultant with expertise in Division 08 door hardware.
@@ -123,7 +123,9 @@ ${setsDescription}`;
         console.warn('[hardwarePrepService] Skipping entry missing setName or function:', entry);
         continue;
       }
-      result[entry.setName] = entry.function;
+      // Strip any "Set: " prefix the AI echoes back from the heading format
+      const key = entry.setName.replace(/^Set:\s*/i, '').trim();
+      result[key] = entry.function;
     }
 
     console.log(`[hardwarePrepService] Final result keys: ${JSON.stringify(Object.keys(result))}`);
@@ -158,7 +160,7 @@ ${FUNCTION_INSTRUCTIONS}
 Return ONLY valid JSON.
 
 ---
-## Set: ${set.setName}${set.notes ? `  (Notes: ${set.notes})` : ''}
+## ${set.setName}${set.notes ? `  (Notes: ${set.notes})` : ''}
 ${setItemLines(set)}`;
 
   const response = await client.chat.completions.create({
