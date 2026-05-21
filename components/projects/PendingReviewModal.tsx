@@ -121,7 +121,7 @@ export const PendingReviewModal: React.FC<PendingReviewModalProps> = ({
                     <span className="truncate block">{item.manufacturer || <span className="text-[var(--text-faint)] italic text-xs">—</span>}</span>
                   </td>
                   <td className="px-3 py-2.5 text-[var(--text-muted)] max-w-[200px]">
-                    <span className="truncate block" title={item.description}>{item.description || <span className="text-[var(--text-faint)] italic text-xs">—</span>}</span>
+                    <span className="truncate block" title={item.processedDescription ?? item.description}>{(item.processedDescription ?? item.description) || <span className="text-[var(--text-faint)] italic text-xs">—</span>}</span>
                   </td>
                   <td className="px-3 py-2.5">
                     {item.finish

@@ -139,7 +139,7 @@ export function suggestHingeSpec(door: Door): HingeSpec | undefined {
     }
 
     // Suggest ball bearing for heavy doors
-    if (door.thickness === '1-3/4"' && door.doorCoreType === 'Solid Core') {
+    if (String(door.thickness) === '1-3/4"' && door.doorCoreType === 'Solid Core') {
         spec.ballBearing = true;
     }
 

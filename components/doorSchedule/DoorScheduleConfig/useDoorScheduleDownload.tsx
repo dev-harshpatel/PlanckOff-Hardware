@@ -25,6 +25,8 @@ interface UseDoorScheduleDownloadParams {
   uniqueData: boolean;
   format: ExportFormat;
   projectName: string;
+  projectLocation?: string;
+  projectProvince?: string;
   showElevationImages: boolean;
   elevationTypes: ElevationType[];
   preloadElevationImages: (groups: DoorGroup[]) => Promise<Map<string, ImageInfo>>;
@@ -44,6 +46,8 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
     uniqueData,
     format,
     projectName,
+    projectLocation,
+    projectProvince,
     showElevationImages,
     elevationTypes,
     preloadElevationImages,
@@ -87,7 +91,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
         // jszip ships as CJS (module.exports = JSZip, no .default at runtime).
         // Webpack wraps CJS so .default may equal the constructor — guard both ways.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const JSZip = ((jszipMod as any).default ?? jszipMod) as typeof import('jszip')['default'];
+        const JSZip = ((jszipMod as any).default ?? jszipMod) as unknown as typeof import('jszip');
 
         const wb = XLSX.utils.book_new();
         const useSingleSheet = groupsToExport.length === 1 && groupsToExport[0].breadcrumb.length === 0;
@@ -339,7 +343,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
           };
 
           autoTable(doc, {
-            ...buildAutoTableOptions(groupTheme, reportTitle, exportDate, PAGE_W, PDF_MARGIN, { projectName, logoDataUrl }),
+            ...buildAutoTableOptions(groupTheme, reportTitle, exportDate, PAGE_W, PDF_MARGIN, { projectName, logoDataUrl, projectLocation, projectProvince }),
             startY:       HEADER_BAR_HEIGHT + 2,  // leave room for branded header (replaces hardcoded 25)
             head:         [pdfHeaders],
             body:         rowsByGroup[i].map(row =>
@@ -373,7 +377,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
 
               const addElevPageHeader = (sub: string) => {
                 const elevExportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN, projectName, logoDataUrl);
+                drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN, projectName, logoDataUrl, projectLocation, projectProvince);
               };
 
               doc.addPage();

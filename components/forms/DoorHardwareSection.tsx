@@ -107,7 +107,7 @@ export function DoorHardwareSection({ editedDoor, hardwareSets, hwExcluded, matc
                                             </td>
                                             <td className="px-3 py-2.5 text-[var(--text-muted)] max-w-[220px]">
                                                 <span className="line-clamp-2 leading-snug">
-                                                    {item.description || <span className="text-[var(--text-faint)] italic">—</span>}
+                                                    {(item.processedDescription ?? item.description) || <span className="text-[var(--text-faint)] italic">—</span>}
                                                 </span>
                                             </td>
                                             <td className="px-3 py-2.5">

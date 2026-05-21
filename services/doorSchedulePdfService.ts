@@ -272,7 +272,7 @@ async function tier2Extract(
   buffer: Buffer,
   warnings: string[],
 ): Promise<{ rows: DoorScheduleRow[]; warnings: string[] }> {
-  warnings.push('Tier 1 failed or file too large — using Tier 2 text extraction.');
+  console.warn('[doorSchedulePdf] Tier 1 failed or file too large — using Tier 2 text extraction.');
 
   console.log('[doorSchedulePdf:t2] Starting pdfjs text extraction…');
   const { pages, pageCount } = await extractPdfText(buffer, (cur, total) => {

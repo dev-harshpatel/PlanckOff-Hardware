@@ -103,6 +103,7 @@ export function extractFrameFields(door: Door): Record<string, string> {
     frameFinish:        (door.frameFinish          ?? '').trim(),
     prehung:            (door.prehung              ?? '').trim(),
     casing:             (door.casing               ?? '').trim(),
+    prep:               (door.assignedHardwareSet?.prep ?? door.hardwarePrep ?? '').trim(),
     // Private filter keys (stripped from group key/description by cleanFields)
     _material:          String(door.frameMaterial  ?? '').trim(),
     _floor:             (door.buildingLocation ?? door.location ?? '').trim(),

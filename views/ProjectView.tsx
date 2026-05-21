@@ -13,6 +13,7 @@ import type { TrashItem } from '@/lib/db/hardware';
 import UndoToast from '../components/shared/UndoToast';
 import HardwareTrashModal from '../components/hardware/HardwareTrashModal';
 import UploadConfirmationModal from '../components/upload/UploadConfirmationModal';
+import { PipelineLoader } from '../components/upload/PipelineLoader';
 import ErrorModal from '../components/shared/ErrorModal';
 import ValidationReportModal from '../components/reports/ValidationReportModal';
 import ResizablePanels from '../components/layout/ResizablePanels';
@@ -71,7 +72,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         doorUploadFile, isDoorUploadModalOpen, setIsDoorUploadModalOpen, setDoorUploadFile,
         isCombinedUploadOpen, isCombinedMinimized, setIsCombinedUploadOpen,
         combinedExcelFile, combinedPdfFile, setCombinedExcelFile, setCombinedPdfFile,
-        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedLogs, logsEndRef,
+        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedLogs, logsEndRef, pipelineStep,
         isCombinedOverwriteOpen, setIsCombinedOverwriteOpen, isCombinedOverwriteChecking,
         uploadErrors, isErrorModalOpen, setIsErrorModalOpen,
         validationReport, isValidationModalOpen, setIsValidationModalOpen, validationReportTitle,
@@ -478,21 +479,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             </div>
                         )}
 
-                        {/* Progress bar + step label (shown while processing) */}
-                        {isCombinedProcessing && (
-                            <div className="px-5 pt-3 pb-3 flex-shrink-0">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-xs text-[var(--text-muted)] truncate pr-2">{combinedCurrentStep}</span>
-                                    <span className="text-xs text-[var(--text-faint)] tabular-nums flex-shrink-0">{combinedProgress}%</span>
-                                </div>
-                                <div className="h-1.5 w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                        style={{ width: `${combinedProgress}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
+                        {/* Pipeline step loader */}
+                        <PipelineLoader currentStep={pipelineStep} />
 
                         {/* Logs panel (shown once processing starts or logs exist) */}
                         {combinedLogs.length > 0 && (

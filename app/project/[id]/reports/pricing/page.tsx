@@ -23,11 +23,10 @@ export default function PricingReportPage() {
   const [projectName, setProjectName] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // useProjectData is called for Realtime channel subscription only (setPricingItemsCallback, setPricingProposalCallback).
-  // addToast is wired in so subscription errors surface as toasts.
   const noopSaveRef = useRef<((sets: HardwareSet[], doors: Door[]) => Promise<void>) | null>(null);
   const { addToast } = useToast();
-  const { setPricingItemsCallback, setPricingProposalCallback } = useProjectData({
+  // useProjectData wired for Realtime channel subscription; addToast surfaces errors as toasts.
+  useProjectData({
     projectId: id ?? '',
     addToast,
     saveToFinalJsonRef: noopSaveRef,
@@ -102,8 +101,6 @@ export default function PricingReportPage() {
           doors={doors}
           hardwareSets={hardwareSets}
           projectName={projectName}
-          registerPricingItemsCallback={setPricingItemsCallback}
-          registerPricingProposalCallback={setPricingProposalCallback}
         />
       </div>
     </div>

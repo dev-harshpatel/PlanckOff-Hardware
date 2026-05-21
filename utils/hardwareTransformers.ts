@@ -101,6 +101,8 @@ function toHardwareItem(raw: ExtractedHardwareSet['hardwareItems'][number], setN
     multipliedQuantity: raw.multipliedQuantity,
     manufacturer: raw.manufacturer,
     description: raw.description,
+    processedDescription: raw.processedDescription,
+    userDescription: raw.userDescription,
     finish: raw.finish,
   };
 }

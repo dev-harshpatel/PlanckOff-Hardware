@@ -6,6 +6,7 @@ import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
 import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
 import { autoCreateVariants } from '../utils/autoVariantUtils';
+import { resolveAllSets } from '../utils/descriptionResolver';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
@@ -126,6 +127,7 @@ export function useProjectUploads({
     const [combinedProgress, setCombinedProgress] = useState(0);
     const [combinedCurrentStep, setCombinedCurrentStep] = useState('');
     const [combinedLogs, setCombinedLogs] = useState<{ level: 'info' | 'success' | 'warn' | 'error'; msg: string }[]>([]);
+    const [pipelineStep, setPipelineStep] = useState(-1);
     const logsEndRef = useRef<HTMLDivElement>(null);
     const logsRef = useRef<ProcessingLogEntry[]>([]);
     const [isCombinedOverwriteOpen, setIsCombinedOverwriteOpen] = useState(false);
@@ -143,6 +145,7 @@ export function useProjectUploads({
         setCombinedLogs([]);
         setCombinedProgress(0);
         setCombinedCurrentStep('');
+        setPipelineStep(-1);
         clearWidget();
     };
 
@@ -421,6 +424,7 @@ export function useProjectUploads({
 
     const processCombinedUpload = async (excelFile: File, pdfFile: File) => {
         setIsCombinedProcessing(true);
+        setPipelineStep(0);
         setCombinedProgress(0);
         setCombinedLogs([]);
         logsRef.current = [];
@@ -450,6 +454,7 @@ export function useProjectUploads({
             step(`Reading "${pdfFile.name}" (${(pdfFile.size / 1024).toFixed(0)} KB)…`, 10);
             await new Promise(r => setTimeout(r, 200));
 
+            setPipelineStep(1);
             step('Uploading files to server…', 15);
 
             const form = new FormData();
@@ -463,9 +468,13 @@ export function useProjectUploads({
                 setCombinedProgress(simulatedProgress);
                 setWidget({ progress: simulatedProgress });
                 if (simulatedProgress === 21) { addLog('info', 'Parsing door schedule columns and rows…'); setCombinedCurrentStep('Parsing door schedule…'); }
-                if (simulatedProgress === 30) { addLog('success', 'Door schedule processed.'); addLog('info', 'Sending hardware PDF to AI (Gemini)…'); setCombinedCurrentStep('AI reading hardware PDF…'); }
-                if (simulatedProgress === 45) { addLog('info', 'AI extracting hardware sets and items…'); }
-                if (simulatedProgress === 60) { addLog('info', 'AI processing hardware specifications…'); }
+                if (simulatedProgress === 30) { addLog('success', 'Door schedule processed.'); addLog('info', 'Sending hardware PDF for AI analysis…'); setCombinedCurrentStep('AI reading hardware PDF…'); setPipelineStep(2); }
+                if (simulatedProgress === 36) { addLog('info', 'AI scanning page layouts and tables…'); }
+                if (simulatedProgress === 42) { addLog('info', 'Identifying hardware set boundaries…'); }
+                if (simulatedProgress === 48) { addLog('info', 'AI extracting hardware sets and line items…'); }
+                if (simulatedProgress === 54) { addLog('info', 'Cross-referencing product codes and quantities…'); }
+                if (simulatedProgress === 60) { addLog('info', 'Resolving item descriptions and specifications…'); }
+                if (simulatedProgress === 66) { addLog('info', 'Finalizing hardware data structure…'); }
             }, 800);
 
             const res = await fetch(`/api/projects/${projectId}/process`, {
@@ -506,6 +515,7 @@ export function useProjectUploads({
                 addLog('warn', `Database queue: ${masterQueueWarning}`);
             }
 
+            setPipelineStep(3);
             step('Matching doors to hardware sets…', 80);
             await new Promise(r => setTimeout(r, 150));
 
@@ -518,10 +528,12 @@ export function useProjectUploads({
             }
             warnings.forEach(w => addLog('warn', w));
 
+            setPipelineStep(4);
             step('Saving final data to database…', 88);
             await new Promise(r => setTimeout(r, 150));
             addLog('success', 'Final JSON saved to database.');
 
+            setPipelineStep(5);
             step('Populating project view…', 94);
             const [hwFresh, dsFresh] = await Promise.all([
                 fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
@@ -533,13 +545,23 @@ export function useProjectUploads({
                 ? transformHardwareSets(hwFreshJson.data.extractedJson) : [];
             const freshDoors = dsFreshJson?.data?.scheduleJson
                 ? transformDoors(dsFreshJson.data.scheduleJson, freshSets) : [];
-            if (freshSets.length > 0) { setHardwareSets(freshSets); isInitialMount.current = true; }
-            if (freshDoors.length > 0) { setDoors(freshDoors); isInitialMount.current = true; }
-            saveToFinalJson(freshSets, freshDoors).catch(() => {});
 
+            // Auto-split sets where assigned doors have differing profiles
+            // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
+            const { sets: autoSets, doors: autoDoors, variantsCreated } = autoCreateVariants(freshSets, freshDoors);
+
+            // Resolve dimension placeholders now that every set has homogeneous door dimensions.
+            const resolvedSets = resolveAllSets(autoSets, autoDoors);
+
+            if (resolvedSets.length > 0) { setHardwareSets(resolvedSets); isInitialMount.current = true; }
+            if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
+            saveToFinalJson(resolvedSets, autoDoors).catch(() => {});
+
+            setPipelineStep(6);
             setCombinedProgress(100);
             setCombinedCurrentStep('Complete');
-            addLog('success', `Done! ${freshDoors.length} doors loaded — ${matchedDoorCount} linked to sets, ${unmatchedDoorCount} unmatched.`);
+            const variantNote = variantsCreated > 0 ? ` ${variantsCreated} auto-variant${variantsCreated !== 1 ? 's' : ''} created.` : '';
+            addLog('success', `Done! ${autoDoors.length} doors loaded — ${matchedDoorCount} linked to sets, ${unmatchedDoorCount} unmatched.${variantNote}`);
 
             addToast({
                 type: 'success',
@@ -590,15 +612,11 @@ export function useProjectUploads({
             ? transformDoors(dsJson.data.scheduleJson, freshSets)
             : doors;
 
-        // Auto-split sets where assigned doors have differing profiles
-        // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
-        // Largest profile group keeps the original set; each minority group becomes a .v1/.v2 variant.
-        const { sets: autoSets, doors: autoDoors } = autoCreateVariants(freshSets, freshDoors);
-
-        setHardwareSets(autoSets);
-        setDoors(autoDoors);
+        const resolvedAssignSets = resolveAllSets(freshSets, freshDoors);
+        setHardwareSets(resolvedAssignSets);
+        setDoors(freshDoors);
         isInitialMount.current = true;
-        saveToFinalJson(autoSets, autoDoors).catch(() => {});
+        saveToFinalJson(resolvedAssignSets, freshDoors).catch(() => {});
 
         const matched = mergeStats.matchedDoorCount;
         const unmatched = mergeStats.unmatchedDoorCount;
@@ -643,7 +661,9 @@ export function useProjectUploads({
             }
         }
 
-        setHardwareSets(updatedHardwareSets);
+        // Re-run resolver for any set whose door assignments just changed.
+        const resolvedReassignSets = resolveAllSets(updatedHardwareSets, updatedDoors);
+        setHardwareSets(resolvedReassignSets);
         setDoors(updatedDoors);
     };
 
@@ -670,6 +690,7 @@ export function useProjectUploads({
         combinedProgress,
         combinedCurrentStep,
         combinedLogs,
+        pipelineStep,
         logsEndRef,
         isCombinedOverwriteOpen,
         setIsCombinedOverwriteOpen,

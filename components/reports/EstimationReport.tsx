@@ -40,7 +40,7 @@ const EstimationReport: React.FC<EstimationReportProps> = ({ report, projectName
           const query = searchQuery.toLowerCase();
           data = data.filter(summary => 
               summary.item.name.toLowerCase().includes(query) ||
-              summary.item.description.toLowerCase().includes(query) ||
+              (summary.item.processedDescription ?? summary.item.description).toLowerCase().includes(query) ||
               summary.totalQuantity.toString().includes(query)
           );
       }
@@ -170,7 +170,7 @@ const EstimationReport: React.FC<EstimationReportProps> = ({ report, projectName
                 <td className="px-6 py-4 font-medium text-gray-900">{index + 1}</td>
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4">{item.manufacturer}</td>
-                <td className="px-6 py-4">{item.description}</td>
+                <td className="px-6 py-4">{item.processedDescription ?? item.description}</td>
                 <td className="px-6 py-4">{item.finish}</td>
                 <td className="px-6 py-4">{item.doorMaterial || 'N/A'}</td>
                 <td className="px-6 py-4 text-right font-bold text-primary-800">{totalQuantity}</td>

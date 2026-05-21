@@ -178,8 +178,8 @@ const HardwareScheduleView: React.FC<HardwareScheduleViewProps> = ({ hardwareSet
                                         <tr key={item.id} className="hover:bg-[var(--bg)] transition-colors">
                                             <td className="px-4 py-3">
                                                 <div className="font-medium text-[var(--text)]">{item.name}</div>
-                                                {item.description && (
-                                                    <div className="text-xs text-[var(--text-muted)] mt-1">{item.description}</div>
+                                                {(item.processedDescription ?? item.description) && (
+                                                    <div className="text-xs text-[var(--text-muted)] mt-1">{item.processedDescription ?? item.description}</div>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-[var(--text-secondary)]">{item.manufacturer}</td>

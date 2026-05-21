@@ -178,18 +178,16 @@ export const exportDoorScheduleToCSV = (
 };
 
 // Format usage for Hardware Set reports
-const formatUsage = (doorTags: string[], mode: 'all' | 'count' | 'preview'): string => {
+const formatUsage = (doorTags: string[], mode: string | string[]): string => {
   const sorted = [...new Set(doorTags)].sort();
+  const modes = Array.isArray(mode) ? mode : [mode];
 
-  switch (mode) {
-    case 'all':
-      return sorted.join(', ');
-    case 'count':
-      return `Used in ${sorted.length} doors`;
-    case 'preview':
-      if (sorted.length <= 5) return sorted.join(', ');
-      return `${sorted.slice(0, 5).join(', ')}... +${sorted.length - 5} more`;
+  if (modes.includes('count')) return `Used in ${sorted.length} doors`;
+  if (modes.includes('preview')) {
+    if (sorted.length <= 5) return sorted.join(', ');
+    return `${sorted.slice(0, 5).join(', ')}... +${sorted.length - 5} more`;
   }
+  return sorted.join(', ');
 };
 
 // Build headers for Hardware Set
@@ -222,7 +220,7 @@ const buildHardwareSetRow = (item: any, config: HardwareSetExportConfig): any[] 
 
   // Required columns
   row.push(item.item.name || '');
-  row.push(item.item.description || '');
+  row.push((item.item.processedDescription ?? item.item.description) || '');
   row.push(item.item.manufacturer || '');
   row.push(item.item.finish || '');
   row.push(formatUsage(item.doorTags, config.usageDisplay));

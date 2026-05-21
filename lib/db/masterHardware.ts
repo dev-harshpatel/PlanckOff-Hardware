@@ -23,6 +23,7 @@ export interface MasterHardwarePending {
   name: string;
   manufacturer: string;
   description: string;
+  processedDescription?: string;
   finish: string;
   modelNumber: string;
   sourceProjectId: string | null;

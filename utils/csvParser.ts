@@ -1,5 +1,5 @@
 
-import { Door, HardwareSet, HardwareItem } from '../types';
+import { Door, HardwareSet, HardwareItem, FrameMaterial } from '../types';
 import { ERRORS } from '@/constants/errors';
 
 /**
@@ -107,7 +107,7 @@ export const parseDoorScheduleCSV = (csvText: string): Door[] => {
             height: getNum('height', 0),
             thickness: getNum('thickness', 1.75),
             doorMaterial: getVal('doorMaterial', 'N/A'),
-            frameMaterial: getVal('frameMaterial', 'N/A'),
+            frameMaterial: getVal('frameMaterial', 'N/A') as FrameMaterial,
             hardwarePrep: getVal('hardwarePrep', 'N/A'),
             providedHardwareSet: getVal('providedHardwareSet', undefined) || undefined,
             schedule: getVal('schedule', 'N/A'),

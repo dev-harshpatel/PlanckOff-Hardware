@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SubmittalMetadata, TableOfContentsItem } from '../../types';
+import { SubmittalMetadata, TableOfContentsEntry as TableOfContentsItem } from '../../types';
 
 interface SubmittalCoverPageProps {
     metadata: SubmittalMetadata;

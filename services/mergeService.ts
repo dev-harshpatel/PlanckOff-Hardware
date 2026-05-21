@@ -20,6 +20,7 @@ import type {
   MergedHardwareSet,
   MergedDoor,
 } from '@/lib/db/hardware';
+import { resolveAllMergedSets } from '@/utils/descriptionResolver';
 
 // ---------------------------------------------------------------------------
 // Public result type
@@ -264,8 +265,11 @@ export function mergeHardwareData(
     };
   });
 
+  // Resolve dimension placeholders in descriptions (e.g. "x width" → "46\"")
+  const resolvedSets = resolveAllMergedSets(sets);
+
   // PDF sets with no matching doors
-  const pdfSetsWithNoDoors = sets
+  const pdfSetsWithNoDoors = resolvedSets
     .filter((s) => s.doors.length === 0)
     .map((s) => s.setName);
 
@@ -282,8 +286,8 @@ export function mergeHardwareData(
   }
 
   const result: MergeResult = {
-    sets,
-    setCount: sets.length,
+    sets: resolvedSets,
+    setCount: resolvedSets.length,
     matchedDoorCount,
     unmatchedDoorCount: unmatchedDoorCodes.size,
     unmatchedDoorCodes: [...unmatchedDoorCodes],

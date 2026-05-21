@@ -33,6 +33,8 @@ interface DoorScheduleConfigProps {
   hardwareSets?: HardwareSet[];
   elevationTypes?: ElevationType[];
   projectName: string;
+  projectLocation?: string;
+  projectProvince?: string;
   onUpdateDoors?: (doors: Door[]) => void;
   onBack?: () => void;
   onExport?: (config: DoorScheduleExportConfig) => void;
@@ -45,6 +47,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
   hardwareSets,
   elevationTypes = [],
   projectName,
+  projectLocation,
+  projectProvince,
 }) => {
   // ── Filter out excluded doors ─────────────────────────────────────────────
   // A door is only fully excluded from the report when BOTH the door section
@@ -113,6 +117,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     uniqueData,
     format,
     projectName,
+    projectLocation,
+    projectProvince,
     showElevationImages,
     elevationTypes,
     preloadElevationImages,

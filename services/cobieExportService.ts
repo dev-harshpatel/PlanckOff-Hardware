@@ -318,7 +318,7 @@ function createTypeSheet(
                 createdBy,
                 createdOn.toISOString(),
                 'Product',
-                item.description || item.name,
+                (item.processedDescription ?? item.description) || item.name,
                 'Fixed',
                 item.manufacturer || '',
                 item.modelNumber || '',

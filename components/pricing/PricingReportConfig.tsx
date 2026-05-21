@@ -133,6 +133,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     currentMaterials,
     currentFloors,
     currentBuildings,
+    currentPreps,
     setFilter,
     setProposalFilter,
     handleCreateVariant,
@@ -347,6 +348,9 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
             <MultiFilterSelect label="Material"          selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
             <MultiFilterSelect label="Building Location" selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
             <MultiFilterSelect label="Building"          selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
+            {activeTab !== 'hardware' && currentPreps.length > 0 && (
+              <MultiFilterSelect label="Prep" selected={filters.prep} options={currentPreps} onChange={v => setFilter('prep', v)} />
+            )}
           </div>
         )}
       </div>

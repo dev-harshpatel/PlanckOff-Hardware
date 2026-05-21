@@ -132,7 +132,7 @@ const ImageAnalysisModal: React.FC<ImageAnalysisModalProps> = ({ isOpen, onClose
                                 onChange={(e) => setPrompt(e.target.value)}
                                 className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
                                 rows={3}
-                                placeholder="Ask Gemini something about the image..."
+                                placeholder="Ask AI something about the image..."
                             />
                         </div>
 
@@ -166,7 +166,7 @@ const ImageAnalysisModal: React.FC<ImageAnalysisModalProps> = ({ isOpen, onClose
                                         <div className="h-2 bg-gray-200 rounded w-1/2 mb-2"></div>
                                         <div className="h-2 bg-gray-200 rounded w-5/6"></div>
                                     </div>
-                                    <span className="mt-4 text-xs">Gemini 3 Pro is analyzing your image...</span>
+                                    <span className="mt-4 text-xs">AI is analyzing your image…</span>
                                 </div>
                             ) : analysisResult ? (
                                 <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap">

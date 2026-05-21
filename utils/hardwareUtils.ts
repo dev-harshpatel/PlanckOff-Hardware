@@ -16,7 +16,7 @@ export const getDoorConflicts = (
     const setItemsText = set.items.map(i => (i.name + i.description).toLowerCase()).join(' ');
     const isSetFireRated = setDesc.includes('fire') || setDesc.includes('rated') || setItemsText.includes('fire') || setItemsText.includes('rated') || setItemsText.includes('label');
     const doorRating = door.fireRating ? door.fireRating.toLowerCase().trim() : 'n/a';
-    const isDoorRated = doorRating !== 'n/a' && doorRating !== '' && doorRating !== 'non-rated';
+    const isDoorRated = doorRating !== 'n/a' && doorRating !== '' && doorRating !== 'non-rated' && doorRating !== '0 hr' && doorRating !== '0hr' && doorRating !== '0';
     if (isDoorRated && !isSetFireRated) conflicts.fireRating = `CRITICAL: Door is rated (${door.fireRating}), but hardware set is NOT fire-rated.`;
     if (!isDoorRated && isSetFireRated) conflicts.fireRating = `WARNING: Non-rated door assigned to fire-rated set (Over-spec).`;
     const hingeItems = set.items.filter(item => {

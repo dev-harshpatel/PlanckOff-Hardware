@@ -109,7 +109,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
             manufacturer: '',
             productName: '',
             modelNumber: '',
-            category: 'Hardware',
+            category: 'hardware',
             csiSection: '08 71 00',
             file: null
         });
@@ -172,7 +172,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                 <SelectItem value="__none__">All Categories</SelectItem>
                                 <SelectItem value="Door">Door</SelectItem>
                                 <SelectItem value="Frame">Frame</SelectItem>
-                                <SelectItem value="Hardware">Hardware</SelectItem>
+                                <SelectItem value="hardware">Hardware</SelectItem>
                                 <SelectItem value="Finish">Finish</SelectItem>
                             </SelectContent>
                         </Select>
@@ -348,7 +348,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                         <SelectContent>
                                             <SelectItem value="Door">Door</SelectItem>
                                             <SelectItem value="Frame">Frame</SelectItem>
-                                            <SelectItem value="Hardware">Hardware</SelectItem>
+                                            <SelectItem value="hardware">Hardware</SelectItem>
                                             <SelectItem value="Finish">Finish</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -386,7 +386,7 @@ const CutSheetLibrary: React.FC<CutSheetLibraryProps> = ({
                                         manufacturer: '',
                                         productName: '',
                                         modelNumber: '',
-                                        category: 'Hardware',
+                                        category: 'hardware',
                                         csiSection: '08 71 00',
                                         file: null
                                     });

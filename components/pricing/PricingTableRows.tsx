@@ -97,7 +97,7 @@ export const HardwareRow: React.FC<{
   return (
     <tr className={even ? 'bg-[var(--bg)]' : 'bg-[var(--bg-subtle)]/40'}>
       <td className={`${TD} font-medium text-[var(--text)] max-w-[160px] truncate`} title={item.name}>{item.name || '—'}</td>
-      <td className={`${TD} max-w-[200px] truncate`} title={item.description ?? ''}>{item.description || '—'}</td>
+      <td className={`${TD} max-w-[200px] truncate`} title={(item.processedDescription ?? item.description) ?? ''}>{(item.processedDescription ?? item.description) || '—'}</td>
       <td className={`${TD} whitespace-nowrap`}>{item.manufacturer || '—'}</td>
       <td className={`${TD} whitespace-nowrap`}>{item.finish || '—'}</td>
       <td className={`${TD} text-right font-mono w-px whitespace-nowrap`}>{group.totalQty}</td>
