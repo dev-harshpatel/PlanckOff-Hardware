@@ -446,7 +446,7 @@ export const VALIDATION_RULES: ValidationRule[] = [
         severity: 'warning',
         validate: (door) => {
             // Heavy doors (1-3/4" solid core) should have ball bearing hinges
-            const isHeavy = door.thickness === '1-3/4"' && door.doorCoreType === 'Solid Core';
+            const isHeavy = String(door.thickness) === '1-3/4"' && door.doorCoreType === 'Solid Core';
             if (isHeavy && door.hingeSpec && !door.hingeSpec.ballBearing) {
                 return false;
             }

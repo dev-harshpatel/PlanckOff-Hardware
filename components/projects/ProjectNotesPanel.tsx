@@ -245,7 +245,7 @@ function NoteEditor({ tab, initialContent, onUpdate }: NoteEditorProps) {
     try {
       const improved = await improveNotesText(rawText);
       if (!improved) return;
-      editor.commands.setContent(plainTextToEditorHtml(improved), false);
+      editor.commands.setContent(plainTextToEditorHtml(improved));
       onUpdate(tab, editor.getJSON() as Record<string, unknown>);
     } catch (err) {
       setImproveError(err instanceof Error ? err.message : 'Failed to improve notes.');

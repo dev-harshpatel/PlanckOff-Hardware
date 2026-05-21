@@ -36,7 +36,7 @@ export const PDF_MARGIN = 14;
  * Table margin.top is set to this value so the table never overlaps the header.
  * startY for the first page should be HEADER_BAR_HEIGHT + 2.
  */
-export const HEADER_BAR_HEIGHT = 24;
+export const HEADER_BAR_HEIGHT = 26;
 
 /** Distance from page bottom edge for footer baseline, in mm */
 export const FOOTER_OFFSET = 6;
@@ -105,9 +105,10 @@ export const DEFAULT_THEME: PdfTheme = {
 //   ┌──────────────────────────────────────────────────────────────────┐
 //   █ navy accent bar (2.5mm)                                          █  ← y 0–2.5
 //   ├──────────────────────────────────────────────────────────────────┤
-//   │ [Logo]   │   Project Name (bold)             │  Exported: date   │  ← y ≈9
-//   │          │   Report Type (muted)              │                   │  ← y ≈15
-//   ├──────────────────────────────────────────────────────────────────┤  ← y ≈21
+//   │ [Logo]   │   Project Name (bold)             │  Exported: date   │  ← y ≈8
+//   │          │   Location, Province (muted)       │                   │  ← y ≈13.5
+//   │          │   Report Type (muted)              │                   │  ← y ≈19
+//   ├──────────────────────────────────────────────────────────────────┤  ← y ≈23
 //   │                    table content                                  │
 // ---------------------------------------------------------------------------
 export function drawPageHeader(
@@ -118,6 +119,8 @@ export function drawPageHeader(
   margin: number,
   projectName?: string,
   logoDataUrl?: string,
+  projectLocation?: string,
+  projectProvince?: string,
 ): void {
   // ── Navy accent stripe at the very top ───────────────────────────────────
   doc.setFillColor(...BRAND_NAVY);
@@ -132,19 +135,30 @@ export function drawPageHeader(
     // Logo failure must never abort the export
   }
 
+  const hasLocation = !!(projectLocation || projectProvince);
+
   // ── Project name — bold, prominent, center ────────────────────────────────
   if (projectName) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...BRAND_NAVY);
-    doc.text(projectName, pageWidth / 2, 9.5, { align: 'center' });
+    doc.text(projectName, pageWidth / 2, hasLocation ? 8 : 9.5, { align: 'center' });
+  }
+
+  // ── Location / Province — muted, center ──────────────────────────────────
+  if (hasLocation) {
+    const locationParts = [projectLocation, projectProvince].filter(Boolean);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(locationParts.join(', '), pageWidth / 2, 13.5, { align: 'center' });
   }
 
   // ── Report type — smaller, muted, center ─────────────────────────────────
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 116, 139); // slate-500
-  doc.text(reportTitle, pageWidth / 2, 16, { align: 'center' });
+  doc.text(reportTitle, pageWidth / 2, hasLocation ? 19 : 16, { align: 'center' });
 
   // ── Export date — top-right, muted ───────────────────────────────────────
   doc.setFontSize(7.5);
@@ -155,7 +169,7 @@ export function drawPageHeader(
   // ── Separator line ────────────────────────────────────────────────────────
   doc.setDrawColor(...SEPARATOR_COLOR);
   doc.setLineWidth(0.5);
-  doc.line(margin, 21, pageWidth - margin, 21);
+  doc.line(margin, 23, pageWidth - margin, 23);
 
   // Reset state for table rendering
   doc.setTextColor(0, 0, 0);
@@ -237,7 +251,7 @@ export function buildAutoTableOptions(
   exportDate: string,
   pageWidth: number,
   margin: number,
-  headerMeta?: { projectName?: string; logoDataUrl?: string },
+  headerMeta?: { projectName?: string; logoDataUrl?: string; projectLocation?: string; projectProvince?: string },
 ): Record<string, unknown> {
   return {
     // Body cell styles
@@ -268,6 +282,9 @@ export function buildAutoTableOptions(
     tableLineColor: SEPARATOR_COLOR,
     tableLineWidth: 0.3,
 
+    // Stretch table to full printable width so no gap appears after last column
+    tableWidth: pageWidth - 2 * margin,
+
     // Page margins — top reserves space for the branded header bar
     margin: {
       left:   margin,
@@ -292,6 +309,8 @@ export function buildAutoTableOptions(
         margin,
         headerMeta?.projectName,
         headerMeta?.logoDataUrl,
+        headerMeta?.projectLocation,
+        headerMeta?.projectProvince,
       );
     },
   };

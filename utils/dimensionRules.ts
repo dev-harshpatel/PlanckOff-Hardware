@@ -213,16 +213,9 @@ export function resolveDimension(
 }
 
 /**
- * Replace dimension placeholder tokens in a description string.
- *
- * Tokens handled:
- *   "x width"            → door width in inches
- *   "x req width"        → door width in inches  ("x req. width" variant too)
- *   "x height"           → door height in inches
- *   "x 2-height"         → 2 × door height in inches
- *   "x length"           → item dimension rule value (e.g. H-1" for hinges)
- *
- * If no tokens are found the original string is returned unchanged.
+ * Append the calculated dimension value to the description.
+ * Never modifies the original description text — only appends "[value]" at the end.
+ * Returns the description unchanged if the item has no matching rule or door dimensions are missing.
  */
 export function resolveDescriptionPlaceholders(
   description: string,
@@ -231,23 +224,7 @@ export function resolveDescriptionPlaceholders(
   isPair = false,
 ): string {
   if (!door.width || !door.height) return description;
-
-  const w   = formatInches(door.width);
-  const h   = formatInches(door.height);
-  const h2  = formatInches(2 * door.height);
   const dim = resolveDimension(itemName, door, isPair);
-
-  const replaced = description
-    .replace(/x\s*2-height/gi,          h2)
-    .replace(/x\s*height/gi,            h)
-    // "x req. width" / "x req width" — PDF variant meaning "× required width"
-    .replace(/x\s*req\.?\s*width/gi,    w)
-    .replace(/x\s*width/gi,             w)
-    .replace(/x\s*length/gi,            dim?.value ?? 'x length');
-
-  // No dimension tokens found, but item has a known rule → append computed value
-  if (replaced === description && dim !== null) {
-    return `${description} [${dim.value}]`;
-  }
-  return replaced;
+  if (!dim) return description;
+  return `${description} [${dim.value}]`;
 }

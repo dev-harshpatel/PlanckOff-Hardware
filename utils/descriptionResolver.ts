@@ -1,25 +1,10 @@
 import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
-import { resolveDescriptionPlaceholders, resolveDimension } from './dimensionRules';
-
-function hasPlaceholderTokens(description: string): boolean {
-  return /x\s*(req\.?\s*)?(width|height|length|2-height)/i.test(description);
-}
-
-function shouldResolve(
-  description: string,
-  itemName: string,
-  door: Door,
-  isPair: boolean,
-): boolean {
-  if (hasPlaceholderTokens(description)) return true;
-  // Also resolve items that have a dimension rule even without tokens
-  return resolveDimension(itemName, door, isPair) !== null;
-}
+import { resolveDescriptionPlaceholders } from './dimensionRules';
 
 /**
- * Resolve processedDescription for all items in a set using the first assigned door.
- * Returns a new HardwareSet — no mutation.
+ * Append the calculated dimension value to all items in a set that have a known rule.
+ * Uses the first assigned door's dimensions. Returns a new HardwareSet — no mutation.
  * If assignedDoors is empty, returns the set unchanged.
  */
 export function resolveSetDescriptions(
@@ -35,9 +20,7 @@ export function resolveSetDescriptions(
     (door.leafCountDisplay?.toLowerCase().includes('pair') ?? false);
 
   const resolvedItems = set.items.map((item) => {
-    if (!shouldResolve(item.description, item.name, door, isPair)) {
-      return item;
-    }
+    if (item.userDescription !== undefined) return item;
 
     const resolved = resolveDescriptionPlaceholders(
       item.description,
@@ -46,7 +29,6 @@ export function resolveSetDescriptions(
       isPair,
     );
 
-    // Only store if the resolved string actually differs from the raw description
     if (resolved === item.description) return item;
 
     return { ...item, processedDescription: resolved };
@@ -152,9 +134,8 @@ export function resolveAllMergedSets(
     const fakeDoor = { width, height } as unknown as Door;
 
     const resolvedItems = set.hardwareItems.map((item) => {
+      if (item.userDescription !== undefined) return item;
       const description = item.description ?? '';
-      const hasTokens = /x\s*(req\.?\s*)?(width|height|length|2-height)/i.test(description);
-      if (!hasTokens && resolveDimension(item.item, fakeDoor, isPair) === null) return item;
 
       const resolved = resolveDescriptionPlaceholders(description, item.item, fakeDoor, isPair);
       if (resolved === description) return item;

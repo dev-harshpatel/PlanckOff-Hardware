@@ -64,6 +64,8 @@ export const exportDoorSchedule = async (
   config: DoorScheduleExportConfig,
   projectName: string,
   elevationTypes: ElevationType[] = [],
+  projectLocation?: string,
+  projectProvince?: string,
 ): Promise<void> => {
   try {
     // ORD-04: explicit spread preserves call-site array order (UI display order)
@@ -73,7 +75,7 @@ export const exportDoorSchedule = async (
         await exportDoorScheduleToExcel(orderedDoors, config, projectName, elevationTypes);
         break;
       case 'pdf':
-        await exportDoorScheduleToPDF(orderedDoors, config, projectName, elevationTypes);
+        await exportDoorScheduleToPDF(orderedDoors, config, projectName, elevationTypes, projectLocation, projectProvince);
         break;
       case 'csv':
         exportDoorScheduleToCSV(orderedDoors, config, projectName, elevationTypes);
@@ -92,7 +94,9 @@ export const exportHardwareSet = async (
   doors: Door[],
   hardwareSets: HardwareSet[],
   config: HardwareSetExportConfig,
-  projectName: string
+  projectName: string,
+  projectLocation?: string,
+  projectProvince?: string,
 ): Promise<void> => {
   try {
     // ORD-04: explicit spreads preserve call-site array order
@@ -106,7 +110,7 @@ export const exportHardwareSet = async (
         await exportHardwareSetToExcel(usageStats, config, projectName);
         break;
       case 'pdf':
-        await exportHardwareSetToPDF(usageStats, config, projectName);
+        await exportHardwareSetToPDF(usageStats, config, projectName, projectLocation, projectProvince);
         break;
       case 'csv':
         exportHardwareSetToCSV(usageStats, config, projectName);

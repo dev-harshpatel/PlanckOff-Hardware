@@ -26,7 +26,7 @@ if (fs.existsSync(envLocalPath)) {
   }
 }
 
-process.env.NODE_ENV = 'development';
+(process.env as Record<string, string>).NODE_ENV = 'development';
 
 async function main() {
   const pdfDir   = path.join(process.cwd(), 'debug-extractions', 'pdf-extraction');

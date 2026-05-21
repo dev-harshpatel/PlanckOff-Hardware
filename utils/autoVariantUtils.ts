@@ -26,7 +26,7 @@ function getDoorProfileKey(door: Door): string {
 export function autoCreateVariants(
     sets: HardwareSet[],
     doors: Door[],
-): { sets: HardwareSet[]; doors: Door[] } {
+): { sets: HardwareSet[]; doors: Door[]; variantsCreated: number } {
     const baseSets = sets.filter(s => !s.parentSetId);
 
     let updatedSets = [...sets];

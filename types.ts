@@ -57,6 +57,7 @@ export interface HardwareItem {
   manufacturer: string;
   description: string;
   processedDescription?: string; // dimension-resolved description; display as processedDescription ?? description
+  userDescription?: string;      // manual override; takes precedence over processedDescription
   finish: string;
   
   // Phase 21: Standards Compliance & Enhanced Specifications
@@ -75,6 +76,8 @@ export interface HardwareItem {
   extendedPrice?: number;
   laborCost?: number;
   installationTime?: number; // minutes
+  unitCost?: number;   // alias for unitPrice used in procurement/export services
+  category?: string;   // item category used in export services
 }
 
 // New explicit type to replace `keyof Omit<HardwareItem, 'id'>`
@@ -195,6 +198,8 @@ export interface HingeSpec {
     quantity?: number; // Alias for count
     ballBearing?: boolean;
     material?: string;
+    nrp?: boolean;           // Non-removable pin
+    electricWire?: boolean;  // Electric wire transfer hinge
 }
 
 export interface HardwarePrepSpec {
@@ -217,13 +222,15 @@ export interface ElectrificationSpec {
     transferType?: string;
     wiringDiagram?: string;
     powerSupplyLocation?: string;
-    
+
     // Additional features
     eptRequired?: boolean;
     wiringMethod?: 'EPT' | 'Loop' | 'Wireless' | 'Hinge';
     doorContact?: boolean;
     rxSwitch?: boolean;
     latchBoltMonitor?: boolean;
+    accessControlType?: string; // e.g. 'Card Reader', 'Keypad', 'Biometric'
+    requestToExit?: boolean;    // REX device required
 }
 
 // Sectioned data from structured Excel uploads (mirrors the BASIC INFORMATION / DOOR / FRAME / HARDWARE column groups)
@@ -255,6 +262,10 @@ export interface DoorSectionData {
   stcRating?: string;
   doorUndercut?: string;
   doorIncludeExclude?: string;
+  width?: string;
+  height?: string;
+  thickness?: string;
+  fireRating?: string;
 }
 
 export interface FrameSectionData {
@@ -390,6 +401,17 @@ export interface Door {
   casing?: string;
   frameIncludeExclude?: string;
   hardwareIncludeExclude?: string;
+  // Legacy/alias fields used by older services and utilities
+  liftCount?: number;         // alias for leafCount used in reports
+  hardwareSet?: string;       // alias for assignedHardwareSet?.name used in export services
+  tag?: string;               // alias for doorTag used in export services
+  material?: string;          // alias for doorMaterial used in export services
+  coreType?: string;          // alias for doorCore used in export services
+  faceType?: string;          // alias for doorFace used in export services
+  veneerType?: string;        // door veneer type used in export services
+  silencerQty?: number;       // silencer quantity override
+  schedule?: string;          // schedule reference used in CSV parser
+
   // Sectioned representation from structured Excel uploads
   sections?: DoorScheduleSections;
 }
@@ -475,6 +497,8 @@ export interface ProjectValidationReport {
 
 // Phase 22: Professional Submittal Package Types
 
+export type SubmittalStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Resubmit' | 'Reviewed';
+
 export interface SubmittalMetadata {
   projectName: string;
   projectNumber: string;
@@ -482,7 +506,15 @@ export interface SubmittalMetadata {
   submittalDate: Date;
   revisionNumber: number;
   preparedBy: string;
-  status: 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Resubmit';
+  status: SubmittalStatus;
+  companyLogoUrl?: string;
+  projectAddress?: string;
+  architect?: string;
+  contractor?: string;
+  revisionDate?: Date;
+  notes?: string;
+  reviewedBy?: string;
+  approvedBy?: string;
 }
 
 export interface SubmittalRevision {
@@ -493,6 +525,15 @@ export interface SubmittalRevision {
   reviewedBy?: string;
   approvalStatus?: 'Approved' | 'Approved as Noted' | 'Rejected' | 'Resubmit';
   comments?: string;
+  // Extended fields used by RevisionHistory component
+  status?: SubmittalStatus;
+  changedBy?: string;
+  revisionDate?: Date;
+  changeDescription?: string;
+  affectedDoors?: string[];
+  affectedItems?: string[];
+  reviewComments?: string;
+  reviewDate?: Date;
 }
 
 export interface TableOfContentsEntry {
@@ -521,6 +562,8 @@ export interface ManufacturerCutSheet {
   fileName?: string;
   uploadDate: Date;
   notes?: string;
+  linkedDoorIds?: string[];
+  linkedHardwareItemIds?: string[];
 }
 
 // Phase 23: Procurement Summary Types (already defined in procurementSummaryService.ts)
@@ -740,4 +783,73 @@ export interface ValidationReport<T> {
     errorCount: number;
     warningCount: number;
   };
+}
+
+// ===== ESTIMATION REPORT =====
+
+export interface HardwareSummaryItemDetails {
+  name: string;
+  manufacturer: string;
+  description: string;
+  processedDescription?: string;
+  finish: string;
+  doorMaterial?: string;
+  [key: string]: unknown;
+}
+
+export interface HardwareSummary {
+  item: HardwareSummaryItemDetails;
+  totalQuantity: number;
+  sourceSets: string[];
+}
+
+export interface Report {
+  totalDoors: number;
+  doorsWithHardware: number;
+  hardwareSummary: Record<string, HardwareSummary>;
+}
+
+// ===== FINISH SYSTEM =====
+
+export interface DoorFinishSystem {
+  id: string;
+  name: string;
+  basePrep?: 'Factory Primed' | 'Unfinished' | 'Pre-finished' | 'Field Applied';
+  finishType?: 'Paint' | 'Stain' | 'Clear Coat' | 'Powder Coat' | 'Anodized' | 'Mill Finish' | 'None';
+  sheen?: 'Flat' | 'Eggshell' | 'Satin' | 'Semi-Gloss' | 'Gloss';
+  colorName?: string;
+  manufacturer?: string;
+  productCode?: string;
+  doorFinish?: string;
+  frameFinish?: string;
+  hardwareFinish?: string;
+  notes?: string;
+}
+
+// ===== ML OPS =====
+
+export interface TrainingExample {
+  id?: string;
+  timestamp: string;
+  projectId?: string;
+  inputContext: {
+    doorType?: string;
+    fireRating?: string;
+    location?: string;
+    hardwarePrep?: string;
+    material?: string;
+    [key: string]: unknown;
+  };
+  userCorrection: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+}
+
+export interface MLModelMetrics {
+  accuracy?: number;
+  totalPredictions?: number;
+  correctPredictions?: number;
+  lastUpdated?: string;
+  totalExamples?: number;
+  lastLearned?: string;
 }

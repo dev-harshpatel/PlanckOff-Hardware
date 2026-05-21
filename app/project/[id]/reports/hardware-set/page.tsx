@@ -26,6 +26,8 @@ export default function HardwareSetReportPage() {
   const [doors, setDoors] = useState<Door[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [projectName, setProjectName] = useState('');
+  const [projectLocation, setProjectLocation] = useState('');
+  const [projectProvince, setProjectProvince] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,6 +46,8 @@ export default function HardwareSetReportPage() {
         ]);
 
         setProjectName(projJson?.data?.name ?? '');
+        setProjectLocation(projJson?.data?.location ?? '');
+        setProjectProvince(projJson?.data?.province ?? '');
 
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
@@ -84,7 +88,7 @@ export default function HardwareSetReportPage() {
 
   const handleExport = (config: HardwareSetExportConfig) => {
     try {
-      exportHardwareSet(doors, hardwareSets, config, projectName);
+      exportHardwareSet(doors, hardwareSets, config, projectName, projectLocation, projectProvince);
     } catch (error) {
       console.error('Export failed:', error);
       addToast({ type: 'error', message: PDF_ERRORS.EXPORT_FAILED.message, details: PDF_ERRORS.EXPORT_FAILED.action });

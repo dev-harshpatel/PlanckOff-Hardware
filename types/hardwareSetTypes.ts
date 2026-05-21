@@ -7,5 +7,5 @@ export interface HardwareSetExportConfig {
     optionalColumns: string[];
     groupBy: 'set' | 'type' | 'manufacturer' | 'flat' | 'buildingTag' | 'buildingLocation' | 'doorMaterial';
     usageDisplay: string[];
-    format: 'xlsx' | 'pdf';
+    format: 'xlsx' | 'pdf' | 'csv';
 }

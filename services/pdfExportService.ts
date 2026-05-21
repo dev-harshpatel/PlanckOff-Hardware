@@ -125,6 +125,8 @@ export const exportDoorScheduleToPDF = async (
   config: DoorScheduleExportConfig,
   projectName: string,
   elevationTypes: ElevationType[] = [],
+  projectLocation?: string,
+  projectProvince?: string,
 ): Promise<void> => {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
@@ -145,11 +147,10 @@ export const exportDoorScheduleToPDF = async (
 
   // Create table using shared theme
   autoTable(doc, {
-    ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl }),
+    ...buildAutoTableOptions(DEFAULT_THEME, 'Door Schedule', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl, projectLocation, projectProvince }),
     head: [headers],
     body: rows,
     startY: HEADER_BAR_HEIGHT + 2,
-    columnStyles: { cellWidth: 'wrap' } as any,
   });
 
   // Add summary if requested
@@ -186,18 +187,16 @@ export const exportDoorScheduleToPDF = async (
 };
 
 // Format usage for Hardware Set reports
-const formatUsage = (doorTags: string[], mode: 'all' | 'count' | 'preview'): string => {
+const formatUsage = (doorTags: string[], mode: string | string[]): string => {
   const sorted = [...new Set(doorTags)].sort();
+  const modes = Array.isArray(mode) ? mode : [mode];
 
-  switch (mode) {
-    case 'all':
-      return sorted.join(', ');
-    case 'count':
-      return `${sorted.length} doors`;
-    case 'preview':
-      if (sorted.length <= 5) return sorted.join(', ');
-      return `${sorted.slice(0, 5).join(', ')}... +${sorted.length - 5}`;
+  if (modes.includes('count')) return `${sorted.length} doors`;
+  if (modes.includes('preview')) {
+    if (sorted.length <= 5) return sorted.join(', ');
+    return `${sorted.slice(0, 5).join(', ')}... +${sorted.length - 5}`;
   }
+  return sorted.join(', ');
 };
 
 // Build headers for Hardware Set
@@ -255,7 +254,9 @@ const buildHardwareSetRow = (item: any, config: HardwareSetExportConfig): any[] 
 export const exportHardwareSetToPDF = async (
   usageStats: any[],
   config: HardwareSetExportConfig,
-  projectName: string
+  projectName: string,
+  projectLocation?: string,
+  projectProvince?: string,
 ): Promise<void> => {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
@@ -269,7 +270,7 @@ export const exportHardwareSetToPDF = async (
   const pageWidth   = doc.internal.pageSize.getWidth();
   const pageHeight  = doc.internal.pageSize.getHeight();
   const logoDataUrl = await loadLogoDataUrl();
-  const themeOpts   = buildAutoTableOptions(DEFAULT_THEME, 'Hardware Set Report', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl });
+  const themeOpts   = buildAutoTableOptions(DEFAULT_THEME, 'Hardware Set Report', exportDate, pageWidth, PDF_MARGIN, { projectName, logoDataUrl, projectLocation, projectProvince });
 
   const headers = buildHardwareSetHeaders(config);
 

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getDoorConflicts, formatDimension } from '../../utils/hardwareUtils';
 import type { AssignedDoorConflictMap } from '../../utils/doorValidation';
-import { DimensionBadge } from './DimensionBadge';
+import { DescriptionCell } from './DescriptionCell';
 import { resolveDimension } from '../../utils/dimensionRules';
 
 const renderConflictIcon = (message: string, isCritical: boolean) => {
@@ -33,6 +33,7 @@ interface HardwareSetExpandedRowProps {
     handleToggleDoorSelection: (setId: string, doorId: string) => void;
     handleToggleAllDoorsInSection: (setId: string, doors: Door[], select: boolean) => void;
     handleGeneratePrep: (set: HardwareSet) => Promise<void>;
+    onItemPatch: (itemId: string, patch: Partial<HardwareItem>) => void;
 }
 
 export function HardwareSetExpandedRow({
@@ -50,6 +51,7 @@ export function HardwareSetExpandedRow({
     handleToggleDoorSelection,
     handleToggleAllDoorsInSection,
     handleGeneratePrep,
+    onItemPatch,
 }: HardwareSetExpandedRowProps) {
     return (
         <tr className="bg-[var(--bg-subtle)]">
@@ -127,15 +129,13 @@ export function HardwareSetExpandedRow({
                                                     {item.manufacturer || '—'}
                                                 </td>
                                                 <td className="px-3 py-2 text-[var(--text-muted)]">
-                                                    {item.processedDescription ?? item.description}
-                                                    {repDoor && !dimensionsVary && !item.processedDescription && (
-                                                        <DimensionBadge
-                                                            itemName={item.name}
-                                                            door={repDoor}
-                                                            isPair={(repDoor.leafCount ?? 1) > 1}
-                                                        />
-                                                    )}
-                                                    {repDoor && dimensionsVary && !item.processedDescription && resolveDimension(item.name, repDoor) && (
+                                                    <DescriptionCell
+                                                        item={item}
+                                                        door={repDoor}
+                                                        isPair={repDoor ? (repDoor.leafCount ?? 1) > 1 : false}
+                                                        onItemPatch={onItemPatch}
+                                                    />
+                                                    {repDoor && dimensionsVary && !item.processedDescription && !item.userDescription && resolveDimension(item.name, repDoor) && (
                                                         <span
                                                             className="inline-flex items-center ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border-subtle)] whitespace-nowrap align-middle"
                                                             title="Assigned doors have different dimensions — see Assigned Doors tab"

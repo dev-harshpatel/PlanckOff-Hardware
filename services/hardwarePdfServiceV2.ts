@@ -375,7 +375,7 @@ async function tier2Extract(
   projectId: string,
   warnings: string[],
 ): Promise<{ sets: ExtractedHardwareSet[]; warnings: string[] }> {
-  warnings.push('Tier 1 failed or file too large — using Tier 2 (server-side text extraction).');
+  console.warn('[hardwarePdf] Tier 1 failed or file too large — using Tier 2 (server-side text extraction).');
 
   // Extract text server-side with position-aware row reconstruction
   console.log('[hardwarePdf:t2] Starting pdfjs text extraction…');
@@ -504,14 +504,10 @@ export async function extractHardwareSetsFromPdf(
       warnings.push(...result.warnings);
       tier = 1;
     } catch (tier1Err) {
-      warnings.push(
-        `Tier 1 failed: ${tier1Err instanceof Error ? tier1Err.message : String(tier1Err)}`,
-      );
+      console.warn(`[hardwarePdf] Tier 1 failed: ${tier1Err instanceof Error ? tier1Err.message : String(tier1Err)} — falling back to Tier 2`);
     }
   } else {
-    warnings.push(
-      `File is ${fileSizeMb.toFixed(1)} MB — exceeds 15 MB Tier 1 limit, using Tier 2 directly.`,
-    );
+    console.warn(`[hardwarePdf] File is ${fileSizeMb.toFixed(1)} MB — exceeds 15 MB Tier 1 limit, using Tier 2 directly.`);
   }
 
   // ── Tier 2 fallback (if Tier 1 didn't run, failed, or returned nothing) ──

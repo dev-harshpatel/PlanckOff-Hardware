@@ -26,6 +26,8 @@ export default function DoorScheduleReportPage() {
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [elevationTypes, setElevationTypes] = useState<ElevationType[]>([]);
   const [projectName, setProjectName] = useState('');
+  const [projectLocation, setProjectLocation] = useState('');
+  const [projectProvince, setProjectProvince] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export default function DoorScheduleReportPage() {
         setHardwareSets(sets);
         setDoors(loadedDoors);
         setProjectName(projJson?.data?.name ?? '');
+        setProjectLocation(projJson?.data?.location ?? '');
+        setProjectProvince(projJson?.data?.province ?? '');
         setElevationTypes(projJson?.data?.elevationTypes ?? []);
       } catch (err) {
         console.error('[DoorScheduleReport] Load failed:', err);
@@ -87,6 +91,8 @@ export default function DoorScheduleReportPage() {
           hardwareSets={hardwareSets}
           elevationTypes={elevationTypes}
           projectName={projectName}
+          projectLocation={projectLocation}
+          projectProvince={projectProvince}
         />
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { HardwareSet, Door } from '../../types';
+import { HardwareSet, Door, HardwareItem } from '../../types';
 import HardwareSetModal from './HardwareSetModal';
 import UploadConfirmationModal from '../upload/UploadConfirmationModal';
 import Tooltip from '../shared/Tooltip';
@@ -99,6 +99,20 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         projectId, hardwareSets, doors, isLoading,
         onProcessUploads, onSaveSet, onDeleteSet, onBulkDeleteSets, onCreateVariant,
     });
+
+    const handleItemPatch = React.useCallback(
+        (setId: string, itemId: string, patch: Partial<HardwareItem>) => {
+            const set = hardwareSets.find((s) => s.id === setId);
+            if (!set) return;
+            onSaveSet({
+                ...set,
+                items: set.items.map((item) =>
+                    item.id === itemId ? { ...item, ...patch } : item,
+                ),
+            });
+        },
+        [hardwareSets, onSaveSet],
+    );
 
     const SortIcon: React.FC<{ columnKey: 'name' | 'doors' | 'items' }> = ({ columnKey }) => {
         if (sortConfig?.key !== columnKey) return <ChevronDown className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-40" />;
@@ -449,6 +463,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                 handleToggleDoorSelection={handleToggleDoorSelection}
                                                 handleToggleAllDoorsInSection={handleToggleAllDoorsInSection}
                                                 handleGeneratePrep={handleGeneratePrep}
+                                                onItemPatch={(itemId, patch) => handleItemPatch(set.id, itemId, patch)}
                                             />
                                         )}
                                     </React.Fragment>

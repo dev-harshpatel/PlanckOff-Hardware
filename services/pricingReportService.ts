@@ -44,7 +44,7 @@ export function exportPricingReportToExcel(
     const orderedHardwareSets = [...hardwareSets];
 
     // Generate pricing report
-    const report = generatePricingReport(orderedDoors, orderedHardwareSets, priceBook, settings, metadata);
+    const report = generatePricingReport(orderedDoors, orderedHardwareSets, priceBook, settings, { ...metadata, generatedBy: metadata.preparedBy });
 
     // Create workbook
     const wb = XLSX.utils.book_new();
@@ -399,7 +399,7 @@ export function generatePricingReportData(
         terms?: string;
     }
 ): PricingReport {
-    return generatePricingReport(doors, hardwareSets, priceBook, settings, metadata);
+    return generatePricingReport(doors, hardwareSets, priceBook, settings, { ...metadata, generatedBy: metadata.preparedBy });
 }
 
 // ===== EXPORT =====

@@ -54,6 +54,9 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({
         }
 
         onAddRevision({
+            description: newRevisionData.changeDescription,
+            date: new Date(),
+            preparedBy: newRevisionData.changedBy,
             changedBy: newRevisionData.changedBy,
             changeDescription: newRevisionData.changeDescription,
             affectedDoors: newRevisionData.affectedDoors,
