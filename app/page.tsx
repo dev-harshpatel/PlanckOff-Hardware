@@ -20,15 +20,23 @@ const Dashboard = dynamic(() => import('@/views/Dashboard'), {
 export default function HomePage() {
   const router = useRouter();
   const { projects, trash, projectsHydrated, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { startNavigation } = useNavigationLoading();
   const { addToast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(true);
 
   useEffect(() => {
-    // Fire immediately — runs in parallel with AuthContext's /api/auth/me check.
-    // If the session cookie isn't set yet the server returns 401; we silently ignore it.
+    // Wait for auth to resolve before making role-gated requests.
+    // On first render user is null (auth loading) — firing early causes a 403 for Client.
+    if (isAuthLoading) return;
+
+    // Client users have no access to /api/team/members.
+    if (user?.role === 'Client') {
+      setIsLoadingTeamMembers(false);
+      return;
+    }
+
     fetch('/api/team/members', { credentials: 'include' })
       .then(res => res.ok ? res.json() : { data: [] })
       .then((json: { data?: Array<{ id: string; name: string; email: string; role: string; status: string }> }) => {
@@ -42,7 +50,7 @@ export default function HomePage() {
       })
       .catch(() => {})
       .finally(() => setIsLoadingTeamMembers(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthLoading, user?.role]);
 
   if (!projectsHydrated) {
     return <DashboardSkeleton />;

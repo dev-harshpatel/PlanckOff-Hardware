@@ -8,22 +8,38 @@ import {
   hardDeleteProject,
   restoreProject,
 } from '@/lib/db/projects';
+import { isClientAssignedToProject } from '@/lib/db/clientProjectAssignments';
 import { invalidateProjects } from '@/lib/cache/projects';
 import type { Project } from '@/types';
 
 export const GET = withAuth(
-  async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+  async (_req: NextRequest, { user }: AuthContext, params?: RouteParams) => {
     const id = params?.id as string;
+
+    if (user.role === 'Client') {
+      const allowed = await isClientAssignedToProject(user.id, id);
+      // Return the same 404 shape regardless — don't reveal that the project
+      // exists but is inaccessible.
+      if (!allowed) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    }
+
     const { data, error } = await getProjectById(id);
     if (error) return NextResponse.json({ error: error.message }, { status: 404 });
     return NextResponse.json({ data });
   },
 );
 
-export const PUT = withRoleAuth(
-  ['Administrator', 'Team Lead'],
-  async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+export const PUT = withAuth(
+  async (req: NextRequest, { user }: AuthContext, params?: RouteParams) => {
     const id = params?.id as string;
+
+    if (user.role === 'Client') {
+      const allowed = await isClientAssignedToProject(user.id, id);
+      if (!allowed) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    } else if (!['Administrator', 'Team Lead', 'Estimator'].includes(user.role)) {
+      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+    }
+
     let updates: Partial<Project>;
     try {
       updates = (await req.json()) as Partial<Project>;

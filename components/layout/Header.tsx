@@ -46,6 +46,7 @@ const TEAM_ROLES: RoleName[] = ['Administrator', 'Team Lead'];
 const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, user, onLogout, pendingCount = 0 }) => {
   const { theme, setTheme } = useTheme();
   const canManageTeam = TEAM_ROLES.includes(user.role);
+  const isClient = user.role === 'Client';
 
   return (
     <header className="bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-40 flex-shrink-0">
@@ -58,6 +59,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
               width={110}
               height={26}
               priority
+              style={{ height: 'auto' }}
             />
           </button>
 
@@ -80,20 +82,22 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
           >
             Dashboard
           </NavLink>
-          <NavLink
-            isActive={currentPage === 'database'}
-            onClick={() => onNavigate('database')}
-          >
-            <span className="relative inline-flex items-center">
-              Database
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-2.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                </span>
-              )}
-            </span>
-          </NavLink>
+          {!isClient && (
+            <NavLink
+              isActive={currentPage === 'database'}
+              onClick={() => onNavigate('database')}
+            >
+              <span className="relative inline-flex items-center">
+                Database
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-2.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                )}
+              </span>
+            </NavLink>
+          )}
           {canManageTeam && (
             <NavLink
               isActive={currentPage === 'team'}
@@ -102,15 +106,17 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
               Team Management
             </NavLink>
           )}
-          <NavLink
-            isActive={currentPage === 'settings'}
-            onClick={() => onNavigate('settings')}
-          >
-            <span className="inline-flex items-center gap-1">
-              <Settings className="h-3.5 w-3.5" />
-              Settings
-            </span>
-          </NavLink>
+          {!isClient && (
+            <NavLink
+              isActive={currentPage === 'settings'}
+              onClick={() => onNavigate('settings')}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Settings className="h-3.5 w-3.5" />
+                Settings
+              </span>
+            </NavLink>
+          )}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"

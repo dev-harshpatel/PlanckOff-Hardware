@@ -157,6 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
     const canCreate = userRole === 'Administrator' || userRole === 'Team Lead';
     const canDragProjects = userRole === 'Administrator' || userRole === 'Team Lead';
+    const canViewTrash = userRole !== 'Client';
 
     return (
         <>
@@ -175,19 +176,21 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => openTrash()}
-                                className="relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
-                                title="Trash"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Trash
-                                {trash.length > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                                        {trash.length}
-                                    </span>
-                                )}
-                            </button>
+                            {canViewTrash && (
+                                <button
+                                    onClick={() => openTrash()}
+                                    className="relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+                                    title="Trash"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Trash
+                                    {trash.length > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                                            {trash.length}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                             {canCreate && (
                                 <Button
                                     size="sm"
@@ -238,6 +241,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     isLoadingTeamMembers={isLoadingTeamMembers}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
+                    showMemberFilter={userRole !== 'Client'}
                 />
 
                 {/* Projects content */}

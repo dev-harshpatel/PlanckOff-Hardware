@@ -13,6 +13,7 @@ export interface DashboardFiltersProps {
     isLoadingTeamMembers: boolean;
     viewMode: 'grid' | 'list';
     onViewModeChange: (mode: 'grid' | 'list') => void;
+    showMemberFilter?: boolean;
 }
 
 export function DashboardFilters({
@@ -24,6 +25,7 @@ export function DashboardFilters({
     isLoadingTeamMembers,
     viewMode,
     onViewModeChange,
+    showMemberFilter = true,
 }: DashboardFiltersProps) {
     return (
         <div className="bg-[var(--bg)] border-b border-[var(--border)] px-6 py-3 flex items-center gap-3 flex-shrink-0">
@@ -37,18 +39,20 @@ export function DashboardFilters({
                     className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-ring)] focus:border-[var(--primary-ring)] bg-[var(--bg)] text-[var(--text)] placeholder:text-[var(--text-faint)]"
                 />
             </div>
-            <div className="relative min-w-[200px]">
-                <Filter className="absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" />
-                <SelectDropdown
-                    value={selectedMemberFilter}
-                    onChange={onMemberFilterChange}
-                    options={memberFilterOptions}
-                    disabled={isLoadingTeamMembers}
-                    className="w-full"
-                    triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    contentClassName="mt-1"
-                />
-            </div>
+            {showMemberFilter && (
+                <div className="relative min-w-[200px]">
+                    <Filter className="absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" />
+                    <SelectDropdown
+                        value={selectedMemberFilter}
+                        onChange={onMemberFilterChange}
+                        options={memberFilterOptions}
+                        disabled={isLoadingTeamMembers}
+                        className="w-full"
+                        triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        contentClassName="mt-1"
+                    />
+                </div>
+            )}
             <div className="ml-auto flex items-center gap-1">
                 <button
                     onClick={() => onViewModeChange('grid')}

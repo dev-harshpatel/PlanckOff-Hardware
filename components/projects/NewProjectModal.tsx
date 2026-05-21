@@ -266,28 +266,32 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="projectNumber" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Project #
-              </Label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <span className="text-sm font-medium text-gray-400">#</span>
+            {teamMembers.length > 0 && (
+              <div>
+                <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                  Assign To <span className="text-red-500">*</span>
+                </Label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
+                    <UserIcon className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <Select value={projectData.assignedTo} onValueChange={(value) => setProjectData(prev => ({ ...prev, assignedTo: value }))} disabled={isLoading}>
+                    <SelectTrigger id="assignedTo" className="h-11 rounded-lg pl-9">
+                      <SelectValue placeholder="Select team member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teamMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name} ({member.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Input
-                  type="text"
-                  name="projectNumber"
-                  id="projectNumber"
-                  value={projectData.projectNumber}
-                  onChange={handleInputChange}
-                  placeholder="Auto-generated if empty"
-                  className="h-11 rounded-lg pl-9"
-                  disabled={isLoading}
-                />
               </div>
-            </div>
+            )}
 
-            <div>
+            <div className={teamMembers.length === 0 ? 'col-span-2' : ''}>
               <Label htmlFor="dueDate" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                 Due Date <span className="text-red-500">*</span>
               </Label>
@@ -307,31 +311,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
               </div>
             </div>
           </div>
-
-          {teamMembers.length > 0 && (
-            <div>
-              <Label htmlFor="assignedTo" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Assign To <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
-                  <UserIcon className="h-4 w-4 text-gray-400" />
-                </div>
-                <Select value={projectData.assignedTo} onValueChange={(value) => setProjectData(prev => ({ ...prev, assignedTo: value }))} disabled={isLoading}>
-                  <SelectTrigger id="assignedTo" className="h-11 rounded-lg pl-9">
-                    <SelectValue placeholder="Select team member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teamMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name} ({member.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
 
           <div>
             <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
