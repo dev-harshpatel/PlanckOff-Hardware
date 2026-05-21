@@ -46,6 +46,8 @@ export function useDoorTableState({
         for (const s of hardwareSets) {
             const full = s.name.trim().toLowerCase();
             names.add(full);
+            // Comma-space-normalized: "s2,s4,s5..." matches set named "s2, s4, s5..."
+            names.add(full.replace(/\s*,\s*/g, ','));
             // Also accept the code prefix so "P200" is valid when the set is named "P200 – Elevator Lobby"
             const sepIdx = full.search(/[\s\-–—_]/);
             if (sepIdx > 0) names.add(full.slice(0, sepIdx));
