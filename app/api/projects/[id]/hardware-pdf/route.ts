@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { extractHardwareSetsFromPdf } from '@/services/hardwarePdfServiceV2';
 import { generatePrepForAllSets } from '@/services/hardwarePrepService';
@@ -7,7 +7,7 @@ import { upsertHardwarePdfExtraction, getHardwarePdfExtraction } from '@/lib/db/
 import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
 
-export const GET = withAuth(
+export const GET = withProjectAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
     const { data, error } = await getHardwarePdfExtraction(projectId);
@@ -21,7 +21,7 @@ export const maxDuration = 120;
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
-export const POST = withAuth(
+export const POST = withProjectAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
@@ -185,7 +185,7 @@ export const POST = withAuth(
 
 // Patch the stored extraction with an updated set list (e.g. after a variant is created).
 // Only updates extractedJson — fileName / uploadedBy are preserved from the existing row.
-export const PUT = withAuth(
+export const PUT = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 

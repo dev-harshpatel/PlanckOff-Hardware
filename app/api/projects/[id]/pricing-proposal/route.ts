@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { getProposalProfit, upsertProposalProfit } from '@/lib/db/pricing';
 
-export const GET = withAuth(
+export const GET = withProjectAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
     const { data, error } = await getProposalProfit(projectId);
@@ -12,7 +12,7 @@ export const GET = withAuth(
   },
 );
 
-export const PUT = withAuth(
+export const PUT = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 

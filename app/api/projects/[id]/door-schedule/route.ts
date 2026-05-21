@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { parseDoorSchedule, type DoorScheduleResult } from '@/services/doorScheduleService';
 import { upsertDoorScheduleImport, getDoorScheduleImport, type DoorScheduleRow } from '@/lib/db/hardware';
@@ -34,7 +34,7 @@ function saveExcelDebugFiles(projectId: string, filename: string, result: DoorSc
   }
 }
 
-export const GET = withAuth(
+export const GET = withProjectAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
     const { data, error } = await getCachedDoorSchedule(projectId);
@@ -45,7 +45,7 @@ export const GET = withAuth(
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
-export const POST = withAuth(
+export const POST = withProjectAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
@@ -129,7 +129,7 @@ export const POST = withAuth(
 // Body: { doorTag: string; sections: DoorScheduleRow['sections'] }
 // ---------------------------------------------------------------------------
 
-export const PATCH = withAuth(
+export const PATCH = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 

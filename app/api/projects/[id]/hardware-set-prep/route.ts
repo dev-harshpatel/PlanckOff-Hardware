@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { generatePrepForOneSet } from '@/services/hardwarePrepService';
 import {
@@ -23,7 +23,7 @@ import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 
 export const maxDuration = 60;
 
-export const POST = withAuth(
+export const POST = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 

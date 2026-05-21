@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import {
   getHardwarePdfExtraction,
@@ -22,7 +22,7 @@ import {
 import type { MergedHardwareSet, TrashItem } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 
-export const GET = withAuth(
+export const GET = withProjectAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
     const { data, error } = await getProjectHardwareFinal(projectId);
@@ -39,7 +39,7 @@ export const GET = withAuth(
   },
 );
 
-export const POST = withAuth(
+export const POST = withProjectAuth(
   async (_req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
@@ -112,7 +112,7 @@ export const POST = withAuth(
   },
 );
 
-export const PUT = withAuth(
+export const PUT = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 
