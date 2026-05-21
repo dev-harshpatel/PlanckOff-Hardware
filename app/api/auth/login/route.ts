@@ -57,14 +57,14 @@ export async function POST(request: NextRequest) {
   if (member) {
     if (member.status !== 'Active') {
       return NextResponse.json(
-        { error: 'Account is not active. Please accept your invitation first.' },
-        { status: 403 },
+        { error: 'Invalid email or password.' },
+        { status: 401 },
       );
     }
     if (!member.passwordHash) {
       return NextResponse.json(
-        { error: 'No password set. Please accept your invitation first.' },
-        { status: 403 },
+        { error: 'Invalid email or password.' },
+        { status: 401 },
       );
     }
 
