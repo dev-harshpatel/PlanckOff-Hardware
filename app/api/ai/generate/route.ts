@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
+import { withRoleAuth } from '@/lib/auth/api-helpers';
+import type { AuthContext } from '@/lib/auth/api-helpers';
+
+const ALLOWED_PROVIDERS = ['openrouter', 'gemini'] as const;
+const ALLOWED_MODELS = [
+  'google/gemini-2.0-flash-001',
+  'google/gemini-2.5-flash',
+  'gemini-2.0-flash-exp',
+  'gemini-2.5-flash',
+] as const;
 
 interface GenerateRequestBody {
   prompt: string;
@@ -89,23 +99,47 @@ async function generateWithGemini(
   throw lastError ?? new Error('AI generation failed after retries.');
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = (await request.json()) as GenerateRequestBody;
-    const { prompt, schema, provider = 'openrouter', model = 'google/gemini-2.0-flash-001', temperature = 0.1 } = body;
+export const POST = withRoleAuth(
+  ['Administrator', 'Team Lead', 'Estimator'],
+  async (request: NextRequest, _ctx: AuthContext) => {
+    try {
+      const body = (await request.json()) as GenerateRequestBody;
+      const {
+        prompt,
+        schema,
+        provider = 'openrouter',
+        model = 'google/gemini-2.0-flash-001',
+        temperature = 0.1,
+      } = body;
 
-    if (!prompt || typeof prompt !== 'string') {
-      return NextResponse.json({ error: 'prompt is required and must be a string' }, { status: 400 });
+      if (!prompt || typeof prompt !== 'string') {
+        return NextResponse.json({ error: 'prompt is required and must be a string' }, { status: 400 });
+      }
+
+      // D-08: Allowlist provider
+      if (!ALLOWED_PROVIDERS.includes(provider as typeof ALLOWED_PROVIDERS[number])) {
+        return NextResponse.json({ error: 'Unsupported provider.' }, { status: 400 });
+      }
+
+      // D-08: Allowlist model
+      if (!ALLOWED_MODELS.includes(model as typeof ALLOWED_MODELS[number])) {
+        return NextResponse.json({ error: 'Unsupported model.' }, { status: 400 });
+      }
+
+      // D-08: Clamp temperature to [0, 1]
+      if (temperature < 0 || temperature > 1) {
+        return NextResponse.json({ error: 'temperature must be between 0 and 1.' }, { status: 400 });
+      }
+
+      const text =
+        provider === 'gemini'
+          ? await generateWithGemini(prompt, model, schema, temperature, 5)
+          : await generateWithOpenRouter(prompt, model, schema, temperature, 5);
+
+      return NextResponse.json({ text }, { status: 200 });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      return NextResponse.json({ error: message }, { status: 500 });
     }
-
-    const text =
-      provider === 'gemini'
-        ? await generateWithGemini(prompt, model, schema, temperature, 5)
-        : await generateWithOpenRouter(prompt, model, schema, temperature, 5);
-
-    return NextResponse.json({ text }, { status: 200 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
+  },
+);
