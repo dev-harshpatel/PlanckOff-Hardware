@@ -4,6 +4,7 @@ import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { getTeamMemberById, updateTeamMember } from '@/lib/db/team';
 import { sendInviteEmail } from '@/services/emailService';
 import { canInviteRole } from '@/constants/roles';
+import { checkRateLimit } from '@/lib/rateLimit';
 import type { RoleName } from '@/types/auth';
 
 const INVITE_EXPIRY_DAYS = 7;
@@ -21,7 +22,20 @@ const INVITE_EXPIRY_DAYS = 7;
  */
 export const POST = withRoleAuth(
   ['Administrator', 'Team Lead'],
-  async (_req: NextRequest, { user }: AuthContext, params?: RouteParams) => {
+  async (req: NextRequest, { user }: AuthContext, params?: RouteParams) => {
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      req.headers.get('x-real-ip') ??
+      'unknown';
+
+    const rl = checkRateLimit(ip);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } },
+      );
+    }
+
     const id = params?.id as string | undefined;
     if (!id) return NextResponse.json({ error: 'Missing member id.' }, { status: 400 });
 
