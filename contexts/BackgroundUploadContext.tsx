@@ -51,8 +51,8 @@ export const BackgroundUploadProvider: React.FC<{ children: React.ReactNode }> =
                 handleWorkerMessage(type, taskId, { stage, percent, result, error, data });
             };
 
-            workerRef.current.onerror = (e) => {
-                console.error("Worker Global Error:", e);
+            workerRef.current.onerror = (e: ErrorEvent) => {
+                console.error("Worker Global Error:", e.message, "at", e.filename, "line", e.lineno);
                 // If worker crashes, we might want to restart it
                 processingRef.current = false;
             };

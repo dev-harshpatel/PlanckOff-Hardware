@@ -3,6 +3,8 @@ import { Door, TrainingExample, MLModelMetrics } from '../types';
 const STORAGE_KEY_DATASET = 'tve_training_dataset';
 const STORAGE_KEY_METRICS = 'tve_ml_metrics';
 
+const canUseLocalStorage = typeof localStorage !== 'undefined';
+
 /**
  * Sanitizes text to remove PII (Emails, Phone Numbers) before storage.
  * Ensures GDPR/Privacy compliance for training data.
@@ -39,14 +41,16 @@ export const captureTrainingExample = (door: Door, originalAiPrediction: string 
         userCorrection: door.assignedHardwareSet.name, // The Ground Truth
     };
 
+    if (!canUseLocalStorage) return;
+
     // 1. Load Existing Dataset (Simulated Data Lake)
     const currentDatasetString = localStorage.getItem(STORAGE_KEY_DATASET);
     const currentDataset: TrainingExample[] = currentDatasetString ? JSON.parse(currentDatasetString) : [];
-    
+
     // 2. Add new example (Deduplicate based on content signature if needed, simple push for now)
     // We keep a rolling window of the last 200 examples to keep localStorage light
-    const updatedDataset = [example, ...currentDataset].slice(0, 200); 
-    
+    const updatedDataset = [example, ...currentDataset].slice(0, 200);
+
     localStorage.setItem(STORAGE_KEY_DATASET, JSON.stringify(updatedDataset));
 
     // 3. Update Metrics
@@ -54,6 +58,7 @@ export const captureTrainingExample = (door: Door, originalAiPrediction: string 
 };
 
 const updateMetrics = (datasetSize: number) => {
+    if (!canUseLocalStorage) return;
     const metrics: MLModelMetrics = {
         totalExamples: datasetSize,
         lastLearned: new Date().toISOString(),
@@ -66,6 +71,7 @@ const updateMetrics = (datasetSize: number) => {
  * This implements the "Continuous Learning" loop via RAG (Retrieval Augmented Generation).
  */
 export const getLearnedExamples = (): string => {
+    if (!canUseLocalStorage) return '';
     const datasetString = localStorage.getItem(STORAGE_KEY_DATASET);
     if (!datasetString) return '';
 
