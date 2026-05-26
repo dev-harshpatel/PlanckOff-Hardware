@@ -296,13 +296,21 @@ export function mergeHardwareData(
   }
 
   const unmatchedDoorCodes = new Set<string>();
+  // Doors whose hwSet column is blank — preserved as-is under the __unassigned__ sentinel.
+  const unassignedDoors: MergedDoor[] = [];
   let matchedDoorCount = 0;
 
   for (const [scheduleOrder, row] of doorRows.entries()) {
     const hwSetRaw = row.hwSet?.trim();
 
-    // Skip rows with no hwSet or NOTE# placeholders
-    if (!hwSetRaw || hwSetRaw.toUpperCase().startsWith('NOTE#') || hwSetRaw === '-') {
+    // NOTE# and '-' are explicit placeholders — skip entirely.
+    if (hwSetRaw?.toUpperCase().startsWith('NOTE#') || hwSetRaw === '-') {
+      continue;
+    }
+
+    // Empty hwSet: door exists but has no set assigned — keep it, don't drop it.
+    if (!hwSetRaw) {
+      unassignedDoors.push(toMergedDoor(row, '', scheduleOrder));
       continue;
     }
 
@@ -362,9 +370,21 @@ export function mergeHardwareData(
   // Resolve dimension placeholders in descriptions (e.g. "x width" → "46\"")
   const resolvedSets = resolveAllMergedSets(sets);
 
-  // PDF sets with no matching doors
+  // Append unassigned doors under the __unassigned__ sentinel so they survive
+  // a page refresh. The frontend filters this set out of the hardware-sets list
+  // and renders the doors with no assigned set.
+  if (unassignedDoors.length > 0) {
+    resolvedSets.push({
+      setName: '__unassigned__',
+      hardwareItems: [],
+      notes: '',
+      doors: unassignedDoors,
+    });
+  }
+
+  // PDF sets with no matching doors (exclude the __unassigned__ sentinel)
   const pdfSetsWithNoDoors = resolvedSets
-    .filter((s) => s.doors.length === 0)
+    .filter((s) => s.doors.length === 0 && s.setName !== '__unassigned__')
     .map((s) => s.setName);
 
   if (pdfSetsWithNoDoors.length > 0) {
@@ -381,7 +401,7 @@ export function mergeHardwareData(
 
   const result: MergeResult = {
     sets: resolvedSets,
-    setCount: resolvedSets.length,
+    setCount: resolvedSets.filter(s => s.setName !== '__unassigned__').length,
     matchedDoorCount,
     unmatchedDoorCount: unmatchedDoorCodes.size,
     unmatchedDoorCodes: [...unmatchedDoorCodes],

@@ -18,6 +18,7 @@ interface UseProjectUploadsOptions {
     doors: Door[];
     setDoors: React.Dispatch<React.SetStateAction<Door[]>>;
     isInitialMount: React.MutableRefObject<boolean>;
+    hasFinalJsonRef: React.MutableRefObject<boolean>;
     addToast: (toast: Omit<Toast, 'id'>) => void;
     saveToFinalJson: (sets: HardwareSet[], doors: Door[], trash?: TrashItem[]) => Promise<void>;
 }
@@ -29,6 +30,7 @@ export function useProjectUploads({
     doors,
     setDoors,
     isInitialMount,
+    hasFinalJsonRef,
     addToast,
     saveToFinalJson,
 }: UseProjectUploadsOptions) {
@@ -553,9 +555,15 @@ export function useProjectUploads({
             // Resolve dimension placeholders now that every set has homogeneous door dimensions.
             const resolvedSets = resolveAllSets(autoSets, autoDoors);
 
+            // Mark final_json as the source of truth BEFORE updating state.
+            // This prevents the Supabase realtime handler (reloadDoorSchedule) from
+            // overwriting variant door assignments with base-set assignments when it
+            // fires in response to the door_schedule_imports write above.
+            hasFinalJsonRef.current = true;
+
             if (resolvedSets.length > 0) { setHardwareSets(resolvedSets); isInitialMount.current = true; }
             if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
-            saveToFinalJson(resolvedSets, autoDoors).catch(() => {});
+            await saveToFinalJson(resolvedSets, autoDoors);
 
             setPipelineStep(6);
             setCombinedProgress(100);

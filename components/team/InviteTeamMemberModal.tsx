@@ -1,14 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRBAC } from '@/hooks/useRBAC';
-import { getInvitableRoles } from '@/constants/roles';
-import type { RoleName } from '@/types/auth';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ERRORS } from '@/constants/errors';
-import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
-import { Search } from 'lucide-react';
+import { useState, useEffect, useMemo } from "react";
+import { useRBAC } from "@/hooks/useRBAC";
+import { getInvitableRoles } from "@/constants/roles";
+import type { RoleName } from "@/types/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ERRORS } from "@/constants/errors";
+import { ErrorDisplay } from "@/components/shared/ErrorDisplay";
+import { Search } from "lucide-react";
 
 interface ProjectOption {
   id: string;
@@ -31,11 +37,15 @@ export function InviteTeamMemberModal({
 }: InviteTeamMemberModalProps) {
   const { userRole } = useRBAC();
 
-  const invitableRoles: RoleName[] = userRole ? getInvitableRoles(userRole) : [];
+  const invitableRoles: RoleName[] = userRole
+    ? getInvitableRoles(userRole)
+    : [];
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<RoleName>(defaultRole ?? invitableRoles[0] ?? 'Estimator');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<RoleName>(
+    defaultRole ?? invitableRoles[0] ?? "Estimator",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -44,42 +54,50 @@ export function InviteTeamMemberModal({
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [projectSearch, setProjectSearch] = useState('');
+  const [projectSearch, setProjectSearch] = useState("");
 
   // Reset all fields when modal opens
   useEffect(() => {
     if (isOpen) {
-      setName('');
-      setEmail('');
-      setRole(defaultRole ?? invitableRoles[0] ?? 'Estimator');
+      setName("");
+      setEmail("");
+      setRole(defaultRole ?? invitableRoles[0] ?? "Estimator");
       setError(null);
       setSuccessMsg(null);
       setSelectedProjectIds([]);
-      setProjectSearch('');
+      setProjectSearch("");
     }
   }, [isOpen, defaultRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear project selections when role changes away from Client
   useEffect(() => {
-    if (role !== 'Client') {
+    if (role !== "Client") {
       setSelectedProjectIds([]);
-      setProjectSearch('');
+      setProjectSearch("");
       setProjects([]);
     }
   }, [role]);
 
   // Fetch available projects when Client role is selected
   useEffect(() => {
-    if (role !== 'Client' || !isOpen) return;
+    if (role !== "Client" || !isOpen) return;
 
     setIsLoadingProjects(true);
-    fetch('/api/projects', { credentials: 'include' })
+    fetch("/api/projects", { credentials: "include" })
       .then((r) => r.json())
-      .then((json: { data?: { id: string; name: string; location?: string }[] }) => {
-        setProjects(
-          (json.data ?? []).map((p) => ({ id: p.id, name: p.name, location: p.location })),
-        );
-      })
+      .then(
+        (json: {
+          data?: { id: string; name: string; location?: string }[];
+        }) => {
+          setProjects(
+            (json.data ?? []).map((p) => ({
+              id: p.id,
+              name: p.name,
+              location: p.location,
+            })),
+          );
+        },
+      )
       .catch(() => setProjects([]))
       .finally(() => setIsLoadingProjects(false));
   }, [role, isOpen]);
@@ -96,7 +114,9 @@ export function InviteTeamMemberModal({
 
   const toggleProject = (projectId: string) => {
     setSelectedProjectIds((prev) =>
-      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId],
+      prev.includes(projectId)
+        ? prev.filter((id) => id !== projectId)
+        : [...prev, projectId],
     );
   };
 
@@ -107,8 +127,8 @@ export function InviteTeamMemberModal({
     setError(null);
     setSuccessMsg(null);
 
-    if (role === 'Client' && selectedProjectIds.length === 0) {
-      setError('Please assign at least one project to this Client.');
+    if (role === "Client" && selectedProjectIds.length === 0) {
+      setError("Please assign at least one project to this Client.");
       return;
     }
 
@@ -120,14 +140,14 @@ export function InviteTeamMemberModal({
         email: email.trim().toLowerCase(),
         role,
       };
-      if (role === 'Client') {
+      if (role === "Client") {
         body.projectIds = selectedProjectIds;
       }
 
-      const res = await fetch('/api/team/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const res = await fetch("/api/team/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(body),
       });
 
@@ -144,7 +164,9 @@ export function InviteTeamMemberModal({
       }
 
       if (json.emailSent === false && json.inviteLink) {
-        setSuccessMsg(`Email service not configured. Share this invite link:\n${json.inviteLink}`);
+        setSuccessMsg(
+          `Email service not configured. Share this invite link:\n${json.inviteLink}`,
+        );
       } else {
         setSuccessMsg(`Invitation sent to ${email}.`);
         setTimeout(() => {
@@ -167,20 +189,35 @@ export function InviteTeamMemberModal({
       <div className="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-8 pt-8 pb-6 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">Invite Team Member</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            Invite Team Member
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
             aria-label="Close"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
 
         {/* Scrollable body */}
-        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5 overflow-y-auto flex-1">
+        <form
+          onSubmit={handleSubmit}
+          className="px-8 pb-8 space-y-5 overflow-y-auto flex-1"
+        >
           {/* Full Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -231,7 +268,7 @@ export function InviteTeamMemberModal({
           </div>
 
           {/* Project assignment — only shown for Client role */}
-          {role === 'Client' && (
+          {role === "Client" && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                 Assign Projects <span className="text-red-500">*</span>
@@ -257,7 +294,9 @@ export function InviteTeamMemberModal({
                   </div>
                 ) : filteredProjects.length === 0 ? (
                   <div className="px-4 py-6 text-center text-sm text-gray-400">
-                    {projects.length === 0 ? 'No projects found.' : 'No matches for your search.'}
+                    {projects.length === 0
+                      ? "No projects found."
+                      : "No matches for your search."}
                   </div>
                 ) : (
                   <ul className="max-h-48 overflow-y-auto divide-y divide-gray-100">
@@ -293,23 +332,28 @@ export function InviteTeamMemberModal({
               {/* Selection count */}
               {selectedProjectIds.length > 0 && (
                 <p className="mt-1.5 text-xs text-green-700 font-medium">
-                  {selectedProjectIds.length} project{selectedProjectIds.length !== 1 ? 's' : ''} selected
+                  {selectedProjectIds.length} project
+                  {selectedProjectIds.length !== 1 ? "s" : ""} selected
                 </p>
               )}
             </div>
           )}
 
           <p className="text-sm text-gray-500 leading-relaxed">
-            An invitation email will be sent to this address with a link to set their password.
+            An invitation email will be sent to this address with a link to set
+            their password.
             <br />
-            If this email already has a pending invitation, sending again will resend it and refresh the expiry.
+            If this email already has a pending invitation, sending again will
+            resend it and refresh the expiry.
           </p>
 
           {error && <ErrorDisplay error={error} />}
 
           {successMsg && (
             <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
-              <p className="text-sm text-green-700 whitespace-pre-line">{successMsg}</p>
+              <p className="text-sm text-green-700 whitespace-pre-line">
+                {successMsg}
+              </p>
             </div>
           )}
 
@@ -329,8 +373,18 @@ export function InviteTeamMemberModal({
               loadingText="Sending Invitation..."
               className="flex-1 rounded-xl bg-green-700 hover:bg-green-800"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                />
               </svg>
               Send / Resend Invitation
             </Button>

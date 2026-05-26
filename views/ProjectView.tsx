@@ -54,7 +54,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
     const {
         hardwareSets, setHardwareSets, doors, setDoors, trashItems, setTrashItems,
         hardwareSetsRef, doorsRef, trashItemsRef, isDataLoading, isPollingForResult,
-        isInitialMount,
+        isInitialMount, hasFinalJsonRef,
     } = useProjectData({ projectId: project.id, addToast, saveToFinalJsonRef });
 
     const { saveStatus, saveToFinalJson, saveToHardwarePdf, performSave } = useProjectPersistence({
@@ -83,7 +83,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         handleSaveSet, handleAssignAll, handleProvidedSetChange,
     } = useProjectUploads({
         projectId: project.id, hardwareSets, setHardwareSets, doors, setDoors,
-        isInitialMount, addToast, saveToFinalJson,
+        isInitialMount, hasFinalJsonRef, addToast, saveToFinalJson,
     });
 
     const {

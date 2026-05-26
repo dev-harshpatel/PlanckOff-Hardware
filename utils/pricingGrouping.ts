@@ -45,6 +45,8 @@ export interface DoorPricingGroup {
   buildings: string[];
   /** Unique prep values across doors in this group — display only, not part of the group key */
   prep: string[];
+  /** Unique hardware set names across doors in this group — display only, not part of the group key */
+  hwSets: string[];
   isVariant?: boolean;
   variantKey?: string;
 }
@@ -176,6 +178,7 @@ function buildVariantGroups(variantDoors: Door[], overrides: VariantOverrideMap)
         floors: [],
         buildings: [],
         prep: [],
+        hwSets: [],
         isVariant: true,
         variantKey: ov.variantKey,
       });
@@ -189,6 +192,8 @@ function buildVariantGroups(variantDoors: Door[], overrides: VariantOverrideMap)
     if (floor && !g.floors.includes(floor)) g.floors.push(floor);
     const bldg = (door.buildingTag ?? '').trim();
     if (bldg && !g.buildings.includes(bldg)) g.buildings.push(bldg);
+    const hwSet = getDoorHwSetName(door);
+    if (hwSet && hwSet !== '__unassigned__' && !g.hwSets.includes(hwSet)) g.hwSets.push(hwSet);
   }
   return Array.from(map.values());
 }
@@ -220,6 +225,7 @@ function groupByFields(
         floors:     [],
         buildings:  [],
         prep:       [],
+        hwSets:     [],
       });
     }
 
@@ -239,6 +245,10 @@ function groupByFields(
     // Collect prep: prefer hardware set prep, fall back to door-level hardwarePrep
     const prepVal = (door.assignedHardwareSet?.prep ?? door.hardwarePrep ?? '').trim();
     if (prepVal && !group.prep.includes(prepVal)) group.prep.push(prepVal);
+
+    // Collect hardware set names (skip internal sentinel)
+    const hwSet = getDoorHwSetName(door);
+    if (hwSet && hwSet !== '__unassigned__' && !group.hwSets.includes(hwSet)) group.hwSets.push(hwSet);
   }
 
   return Array.from(map.values());
@@ -255,7 +265,15 @@ export function groupDoors(doors: Door[], variantOverrides: VariantOverrideMap =
 }
 
 export function groupFrames(doors: Door[], variantOverrides: VariantOverrideMap = new Map()): DoorPricingGroup[] {
-  const included = doors.filter(d => d.frameIncludeExclude?.trim().toUpperCase() !== 'EXCLUDE');
+  const included = doors.filter(d => {
+    if (d.frameIncludeExclude?.trim().toUpperCase() === 'EXCLUDE') return false;
+    // Skip doors with no frame specification — nothing to price
+    return Boolean(
+      d.frameMaterial || d.throatThickness || d.frameGauge ||
+      d.frameAssembly || d.frameAnchor    || d.baseAnchor  ||
+      d.frameElevationType || d.frameFinish || d.prehung   || d.casing,
+    );
+  });
   const normal = included.filter(d => !variantOverrides.has(d.id));
   const variant = included.filter(d => variantOverrides.has(d.id));
   return [
@@ -388,6 +406,7 @@ export function filterDoorGroups(
       floors:     [...new Set(matching.map(d => (d.buildingLocation ?? d.location ?? '').trim()).filter(Boolean))],
       buildings:  [...new Set(matching.map(d => (d.buildingTag ?? '').trim()).filter(Boolean))],
       prep:       [...new Set(matching.map(d => (d.assignedHardwareSet?.prep ?? d.hardwarePrep ?? '').trim()).filter(Boolean))],
+      hwSets:     [...new Set(matching.map(d => getDoorHwSetName(d)).filter((v): v is string => !!v && v !== '__unassigned__'))],
     });
   }
   return result;

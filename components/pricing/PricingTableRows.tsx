@@ -57,6 +57,11 @@ export const DoorRow: React.FC<{
                 {f.label}: {group.fields[f.key]}
               </span>
             ))}
+            {group.hwSets?.filter(Boolean).map((hw, i) => (
+              <span key={`hw-${i}`} className="text-[10px] px-1.5 py-px rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                HW Set: {hw}
+              </span>
+            ))}
             {group.prep.map((p, i) => (
               <span key={`prep-${i}`} className="text-[10px] px-1.5 py-px rounded bg-[var(--primary-bg)] border border-[var(--primary-border)] text-[var(--primary-text-muted)]">
                 Prep: {p}

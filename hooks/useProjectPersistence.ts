@@ -108,20 +108,19 @@ export function useProjectPersistence({
             });
 
             const serializedDoorTags = new Set(finalJson.flatMap(s => s.doors.map(d => d.doorTag)));
-            const orphanManualDoors = currentDoors.filter(
-                d => d.isManualEntry === true && !serializedDoorTags.has(d.doorTag),
-            );
-            if (orphanManualDoors.length > 0) {
+            // Include ALL unassigned doors (manual AND imported with no hw set) so they survive a refresh.
+            const orphanDoors = currentDoors.filter(d => !serializedDoorTags.has(d.doorTag));
+            if (orphanDoors.length > 0) {
                 finalJson.push({
                     setName: '__unassigned__',
-                    isManualEntry: true,
+                    isManualEntry: orphanDoors.every(d => d.isManualEntry === true),
                     hardwareItems: [],
                     notes: '',
-                    doors: orphanManualDoors.map((d): MergedDoor => ({
+                    doors: orphanDoors.map((d): MergedDoor => ({
                         doorTag: d.doorTag,
                         hwSet: d.providedHardwareSet ?? '',
                         matchedSetName: '',
-                        isManualEntry: true,
+                        isManualEntry: d.isManualEntry === true,
                         buildingArea: undefined,
                         doorLocation: d.location,
                         interiorExterior: d.interiorExterior,

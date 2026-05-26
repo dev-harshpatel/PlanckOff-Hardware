@@ -297,6 +297,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
         isDataLoading,
         isPollingForResult,
         isInitialMount,
+        hasFinalJsonRef,
         reloadDoorSchedule,
     };
 }
