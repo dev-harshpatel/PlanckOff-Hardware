@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSession, computeNewExpiry } from '@/lib/db/auth';
 import { getTeamMemberByEmail } from '@/lib/db/team';
 import { setAuthCookie } from '@/lib/auth/api-helpers';
+import { checkRateLimit } from '@/lib/rateLimit';
 import type { RoleName } from '@/types/auth';
 
 interface LoginBody {
@@ -33,8 +34,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
   }
 
-  const ipAddress =
-    request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? undefined;
+  const ip =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown';
+
+  const rl = checkRateLimit(ip);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } },
+    );
+  }
+
+  const ipAddress = ip === 'unknown' ? undefined : ip;
 
   // -------------------------------------------------------------------------
   // 1. Try team_members first (status must be Active)
@@ -44,14 +57,14 @@ export async function POST(request: NextRequest) {
   if (member) {
     if (member.status !== 'Active') {
       return NextResponse.json(
-        { error: 'Account is not active. Please accept your invitation first.' },
-        { status: 403 },
+        { error: 'Invalid email or password.' },
+        { status: 401 },
       );
     }
     if (!member.passwordHash) {
       return NextResponse.json(
-        { error: 'No password set. Please accept your invitation first.' },
-        { status: 403 },
+        { error: 'Invalid email or password.' },
+        { status: 401 },
       );
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getTeamMemberByInviteToken, updateTeamMember } from '@/lib/db/team';
 import { AUTH_CONFIG } from '@/constants/auth';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 interface SetPasswordBody {
   token: string;
@@ -31,6 +32,19 @@ export async function POST(request: NextRequest) {
           'Password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, and one number.',
       },
       { status: 400 },
+    );
+  }
+
+  const ip =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown';
+
+  const rl = checkRateLimit(ip);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } },
     );
   }
 

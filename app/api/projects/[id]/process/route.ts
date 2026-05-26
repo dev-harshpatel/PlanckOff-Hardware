@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { parseDoorSchedule } from '@/services/doorScheduleService';
 import type { DoorScheduleResult } from '@/services/doorScheduleService';
@@ -57,7 +57,7 @@ function saveExcelDebugFiles(projectId: string, filename: string, result: DoorSc
   }
 }
 
-export const POST = withAuth(
+export const POST = withProjectAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
 

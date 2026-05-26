@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withProjectAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import { getProjectNotes, upsertProjectNotes } from '@/lib/db/notes';
 import type { NoteTab } from '@/types';
 
 const VALID_TABS: NoteTab[] = ['hardware', 'door', 'frame'];
 
-export const GET = withAuth(
+export const GET = withProjectAuth(
   async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const id = params?.id as string;
     const { data, error } = await getProjectNotes(id);
@@ -15,7 +15,7 @@ export const GET = withAuth(
   },
 );
 
-export const PUT = withAuth(
+export const PUT = withProjectAuth(
   async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
     const id = params?.id as string;
     let body: { tab: NoteTab; content: Record<string, unknown> | null };
