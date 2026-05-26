@@ -22,10 +22,18 @@ export interface PDFBatchResult {
 export async function* extractTextGenerator(file: File, batchSize: number = 20): AsyncGenerator<PDFBatchResult> {
     // Lazy import — keeps pdfjs-dist out of the server bundle
     const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString();
+    // When running inside a Web Worker (upload.worker.ts), import.meta.url is a
+    // blob: URL and spawning a nested pdfjs sub-worker from it fails. Setting
+    // workerSrc to '' makes pdfjs use its in-thread FakeWorker instead.
+    const isInsideWorker = typeof window === 'undefined' && typeof WorkerGlobalScope !== 'undefined';
+    if (!isInsideWorker) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+            'pdfjs-dist/build/pdf.worker.min.mjs',
+            import.meta.url
+        ).toString();
+    } else {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    }
 
     try {
         const arrayBuffer = await file.arrayBuffer();

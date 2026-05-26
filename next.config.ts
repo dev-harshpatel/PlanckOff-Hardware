@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   // These packages access browser globals (DOMMatrix, canvas, etc.) at module init time.
   serverExternalPackages: ['jspdf', 'jspdf-autotable', 'xlsx', 'file-saver', 'pdfjs-dist'],
 
+  // Turbopack equivalent of the webpack pdfjs alias below — prevents pdfjs from
+  // trying to load its own nested worker (we use FakeWorker mode in web workers instead).
+  turbopack: {
+    resolveAlias: {
+      'pdfjs-dist/build/pdf.worker.min.mjs': { browser: false },
+    },
+  },
+
   // D-10, D-11: HTTP security headers applied to ALL routes (Phase 15).
   // Permissive CSP baseline — keeps Next.js + Supabase Realtime working; tighten in a future phase.
   async headers() {
