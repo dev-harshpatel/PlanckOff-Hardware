@@ -358,6 +358,7 @@ export const parseHardwareSetXLSX = (data: ArrayBuffer): HardwareSet[] => {
     }
 
     const setsMap = new Map<string, HardwareSet>();
+    let lastSetName = '';
 
     jsonData.forEach((row, index) => {
         if (!row || Object.keys(row).length === 0) return;
@@ -375,8 +376,14 @@ export const parseHardwareSetXLSX = (data: ArrayBuffer): HardwareSet[] => {
             }
         }
 
-        const setName = mappedRow['setName'] ? String(mappedRow['setName']).trim() : '';
-        if (!setName) return; // Skip if no set identifier
+        const rawSetName = mappedRow['setName'] ? String(mappedRow['setName']).trim() : '';
+        // Carry forward last known set name when this row's set column is blank.
+        // This handles the common pattern where the set name appears only once
+        // at the top of each set block and subsequent item rows leave it blank.
+        const setName = rawSetName || lastSetName;
+        if (rawSetName) lastSetName = rawSetName;
+
+        if (!setName) return; // Skip only if no set name has appeared at all yet
 
         let set = setsMap.get(setName);
         if (!set) {

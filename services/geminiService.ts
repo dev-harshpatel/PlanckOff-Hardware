@@ -1,4 +1,3 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { Door, HardwareSet, HardwareItem, ValidationReport, ValidationError, AppSettings } from '../types';
 import { getLearnedExamples } from './mlOpsService';
 import { generateAIContent } from './aiProviderService';
@@ -109,20 +108,20 @@ const safeParseJson = <T>(text: string): T => {
 
 
 const hardwareSetAssignmentSchema = {
-    type: Type.OBJECT,
+    type: 'object',
     properties: {
-        setName: { type: Type.STRING },
+        setName: { type: 'string' },
         adjustedHardware: {
-            type: Type.ARRAY,
+            type: 'array',
             items: {
-                type: Type.OBJECT,
+                type: 'object',
                 properties: {
-                    id: { type: Type.STRING },
-                    name: { type: Type.STRING },
-                    quantity: { type: Type.NUMBER },
-                    manufacturer: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    finish: { type: Type.STRING },
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    quantity: { type: 'number' },
+                    manufacturer: { type: 'string' },
+                    description: { type: 'string' },
+                    finish: { type: 'string' },
                 },
                 required: ["id", "name", "quantity", "manufacturer", "description", "finish"],
             },
@@ -132,31 +131,31 @@ const hardwareSetAssignmentSchema = {
 };
 
 const hardwareSetArraySchema = {
-    type: Type.ARRAY,
+    type: 'array',
     items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-            id: { type: Type.STRING, description: "A unique ID for the hardware set, e.g., 'hs-pdf-1'" },
-            name: { type: Type.STRING, description: "The specific hardware set number/code ONLY." },
-            doorTags: { type: Type.STRING, description: "Comma-separated list of door tags/identifiers." },
-            description: { type: Type.STRING, description: "Operational notes or general descriptions." },
-            division: { type: Type.STRING, description: "The specification division, e.g., 'Division 08'" },
+            id: { type: 'string', description: "A unique ID for the hardware set, e.g., 'hs-pdf-1'" },
+            name: { type: 'string', description: "The specific hardware set number/code ONLY." },
+            doorTags: { type: 'string', description: "Comma-separated list of door tags/identifiers." },
+            description: { type: 'string', description: "Operational notes or general descriptions." },
+            division: { type: 'string', description: "The specification division, e.g., 'Division 08'" },
             extractionWarnings: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
+                type: 'array', 
+                items: { type: 'string' },
                 description: "List of specific errors if data was missing."
             },
             items: {
-                type: Type.ARRAY,
+                type: 'array',
                 items: {
-                    type: Type.OBJECT,
+                    type: 'object',
                     properties: {
-                        id: { type: Type.STRING, description: "A unique ID for the item" },
-                        name: { type: Type.STRING },
-                        quantity: { type: Type.NUMBER },
-                        manufacturer: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        finish: { type: Type.STRING },
+                        id: { type: 'string', description: "A unique ID for the item" },
+                        name: { type: 'string' },
+                        quantity: { type: 'number' },
+                        manufacturer: { type: 'string' },
+                        description: { type: 'string' },
+                        finish: { type: 'string' },
                     },
                     required: ["id", "name", "quantity", "manufacturer", "description", "finish"],
                 },
@@ -167,27 +166,27 @@ const hardwareSetArraySchema = {
 };
 
 const doorArraySchema = {
-    type: Type.ARRAY,
+    type: 'array',
     items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-            id: { type: Type.STRING },
-            doorTag: { type: Type.STRING },
-            location: { type: Type.STRING },
-            interiorExterior: { type: Type.STRING, enum: ['Interior', 'Exterior', 'N/A'] },
-            quantity: { type: Type.NUMBER },
-            liftCount: { type: Type.NUMBER },
-            operation: { type: Type.STRING },
-            fireRating: { type: Type.STRING },
-            width: { type: Type.NUMBER },
-            height: { type: Type.NUMBER },
-            thickness: { type: Type.NUMBER },
-            doorMaterial: { type: Type.STRING },
-            frameMaterial: { type: Type.STRING },
-            hardwarePrep: { type: Type.STRING },
-            providedHardwareSet: { type: Type.STRING },
-            schedule: { type: Type.STRING },
-            type: { type: Type.STRING },
+            id: { type: 'string' },
+            doorTag: { type: 'string' },
+            location: { type: 'string' },
+            interiorExterior: { type: 'string', enum: ['Interior', 'Exterior', 'N/A'] },
+            quantity: { type: 'number' },
+            liftCount: { type: 'number' },
+            operation: { type: 'string' },
+            fireRating: { type: 'string' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+            thickness: { type: 'number' },
+            doorMaterial: { type: 'string' },
+            frameMaterial: { type: 'string' },
+            hardwarePrep: { type: 'string' },
+            providedHardwareSet: { type: 'string' },
+            schedule: { type: 'string' },
+            type: { type: 'string' },
         },
         required: ["id", "doorTag", "location", "interiorExterior", "quantity", "type"],
     },
@@ -244,59 +243,6 @@ const chunkArray = <T>(arr: T[], size: number): T[][] => {
     );
 };
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-        const base64 = reader.result as string;
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-    };
-    reader.onerror = error => reject(error);
-  });
-};
-
-export const analyzeImageWithAI = async (
-    imageFile: File, 
-    promptText: string,
-    apiKey?: string
-): Promise<string> => {
-    const key = apiKey || process.env.VITE_GEMINI_API_KEY;
-    if (!key) {
-        throw new Error("No Gemini API Key provided. Please update your settings.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey: key });
-
-    try {
-        const base64Data = await fileToBase64(imageFile);
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp', 
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: promptText },
-                        { 
-                            inlineData: { 
-                                mimeType: imageFile.type, 
-                                data: base64Data 
-                            } 
-                        }
-                    ]
-                }
-            ]
-        });
-
-        return response.text || "No analysis generated.";
-
-    } catch (error: any) {
-        console.error("Error analyzing image:", error);
-        throw new Error(`Image Analysis Failed: ${error.message}`);
-    }
-};
 
 export const assignHardwareWithAI = async (
     door: Door, 

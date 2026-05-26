@@ -152,11 +152,6 @@ const ReportsView: React.FC<ReportsViewProps> = ({
                 {/* Selector — 3 big cards in one row */}
                 {currentView === 'selector' && (
                     <div className="space-y-5">
-                        <div>
-                            <h2 className="text-sm font-semibold text-[var(--text)]">Select Report Type</h2>
-                            <p className="text-xs text-[var(--text-muted)] mt-0.5">Choose a report to configure and export.</p>
-                        </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             {REPORT_CARDS.map((card) => (
                                 <button

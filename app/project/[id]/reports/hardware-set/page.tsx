@@ -8,7 +8,7 @@ import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
-import { filterExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
+import { filterHardwareExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
 import { exportHardwareSet } from '@/services/reportExportService';
 import type { HardwareSetExportConfig } from '@/types/hardwareSetTypes';
 import { useToast } from '@/contexts/ToastContext';
@@ -52,7 +52,7 @@ export default function HardwareSetReportPage() {
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
           const { hardwareSets: sets, doors: loadedDoors } = transformFromFinalJson(finalData);
-          const activeDoors = filterExcludedDoors(loadedDoors);
+          const activeDoors = filterHardwareExcludedDoors(loadedDoors);
           setHardwareSets(filterSetsWithNoDoors(sets, activeDoors));
           setDoors(activeDoors);
           return;
@@ -73,7 +73,7 @@ export default function HardwareSetReportPage() {
         const allDoors: Door[] = dsJson?.data?.scheduleJson
           ? transformDoors(dsJson.data.scheduleJson, sets)
           : [];
-        const activeDoors = filterExcludedDoors(allDoors);
+        const activeDoors = filterHardwareExcludedDoors(allDoors);
         setHardwareSets(filterSetsWithNoDoors(sets, activeDoors));
         setDoors(activeDoors);
       } catch (err) {

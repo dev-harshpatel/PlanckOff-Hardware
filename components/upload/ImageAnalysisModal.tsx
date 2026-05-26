@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { analyzeImageWithAI } from '../../services/geminiService';
+import { analyzeImageWithAI } from '../../services/imageAnalysisService';
 import { AppSettings, Toast } from '../../types';
 import { CameraIcon, ArrowUpTrayIcon, XCircleIcon } from '../shared/icons';
 import { ERRORS } from '@/constants/errors';
