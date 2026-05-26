@@ -52,9 +52,14 @@ export const BackgroundUploadProvider: React.FC<{ children: React.ReactNode }> =
             };
 
             workerRef.current.onerror = (e: ErrorEvent) => {
-                console.error("Worker Global Error:", e.message, "at", e.filename, "line", e.lineno);
-                // If worker crashes, we might want to restart it
+                // Browsers sanitize ErrorEvent properties when a worker module fails to
+                // load (all fields become undefined). Log the full event for diagnostics.
+                const msg = e.message || e.filename
+                    ? `${e.message ?? '(no message)'} at ${e.filename ?? '(unknown)'}:${e.lineno ?? '?'}`
+                    : 'Worker failed to load (module import error — check worker bundle)';
+                console.error("Worker Error:", msg, e);
                 processingRef.current = false;
+                setIsWorkerReady(false);
             };
         } catch (e) {
             console.error("Failed to start worker", e);

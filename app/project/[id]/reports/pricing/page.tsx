@@ -7,7 +7,7 @@ import { DollarSign } from 'lucide-react';
 import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
-import { filterExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
+import { filterHardwareExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useToast } from '@/contexts/ToastContext';
@@ -55,8 +55,11 @@ export default function PricingReportPage() {
         const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
         if (finalData && finalData.length > 0) {
           const { hardwareSets: mergedSets, doors: finalDoors } = transformFromFinalJson(finalData);
-          loadedDoors = filterExcludedDoors(finalDoors);
-          sets = filterSetsWithNoDoors(mergedSets, loadedDoors);
+          // Pass all doors — groupDoors/groupFrames/groupHardwareItems each apply
+          // their own per-component exclude flag, so pre-filtering here would drop
+          // doors from the wrong categories.
+          loadedDoors = finalDoors;
+          sets = filterSetsWithNoDoors(mergedSets, filterHardwareExcludedDoors(finalDoors));
         } else {
           const hwRes = await fetch(`/api/projects/${id}/hardware-pdf`, { credentials: 'include' });
           const hwJson = hwRes.ok ? await hwRes.json() : null;
@@ -64,8 +67,8 @@ export default function PricingReportPage() {
           const allDoors = dsJson?.data?.scheduleJson
             ? transformDoors(dsJson.data.scheduleJson, sets)
             : [];
-          loadedDoors = filterExcludedDoors(allDoors);
-          sets = filterSetsWithNoDoors(sets, loadedDoors);
+          loadedDoors = allDoors;
+          sets = filterSetsWithNoDoors(sets, filterHardwareExcludedDoors(allDoors));
         }
 
         setHardwareSets(sets);

@@ -22,17 +22,18 @@ export interface PDFBatchResult {
 export async function* extractTextGenerator(file: File, batchSize: number = 20): AsyncGenerator<PDFBatchResult> {
     // Lazy import — keeps pdfjs-dist out of the server bundle
     const pdfjsLib = await import('pdfjs-dist');
-    // When running inside a Web Worker (upload.worker.ts), import.meta.url is a
-    // blob: URL and spawning a nested pdfjs sub-worker from it fails. Setting
-    // workerSrc to '' makes pdfjs use its in-thread FakeWorker instead.
-    if (typeof window !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-            'pdfjs-dist/build/pdf.worker.min.mjs',
-            import.meta.url
-        ).toString();
-    } else {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-    }
+    // Always use FakeWorker (workerSrc = '').
+    //
+    // Why: Turbopack statically analyzes `new URL('...worker...', import.meta.url)`
+    // patterns regardless of surrounding if-conditions. When upload.worker.ts is
+    // bundled, that pattern causes Turbopack to try to create a nested module-worker
+    // asset inside the outer worker bundle — which fails in Next.js 15.5.x and
+    // prevents the upload worker from loading at all.
+    //
+    // The Turbopack alias in next.config.ts already maps pdf.worker.min.mjs to
+    // the empty stub anyway, so the runtime branch that set the real worker URL
+    // was a no-op (pdfjs fell back to FakeWorker in all cases).
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
     try {
         const arrayBuffer = await file.arrayBuffer();

@@ -75,6 +75,7 @@ const ALIAS_MAP: Record<string, string> = {
 
   // Sweep
   'sweep':              'sweep',
+  'sweeps':             'sweep',
   'door sweep':         'sweep',
   'door sweeps':        'sweep',
 

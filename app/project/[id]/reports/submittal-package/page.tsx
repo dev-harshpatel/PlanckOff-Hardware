@@ -7,14 +7,14 @@ import { useEffect, useState } from 'react';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 import type { HardwareSet, Door } from '@/types';
 import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransformers';
-import { filterExcludedFromFinalJson, filterExcludedDoors } from '@/utils/reportFilters';
+import { filterExcludedFromFinalJson, filterHardwareExcludedDoors } from '@/utils/reportFilters';
 import { Package } from 'lucide-react';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 const SubmittalGenerator = dynamic(() => import('@/components/submittals/SubmittalGenerator'), { ssr: false });
 
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
-  const activeDoors = filterExcludedDoors(doors);
+  const activeDoors = filterHardwareExcludedDoors(doors);
   return hardwareSets
     .filter(set => set.items?.length > 0)
     .map((set): MergedHardwareSet => {

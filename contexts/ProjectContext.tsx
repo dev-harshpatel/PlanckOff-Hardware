@@ -145,7 +145,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (!res.ok) throw new Error(json.error ?? ERRORS.GENERAL.SAVE_FAILED.message);
 
       if (json.data) {
-        setProjects(prev => [...prev, json.data!]);
+        setProjects(prev => [json.data!, ...prev]);
       }
       addToast({ type: 'success', message: `Project "${json.data!.name}" created.` });
     } catch (error: unknown) {

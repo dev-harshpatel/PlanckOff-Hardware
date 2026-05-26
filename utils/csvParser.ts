@@ -212,18 +212,23 @@ export const parseHardwareSetCSV = (csvText: string): HardwareSet[] => {
     }
 
     const setsMap = new Map<string, HardwareSet>();
+    let lastSetName = '';
 
     dataLines.forEach((line, index) => {
         if (!line.trim()) return;
-        
+
         const values = splitCSVLine(line);
         const getVal = (key: string): string => {
             const idx = columnIndexMap[key];
             return idx !== undefined && values[idx] ? values[idx].trim() : '';
         };
 
-        const setName = getVal('setName');
-        if (!setName) return; // Skip rows without a set name
+        const rawSetName = getVal('setName');
+        // Carry forward last known set name for rows where the set column is blank.
+        const setName = rawSetName || lastSetName;
+        if (rawSetName) lastSetName = rawSetName;
+
+        if (!setName) return; // Skip only if no set name has appeared at all yet
 
         let set = setsMap.get(setName);
         if (!set) {

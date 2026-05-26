@@ -1,10 +1,8 @@
 
 import { Door, HardwareSet, ValidationReport, ValidationError, AppSettings } from '../types';
-import { extractTextFromPDF, extractTextGenerator, PDFBatchResult } from '../utils/pdfParser'; // Import generator
+import { extractTextGenerator } from '../utils/pdfParser';
 import { extractTextFromDOCX } from '../utils/docxParser';
 import { extractDoorsFromText, extractHardwareSetsFromText } from './geminiService';
-import { parseDoorScheduleCSV, parseHardwareSetCSV } from '../utils/csvParser';
-import { parseDoorScheduleXLSX, parseHardwareSetXLSX } from '../utils/xlsxParser';
 
 // ... (omitted)
 
@@ -220,7 +218,7 @@ export const processDoorScheduleFile = async (
             
             // Analyze chunk
             const report = await extractDoorsFromText(batch.text, undefined, apiKey, undefined, settings);
-            
+
             // Emit chunk data
             if (report.data && report.data.length > 0) {
                 // Adjust row IDs if needed, or just push
@@ -233,13 +231,15 @@ export const processDoorScheduleFile = async (
     } 
     // CSV
     else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
+        const { parseDoorScheduleCSV } = await import('../utils/csvParser');
         const csvText = await file.text();
         const doors = await parseDoorScheduleCSV(csvText);
-        onData?.(doors); // Emit all at once
+        onData?.(doors);
         return validateDoors(doors);
-    } 
+    }
     // Excel
     else if (excelMimeTypes.includes(fileType) || excelExtensions.some(ext => fileName.endsWith(ext))) {
+        const { parseDoorScheduleXLSX } = await import('../utils/xlsxParser');
         const arrayBuffer = await file.arrayBuffer();
         const doors = await parseDoorScheduleXLSX(arrayBuffer);
         onData?.(doors);
