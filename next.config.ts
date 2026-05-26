@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   // trying to load its own nested worker (we use FakeWorker mode in web workers instead).
   turbopack: {
     resolveAlias: {
-      'pdfjs-dist/build/pdf.worker.min.mjs': { browser: false },
+      'pdfjs-dist/build/pdf.worker.min.mjs': './utils/pdfjs-worker-stub.js',
     },
   },
 

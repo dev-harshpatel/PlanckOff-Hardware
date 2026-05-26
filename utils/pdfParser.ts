@@ -25,8 +25,7 @@ export async function* extractTextGenerator(file: File, batchSize: number = 20):
     // When running inside a Web Worker (upload.worker.ts), import.meta.url is a
     // blob: URL and spawning a nested pdfjs sub-worker from it fails. Setting
     // workerSrc to '' makes pdfjs use its in-thread FakeWorker instead.
-    const isInsideWorker = typeof window === 'undefined' && typeof WorkerGlobalScope !== 'undefined';
-    if (!isInsideWorker) {
+    if (typeof window !== 'undefined') {
         pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
             'pdfjs-dist/build/pdf.worker.min.mjs',
             import.meta.url
