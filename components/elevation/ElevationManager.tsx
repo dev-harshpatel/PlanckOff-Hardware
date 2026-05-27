@@ -7,6 +7,10 @@ import {
 import { ElevationType } from '../../types';
 import { compressElevationImage, deleteElevationImage, uploadElevationImage } from '../../services/elevationService';
 import { Button } from '@/components/ui/button';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ElevationManagerProps {
     elevationTypes: ElevationType[];
@@ -58,6 +62,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [replaceConfirmed, setReplaceConfirmed] = useState(false);
 
     const isEditMode = editingId !== null;
@@ -205,12 +210,15 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
         }
     };
 
-    const handleDelete = (id: string) => {
-        if (!window.confirm('Delete this elevation type? It will be unlinked from all assigned doors.')) return;
-        if (editingId === id) resetForm();
-        const updated = types.filter(t => t.id !== id);
+    const handleDelete = (id: string) => setPendingDeleteId(id);
+
+    const confirmDelete = () => {
+        if (!pendingDeleteId) return;
+        if (editingId === pendingDeleteId) resetForm();
+        const updated = types.filter(t => t.id !== pendingDeleteId);
         setTypes(updated);
         onUpdate(updated);
+        setPendingDeleteId(null);
     };
 
     // In edit mode: no image required if type already has one; new file is optional
@@ -227,6 +235,7 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
     const zoneImage = previewUrl ?? (isEditMode ? existingImageInEdit : null);
 
     return (
+        <>
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-[var(--bg)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-[var(--border-subtle)]">
 
@@ -532,6 +541,22 @@ const ElevationManager: React.FC<ElevationManagerProps> = ({ elevationTypes, onU
                 </div>
             </div>
         </div>
+
+        <AlertDialog open={!!pendingDeleteId} onOpenChange={open => { if (!open) setPendingDeleteId(null); }}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete elevation type?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This elevation type will be permanently removed and unlinked from all assigned doors.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        </>
     );
 };
 

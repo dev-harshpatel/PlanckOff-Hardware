@@ -266,6 +266,7 @@ function makeOpenRouterClient(apiKey: string): OpenAI {
 async function callOpenRouterForSets(
   client: OpenAI,
   messages: Parameters<OpenAI['chat']['completions']['create']>[0]['messages'],
+  signal?: AbortSignal,
 ): Promise<string> {
   const response = await client.chat.completions.create({
     model: MODEL,
@@ -279,7 +280,7 @@ async function callOpenRouterForSets(
       },
     } as Parameters<typeof client.chat.completions.create>[0]['response_format'],
     messages,
-  });
+  }, { signal });
   return response.choices[0]?.message?.content ?? '';
 }
 
@@ -321,6 +322,8 @@ async function runConcurrent<T>(
       try {
         results[idx] = await tasks[idx]();
       } catch (err) {
+        // Propagate abort so the caller knows processing was cancelled
+        if (err instanceof Error && err.name === 'AbortError') throw err;
         results[idx] = err instanceof Error ? err : new Error(String(err));
       }
     }
@@ -337,6 +340,7 @@ async function runConcurrent<T>(
 async function tier1Extract(
   client: OpenAI,
   buffer: Buffer,
+  signal?: AbortSignal,
 ): Promise<{ raw: string; sets: ExtractedHardwareSet[]; warnings: string[] }> {
   const base64Pdf = buffer.toString('base64');
   const warnings: string[] = [];
@@ -355,7 +359,7 @@ async function tier1Extract(
         { type: 'text', text: USER_PROMPT },
       ],
     },
-  ]);
+  ], signal);
 
   console.log(`[hardwarePdf:t1] Response received — ${raw.length} chars`);
 
@@ -374,6 +378,7 @@ async function tier2Extract(
   buffer: Buffer,
   projectId: string,
   warnings: string[],
+  signal?: AbortSignal,
 ): Promise<{ sets: ExtractedHardwareSet[]; warnings: string[] }> {
   console.warn('[hardwarePdf] Tier 1 failed or file too large — using Tier 2 (server-side text extraction).');
 
@@ -412,7 +417,7 @@ async function tier2Extract(
     const raw = await callOpenRouterForSets(client, [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${USER_PROMPT}\n\n${batchPrompt}` },
-    ]);
+    ], signal);
 
     console.log(`[hardwarePdf:t2] ✓ Batch ${idx + 1}/${batches.length} done (pages ${batch.startPage}–${batch.endPage}) — response length: ${raw.length} chars`);
 
@@ -436,7 +441,7 @@ async function tier2Extract(
   });
 
   // Run batches in parallel (up to TIER2_MAX_CONCURRENT at a time)
-  const results = await runConcurrent(tasks, TIER2_MAX_CONCURRENT);
+  const results = await runConcurrent(tasks, TIER2_MAX_CONCURRENT);  // AbortError propagates up
 
   const batchSets: ExtractedHardwareSet[][] = [];
   results.forEach((result, idx) => {
@@ -474,6 +479,7 @@ export async function extractHardwareSetsFromPdf(
   buffer: Buffer,
   fileName: string,
   projectId: string,
+  signal?: AbortSignal,
 ): Promise<HardwarePdfResult> {
   const warnings: string[] = [];
   const startMs = Date.now();
@@ -498,12 +504,13 @@ export async function extractHardwareSetsFromPdf(
   if (useTier1) {
     // ── Tier 1 attempt ────────────────────────────────────────────────────
     try {
-      const result = await tier1Extract(client, buffer);
+      const result = await tier1Extract(client, buffer, signal);
       rawTier1 = result.raw;
       sets = result.sets;
       warnings.push(...result.warnings);
       tier = 1;
     } catch (tier1Err) {
+      if (tier1Err instanceof Error && tier1Err.name === 'AbortError') throw tier1Err;
       console.warn(`[hardwarePdf] Tier 1 failed: ${tier1Err instanceof Error ? tier1Err.message : String(tier1Err)} — falling back to Tier 2`);
     }
   } else {
@@ -512,7 +519,7 @@ export async function extractHardwareSetsFromPdf(
 
   // ── Tier 2 fallback (if Tier 1 didn't run, failed, or returned nothing) ──
   if (sets.length === 0) {
-    const t2Result = await tier2Extract(client, buffer, projectId, warnings);
+    const t2Result = await tier2Extract(client, buffer, projectId, warnings, signal);
     sets = t2Result.sets;
     tier = 2;
   }

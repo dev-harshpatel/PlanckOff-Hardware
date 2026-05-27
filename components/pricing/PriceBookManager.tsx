@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { PriceBookEntry } from '../../types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PriceBookManagerProps {
     priceBook: PriceBookEntry[];
@@ -23,6 +27,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
     const [categoryFilter, setCategoryFilter] = useState<'all' | 'door' | 'frame' | 'hardware'>('all');
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingEntry, setEditingEntry] = useState<PriceBookEntry | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     // Filter and search price book
     const filteredPriceBook = useMemo(() => {
@@ -62,11 +67,7 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
         setShowAddModal(true);
     };
 
-    const handleDelete = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this price entry?')) {
-            onDeleteEntry(id);
-        }
-    };
+    const handleDelete = (id: string) => setPendingDeleteId(id);
 
     const handleCloseModal = () => {
         setShowAddModal(false);
@@ -269,6 +270,23 @@ const PriceBookManager: React.FC<PriceBookManagerProps> = ({
                     onClose={handleCloseModal}
                 />
             )}
+
+            <AlertDialog open={!!pendingDeleteId} onOpenChange={open => { if (!open) setPendingDeleteId(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete price entry?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This price entry will be permanently removed from the price book.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => { if (pendingDeleteId) { onDeleteEntry(pendingDeleteId); setPendingDeleteId(null); } }}>
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

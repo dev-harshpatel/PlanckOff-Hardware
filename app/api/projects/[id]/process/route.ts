@@ -8,6 +8,10 @@
  * Form fields:
  *   - excel  — .xlsx file (door schedule)
  *   - pdf    — .pdf file  (hardware spec)
+ *
+ * Cancellation: all AI work runs first; DB writes only happen after all AI
+ * succeeds. If the client aborts (req.signal) during AI processing, nothing is
+ * written to the database, leaving the project in its prior state.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -60,6 +64,7 @@ function saveExcelDebugFiles(projectId: string, filename: string, result: DoorSc
 export const POST = withProjectAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
     const projectId = params?.id as string;
+    const { signal } = req;
 
     // ── Parse multipart form ───────────────────────────────────────────────
     let formData: FormData;
@@ -92,7 +97,11 @@ export const POST = withProjectAuth(
       return NextResponse.json({ error: 'Hardware PDF too large. Maximum size is 20 MB.' }, { status: 413 });
     }
 
-    // ── Step 1: Parse door schedule (Excel OR PDF) ────────────────────────
+    // ── Phase 1: Parse & AI — NO database writes yet ──────────────────────
+    // All DB writes are deferred until after all AI work succeeds.
+    // This ensures a user cancel during AI leaves the project in its prior state.
+
+    // Step 1a: Parse door schedule (Excel OR PDF) ──────────────────────────
     const scheduleBuffer = Buffer.from(await scheduleField.arrayBuffer());
     const scheduleExt = (scheduleField.name.split('.').pop() ?? '').toLowerCase();
     const scheduleIsPdf = scheduleExt === 'pdf';
@@ -112,7 +121,6 @@ export const POST = withProjectAuth(
       );
     }
 
-    // Always save debug files — even on 0 rows so format mismatches are visible.
     if (!scheduleIsPdf) saveExcelDebugFiles(projectId, scheduleField.name, scheduleResult);
 
     if (scheduleResult.rowCount === 0) {
@@ -124,25 +132,16 @@ export const POST = withProjectAuth(
       );
     }
 
-    // ── Step 2: Persist door schedule ─────────────────────────────────────
-    const { data: scheduleData, error: scheduleError } = await upsertDoorScheduleImport(projectId, {
-      scheduleJson: scheduleResult.rows,
-      fileName: scheduleField.name,
-      uploadedBy: ctx.user.id,
-    });
-
-    if (scheduleError) {
-      return NextResponse.json({ error: scheduleError.message }, { status: 500 });
-    }
-
-    invalidateDoorSchedule(projectId);
-
-    // ── Step 3: Extract hardware sets from PDF ────────────────────────────
+    // Step 1b: Extract hardware sets from PDF (AI) ─────────────────────────
+    if (signal.aborted) return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
     const pdfBuffer = Buffer.from(await pdfField.arrayBuffer());
     let pdfResult;
     try {
-      pdfResult = await extractHardwareSetsFromPdf(pdfBuffer, pdfField.name, projectId);
+      pdfResult = await extractHardwareSetsFromPdf(pdfBuffer, pdfField.name, projectId, signal);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
+      }
       return NextResponse.json(
         { error: `PDF processing failed: ${err instanceof Error ? err.message : String(err)}` },
         { status: 422 },
@@ -156,17 +155,21 @@ export const POST = withProjectAuth(
       );
     }
 
-    // ── Step 3b: Generate hardware prep (function strings) for all sets ───
+    // Step 1c: Generate hardware prep function strings (AI) ────────────────
+    if (signal.aborted) return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
     console.log(`[process:prep] Generating prep for ${pdfResult.sets.length} sets…`);
     const prepStart = Date.now();
     let prepMap: Record<string, string> = {};
     try {
-      prepMap = await generatePrepForAllSets(pdfResult.sets);
+      prepMap = await generatePrepForAllSets(pdfResult.sets, signal);
       console.log(
         `[process:prep] Done in ${Date.now() - prepStart}ms — ` +
         `got=${Object.keys(prepMap).length}/${pdfResult.sets.length}  keys=${JSON.stringify(Object.keys(prepMap))}`,
       );
     } catch (prepErr) {
+      if (prepErr instanceof Error && prepErr.name === 'AbortError') {
+        return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
+      }
       console.error('[process:prep] Prep generation failed (non-fatal):', prepErr);
     }
 
@@ -175,7 +178,24 @@ export const POST = withProjectAuth(
       prep: prepMap[set.setName],
     }));
 
-    // ── Step 4: Persist PDF extraction ────────────────────────────────────
+    // ── Phase 2: Persist — all DB writes in one pass after AI succeeds ─────
+    // Final signal check before touching the database.
+    if (signal.aborted) return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
+
+    // Step 2a: Persist door schedule ───────────────────────────────────────
+    const { data: scheduleData, error: scheduleError } = await upsertDoorScheduleImport(projectId, {
+      scheduleJson: scheduleResult.rows,
+      fileName: scheduleField.name,
+      uploadedBy: ctx.user.id,
+    });
+
+    if (scheduleError) {
+      return NextResponse.json({ error: scheduleError.message }, { status: 500 });
+    }
+
+    invalidateDoorSchedule(projectId);
+
+    // Step 2b: Persist PDF extraction ──────────────────────────────────────
     const { data: pdfData, error: pdfError } = await upsertHardwarePdfExtraction(projectId, {
       extractedJson: setsWithPrep,
       fileName: pdfField.name,
@@ -186,7 +206,7 @@ export const POST = withProjectAuth(
       return NextResponse.json({ error: pdfError.message }, { status: 500 });
     }
 
-    // ── Step 4b: Queue new unique items for master hardware DB approval ───
+    // Step 2c: Queue new unique items for master hardware DB approval ───────
     console.log(`[process:master] PDF extracted sets=${setsWithPrep.length}  items=${pdfResult.itemCount}`);
     const candidateItems = setsWithPrep
       .flatMap(set =>
@@ -220,10 +240,10 @@ export const POST = withProjectAuth(
       console.warn('[process:master] No candidate items — check that hardwareItems[].item field is populated.');
     }
 
-    // ── Step 5: Merge ─────────────────────────────────────────────────────
+    // Step 2d: Merge ────────────────────────────────────────────────────────
     const mergeResult = mergeHardwareData(setsWithPrep, scheduleResult.rows, projectId);
 
-    // ── Step 6: Persist merged final JSON ─────────────────────────────────
+    // Step 2e: Persist merged final JSON ────────────────────────────────────
     const { error: finalError } = await upsertProjectHardwareFinal(projectId, {
       finalJson: mergeResult.sets,
       pdfExtractionId: pdfData!.id,
@@ -235,7 +255,7 @@ export const POST = withProjectAuth(
       return NextResponse.json({ error: finalError.message }, { status: 500 });
     }
 
-    // ── Step 7: Return stats ───────────────────────────────────────────────
+    // ── Step 3: Return stats ───────────────────────────────────────────────
     return NextResponse.json({
       data: {
         setCount: mergeResult.setCount,

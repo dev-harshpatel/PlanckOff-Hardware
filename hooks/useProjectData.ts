@@ -136,7 +136,11 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                     ? transformHardwareSets(hwJson.data.extractedJson)
                     : [];
 
-                const finalRaw = Array.isArray(mergeJson?.data?.finalJson) && mergeJson.data.finalJson.length > 0
+                // hasFinalRecord: true when a project_hardware_finals row exists at all.
+                // An empty finalJson ([]) means the user intentionally cleared everything —
+                // that must be respected. Only null means "no record yet."
+                const hasFinalRecord = mergeJson?.data !== null && mergeJson?.data !== undefined;
+                const finalRaw = hasFinalRecord && Array.isArray(mergeJson.data.finalJson) && mergeJson.data.finalJson.length > 0
                     ? mergeJson.data.finalJson as Parameters<typeof transformFromFinalJson>[0]
                     : null;
                 const finalData = finalRaw ? transformFromFinalJson(finalRaw) : null;
@@ -144,7 +148,7 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                 let sets: typeof pdfSets;
                 let loadedDoors: Door[];
 
-                if (finalRaw && finalData && finalData.hardwareSets.length > 0) {
+                if (hasFinalRecord && finalData && finalData.hardwareSets.length > 0) {
                     // ── Phase C: final_json is the single source of truth ─────────────
                     // Mark this so reloadDoorSchedule becomes a no-op.
                     hasFinalJsonRef.current = true;
@@ -183,9 +187,17 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                         }))
                         .sort((a, b) => a.doorTag.localeCompare(b.doorTag, undefined, { numeric: true, sensitivity: 'base' }));
 
+                } else if (hasFinalRecord) {
+                    // ── final_json record exists but is empty ─────────────────────────
+                    // The user intentionally deleted all sets/doors. Respect the empty
+                    // state and lock out realtime reloads — do NOT rebuild from extraction tables.
+                    hasFinalJsonRef.current = true;
+                    sets = [];
+                    loadedDoors = [];
+
                 } else {
-                    // ── No final_json yet: build from extraction tables ────────────────
-                    // This path only runs on first load (before final_json is seeded).
+                    // ── No final_json record yet: build from extraction tables ─────────
+                    // This path only runs on first-ever load (before final_json is seeded).
                     sets = pdfSets;
 
                     const rawDoors = dsJson?.data?.scheduleJson
@@ -208,8 +220,8 @@ export function useProjectData({ projectId, addToast, saveToFinalJsonRef }: UseP
                     isInitialMount.current = true;
                 }
 
-                // Seed final_json on the very first load (when it doesn't exist yet).
-                if (!finalRaw && sets.length > 0 && !cancelled) {
+                // Seed final_json only on the very first load (no record exists yet).
+                if (!hasFinalRecord && sets.length > 0 && !cancelled) {
                     saveToFinalJsonRef.current?.(sets, loadedDoors).catch(() => {});
                 }
             } catch {

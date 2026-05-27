@@ -164,7 +164,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, 
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {trash.map(project => {
+              {trash.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i).map(project => {
                 const daysLeft = project.deletedAt ? getDaysLeft(project.deletedAt) : TRASH_TTL_DAYS;
                 const isRestoring = restoringId === project.id;
                 const isDeleting = deletingId === project.id;

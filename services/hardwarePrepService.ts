@@ -77,6 +77,7 @@ const BATCH_SCHEMA = {
 
 export async function generatePrepForAllSets(
   sets: ExtractedHardwareSet[],
+  signal?: AbortSignal,
 ): Promise<Record<string, string>> {
   if (sets.length === 0) return {};
 
@@ -108,7 +109,7 @@ ${setsDescription}`;
         json_schema: { name: 'hardware_prep_batch', strict: false, schema: BATCH_SCHEMA },
       },
       temperature: 0.1,
-    });
+    }, { signal });
 
     const raw = response.choices[0]?.message?.content ?? '';
     console.log(`[hardwarePrepService] Raw response (first 500 chars): ${raw.slice(0, 500)}`);
