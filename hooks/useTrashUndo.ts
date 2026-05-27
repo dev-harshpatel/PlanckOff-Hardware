@@ -101,13 +101,22 @@ export function useTrashUndo({
         if (!setToDelete) return;
 
         const trashItem = buildTrashItemForSet(setToDelete, doors);
-        const doorsToRemove = doors.filter(d =>
-            d.assignedHardwareSet?.id === setId ||
-            d.providedHardwareSet?.toLowerCase() === setToDelete.name.toLowerCase()
+        // Doors are NOT deleted — they stay in the schedule but become unassigned.
+        const affectedDoorIds = new Set(
+            doors
+                .filter(d =>
+                    d.assignedHardwareSet?.id === setId ||
+                    d.providedHardwareSet?.toLowerCase() === setToDelete.name.toLowerCase()
+                )
+                .map(d => d.id)
         );
 
         setHardwareSets(prev => prev.filter(s => s.id !== setId));
-        setDoors(prev => prev.filter(d => !doorsToRemove.some(dr => dr.id === d.id)));
+        setDoors(prev => prev.map(d =>
+            affectedDoorIds.has(d.id)
+                ? { ...d, assignedHardwareSet: undefined, status: 'pending' as const }
+                : d
+        ));
 
         const label = `Set "${setToDelete.name}" deleted — moves to Trash in`;
         pushUndoToast({
@@ -120,14 +129,12 @@ export function useTrashUndo({
                     next.splice(idx === -1 ? prev.length : idx, 0, setToDelete);
                     return next;
                 });
-                setDoors(prev => {
-                    const sortedBack = [...prev, ...doorsToRemove].sort((a, b) => {
-                        const ao = (a as Door & { scheduleOrder?: number }).scheduleOrder ?? Infinity;
-                        const bo = (b as Door & { scheduleOrder?: number }).scheduleOrder ?? Infinity;
-                        return ao - bo;
-                    });
-                    return sortedBack;
-                });
+                // Re-assign doors back to the restored set
+                setDoors(prev => prev.map(d =>
+                    affectedDoorIds.has(d.id)
+                        ? { ...d, assignedHardwareSet: setToDelete, status: 'complete' as const }
+                        : d
+                ));
             },
             onConfirm: () => {
                 const newTrash = [...trashItemsRef.current, trashItem];
@@ -145,15 +152,24 @@ export function useTrashUndo({
         if (setsToDelete.length === 0) return;
 
         const trashEntries = setsToDelete.map(s => buildTrashItemForSet(s, doors));
-        const doorsToRemove = doors.filter(d =>
-            setsToDelete.some(s =>
-                d.assignedHardwareSet?.id === s.id ||
-                d.providedHardwareSet?.toLowerCase() === s.name.toLowerCase()
-            )
+        // Doors are NOT deleted — they stay in the schedule but become unassigned.
+        const affectedDoorIds = new Set(
+            doors
+                .filter(d =>
+                    setsToDelete.some(s =>
+                        d.assignedHardwareSet?.id === s.id ||
+                        d.providedHardwareSet?.toLowerCase() === s.name.toLowerCase()
+                    )
+                )
+                .map(d => d.id)
         );
 
         setHardwareSets(prev => prev.filter(s => !setIds.has(s.id)));
-        setDoors(prev => prev.filter(d => !doorsToRemove.some(dr => dr.id === d.id)));
+        setDoors(prev => prev.map(d =>
+            affectedDoorIds.has(d.id)
+                ? { ...d, assignedHardwareSet: undefined, status: 'pending' as const }
+                : d
+        ));
 
         const batchId = `trash-bulk-${Date.now()}`;
         const label = `${setsToDelete.length} set${setsToDelete.length !== 1 ? 's' : ''} deleted — moves to Trash in`;
@@ -162,7 +178,19 @@ export function useTrashUndo({
             label,
             onUndo: () => {
                 setHardwareSets(prev => [...prev, ...setsToDelete]);
-                setDoors(prev => [...prev, ...doorsToRemove]);
+                // Re-assign each door back to its original set
+                setDoors(prev => prev.map(d => {
+                    if (!affectedDoorIds.has(d.id)) return d;
+                    const originalSet = setsToDelete.find(s =>
+                        s.id === d.assignedHardwareSet?.id ||
+                        s.name.toLowerCase() === d.providedHardwareSet?.toLowerCase()
+                    ) ?? setsToDelete.find(s =>
+                        s.name.toLowerCase() === d.providedHardwareSet?.toLowerCase()
+                    );
+                    return originalSet
+                        ? { ...d, assignedHardwareSet: originalSet, status: 'complete' as const }
+                        : d;
+                }));
             },
             onConfirm: () => {
                 const newTrash = [...trashItemsRef.current, ...trashEntries];
@@ -258,12 +286,15 @@ export function useTrashUndo({
     }, [trashItems, hardwareSets, addToast]);
 
     const handlePermanentDelete = useCallback((trashId: string) => {
-        setTrashItems(prev => prev.filter(t => t.id !== trashId));
-    }, []);
+        const newTrash = trashItemsRef.current.filter(t => t.id !== trashId);
+        setTrashItems(newTrash);
+        saveToFinalJson(hardwareSetsRef.current, doorsRef.current, newTrash).catch(() => {});
+    }, [saveToFinalJson, hardwareSetsRef, doorsRef, trashItemsRef]);
 
     const handleClearAllTrash = useCallback(() => {
         setTrashItems([]);
-    }, []);
+        saveToFinalJson(hardwareSetsRef.current, doorsRef.current, []).catch(() => {});
+    }, [saveToFinalJson, hardwareSetsRef, doorsRef]);
 
     const handleSplitSetAndReassign = useCallback((newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
         const newSet: HardwareSet = {

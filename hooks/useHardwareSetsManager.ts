@@ -45,6 +45,7 @@ export function useHardwareSetsManager({
     const [prepGenerating, setPrepGenerating] = useState<Set<string>>(new Set());
     const [prepErrors, setPrepErrors] = useState<Record<string, string>>({});
     const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'doors' | 'items'; direction: 'asc' | 'desc' } | null>(null);
+    const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
 
     // Locks in the PDF sequence the first time a non-empty set list arrives.
     // Subsequent deletes / restores use this order so sets always snap back
@@ -143,7 +144,9 @@ export function useHardwareSetsManager({
     };
 
     const handleFileSelect = (files: FileList | null) => {
-        if (files && files.length > 0) { setSelectedFiles(Array.from(files)); openConfirmModal(); }
+        if (!files || files.length === 0) return;
+        const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+        if (pdfFiles.length > 0) { onProcessUploads(pdfFiles, 'add'); }
     };
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false);
@@ -197,9 +200,12 @@ export function useHardwareSetsManager({
     };
     const clearSelection = () => setSelectedRows(new Set());
     const handleBulkDelete = () => {
-        if (selectedRows.size > 0 && confirm(`Are you sure you want to delete ${selectedRows.size} hardware sets? This action cannot be undone.`)) {
-            onBulkDeleteSets(selectedRows); setSelectedRows(new Set());
-        }
+        if (selectedRows.size > 0) setIsBulkDeleteConfirmOpen(true);
+    };
+    const confirmBulkDelete = () => {
+        onBulkDeleteSets(selectedRows);
+        setSelectedRows(new Set());
+        setIsBulkDeleteConfirmOpen(false);
     };
     const handleToggleDoorSelection = (setId: string, doorId: string) => {
         setSelectedDoors(prev => {
@@ -304,6 +310,7 @@ export function useHardwareSetsManager({
         toggleSelectAll,
         clearSelection,
         handleBulkDelete,
+        isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen, confirmBulkDelete,
         handleToggleDoorSelection,
         handleToggleAllDoorsInSection,
         handleGeneratePrep,

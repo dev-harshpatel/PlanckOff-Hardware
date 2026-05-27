@@ -76,14 +76,14 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         isCombinedOverwriteOpen, setIsCombinedOverwriteOpen, isCombinedOverwriteChecking,
         uploadErrors, isErrorModalOpen, setIsErrorModalOpen,
         validationReport, isValidationModalOpen, setIsValidationModalOpen, validationReportTitle,
-        resetCombinedModal, handleMinimizeCombinedModal,
+        resetCombinedModal, handleMinimizeCombinedModal, handleCancelProcessing,
         handleHardwareUploads, handleConfirmHardwareUpload,
         handleDoorScheduleUpload, handleConfirmDoorUpload,
         handleCombinedProcessClick, handleConfirmCombinedOverwrite,
         handleSaveSet, handleAssignAll, handleProvidedSetChange,
     } = useProjectUploads({
         projectId: project.id, hardwareSets, setHardwareSets, doors, setDoors,
-        isInitialMount, hasFinalJsonRef, addToast, saveToFinalJson,
+        isInitialMount, hasFinalJsonRef, trashItemsRef, addToast, saveToFinalJson,
     });
 
     const {
@@ -430,10 +430,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => { if (!isCombinedProcessing) resetCombinedModal(); }}
-                                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                    disabled={isCombinedProcessing}
-                                    aria-label="Close"
+                                    onClick={() => isCombinedProcessing ? handleCancelProcessing() : resetCombinedModal()}
+                                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"
+                                    aria-label={isCombinedProcessing ? 'Stop processing' : 'Close'}
                                 >
                                     <X className="h-3.5 w-3.5" />
                                 </button>
@@ -516,10 +515,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={resetCombinedModal}
-                                        disabled={isCombinedProcessing}
+                                        onClick={isCombinedProcessing ? handleCancelProcessing : resetCombinedModal}
+                                        className={isCombinedProcessing ? 'text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-400/30' : ''}
                                     >
-                                        Cancel
+                                        {isCombinedProcessing ? 'Stop' : 'Cancel'}
                                     </Button>
                                     <Button
                                         size="sm"

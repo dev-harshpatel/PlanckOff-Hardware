@@ -15,6 +15,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
     Upload, Plus, Search, ChevronRight, ChevronDown, ChevronUp,
     Copy, Pencil, Trash2, AlertTriangle, AlertCircle, Package, X,
     Ban, Loader2, CheckCircle2,
@@ -92,6 +96,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
         toggleSelectAll,
         clearSelection,
         handleBulkDelete,
+        isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen, confirmBulkDelete,
         handleToggleDoorSelection,
         handleToggleAllDoorsInSection,
         handleGeneratePrep,
@@ -133,7 +138,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 ref={fileInputRef}
                 onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
-                accept=".pdf,.csv,.xlsx,.xls,.docx,.txt"
+                accept=".pdf"
                 multiple
             />
 
@@ -142,7 +147,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 <div className="absolute inset-0 bg-primary-50/95 flex flex-col items-center justify-center z-20 pointer-events-none rounded-xl border-2 border-dashed border-primary-400">
                     <Upload className="w-12 h-12 text-primary-500 mb-3" />
                     <p className="text-lg font-semibold text-primary-700">Drop to upload</p>
-                    <p className="text-sm text-primary-500 mt-1">PDF, Excel, Word supported</p>
+                    <p className="text-sm text-primary-500 mt-1">PDF files only</p>
                 </div>
             )}
 
@@ -556,6 +561,21 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                     </div>
                 </div>
             )}
+
+            <AlertDialog open={isBulkDeleteConfirmOpen} onOpenChange={open => { if (!open) setIsBulkDeleteConfirmOpen(false); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete {selectedRows.size} hardware set{selectedRows.size !== 1 ? 's' : ''}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The selected hardware sets will be moved to Trash. Doors assigned to them will become unassigned.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmBulkDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

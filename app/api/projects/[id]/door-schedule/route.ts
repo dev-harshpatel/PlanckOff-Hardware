@@ -125,6 +125,46 @@ export const POST = withProjectAuth(
 );
 
 // ---------------------------------------------------------------------------
+// PUT — replace the stored schedule, keeping only the specified doorTags.
+// Body: { keepDoorTags: string[] }
+// Used by saveToFinalJson to prune deleted doors from the raw import table.
+// ---------------------------------------------------------------------------
+
+export const PUT = withProjectAuth(
+  async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+    const projectId = params?.id as string;
+
+    let body: { keepDoorTags?: string[] };
+    try {
+      body = await req.json() as { keepDoorTags?: string[] };
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    }
+
+    if (!Array.isArray(body.keepDoorTags)) {
+      return NextResponse.json({ error: 'keepDoorTags must be an array.' }, { status: 400 });
+    }
+
+    const { data: current, error: loadError } = await getDoorScheduleImport(projectId);
+    if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 });
+    if (!current) return NextResponse.json({ data: { updated: false, kept: 0 } });
+
+    const keepSet = new Set(body.keepDoorTags);
+    const filtered: DoorScheduleRow[] = current.scheduleJson.filter(row => keepSet.has(row.doorTag));
+
+    const { error: saveError } = await upsertDoorScheduleImport(projectId, {
+      scheduleJson: filtered,
+      fileName: current.fileName ?? undefined,
+    });
+
+    if (saveError) return NextResponse.json({ error: saveError.message }, { status: 500 });
+
+    await invalidateDoorSchedule(projectId);
+    return NextResponse.json({ data: { updated: true, kept: filtered.length } });
+  },
+);
+
+// ---------------------------------------------------------------------------
 // PATCH — update a single door's sections in the stored scheduleJson
 // Body: { doorTag: string; sections: DoorScheduleRow['sections'] }
 // ---------------------------------------------------------------------------

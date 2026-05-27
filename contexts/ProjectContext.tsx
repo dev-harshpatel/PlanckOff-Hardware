@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { Project, HardwareItem, AppSettings, NewProjectData } from '../types';
 import { initialMasterInventory } from '@/constants/inventory';
 import { ERRORS } from '@/constants/errors';
@@ -69,6 +69,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsHydrated, setProjectsHydrated] = useState(false);
   const [trash, setTrash] = useState<Project[]>([]);
+  const deletingIds = useRef(new Set<string>());
   const [masterInventory, setMasterInventory] = useState<HardwareItem[]>(() => {
     if (typeof window === 'undefined') return initialMasterInventory;
     try {
@@ -241,6 +242,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
   );
 
   const deleteProject = useCallback(async (id: string) => {
+    if (deletingIds.current.has(id)) return;
+    deletingIds.current.add(id);
     try {
       const res = await fetch(`/api/projects/${id}`, {
         method: 'DELETE',
@@ -257,6 +260,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast({ type: 'error', message });
+    } finally {
+      deletingIds.current.delete(id);
     }
   }, [projects, addToast]);
 

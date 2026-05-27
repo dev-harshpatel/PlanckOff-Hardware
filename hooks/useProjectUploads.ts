@@ -19,6 +19,7 @@ interface UseProjectUploadsOptions {
     setDoors: React.Dispatch<React.SetStateAction<Door[]>>;
     isInitialMount: React.MutableRefObject<boolean>;
     hasFinalJsonRef: React.MutableRefObject<boolean>;
+    trashItemsRef: React.MutableRefObject<TrashItem[]>;
     addToast: (toast: Omit<Toast, 'id'>) => void;
     saveToFinalJson: (sets: HardwareSet[], doors: Door[], trash?: TrashItem[]) => Promise<void>;
 }
@@ -31,6 +32,7 @@ export function useProjectUploads({
     setDoors,
     isInitialMount,
     hasFinalJsonRef,
+    trashItemsRef,
     addToast,
     saveToFinalJson,
 }: UseProjectUploadsOptions) {
@@ -134,6 +136,8 @@ export function useProjectUploads({
     const logsRef = useRef<ProcessingLogEntry[]>([]);
     const [isCombinedOverwriteOpen, setIsCombinedOverwriteOpen] = useState(false);
     const [isCombinedOverwriteChecking, setIsCombinedOverwriteChecking] = useState(false);
+    const cancelControllerRef = useRef<AbortController | null>(null);
+    const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Legacy upload errors
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -166,6 +170,15 @@ export function useProjectUploads({
         return () => unregisterExpandHandler();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Returns the current trash with stale entries for live-set names removed.
+    // Prevents duplicate trash accumulation across delete → re-upload → delete cycles.
+    const trashWithoutLiveSets = useCallback((liveSets: HardwareSet[]): TrashItem[] => {
+        const liveNames = new Set(liveSets.map(s => s.name.toLowerCase()));
+        return trashItemsRef.current.filter(t =>
+            t.type !== 'set' || !liveNames.has((t.setName ?? '').toLowerCase())
+        );
+    }, [trashItemsRef]);
 
     const addLog = useCallback((level: 'info' | 'success' | 'warn' | 'error', msg: string) => {
         const entry: ProcessingLogEntry = { level, msg };
@@ -240,11 +253,20 @@ export function useProjectUploads({
                 const dsFreshJson = dsFresh.ok ? await dsFresh.json() : null;
                 if (dsFreshJson?.data?.scheduleJson) {
                     const freshDoors = transformDoors(dsFreshJson.data.scheduleJson, loadedSets);
-                    setDoors(freshDoors);
+                    const { sets: autoSets, doors: autoDoors } = autoCreateVariants(loadedSets, freshDoors);
+                    const resolvedSets = resolveAllSets(autoSets, autoDoors);
+                    hasFinalJsonRef.current = true;
+                    setHardwareSets(resolvedSets);
+                    setDoors(autoDoors);
                     isInitialMount.current = true;
-                    saveToFinalJson(loadedSets, freshDoors).catch(() => {});
+                    saveToFinalJson(resolvedSets, autoDoors, trashWithoutLiveSets(resolvedSets)).catch(() => {});
                 } else {
-                    saveToFinalJson(loadedSets, []).catch(() => {});
+                    const { sets: autoSets, doors: autoDoors } = autoCreateVariants(loadedSets, []);
+                    const resolvedSets = resolveAllSets(autoSets, autoDoors);
+                    hasFinalJsonRef.current = true;
+                    setHardwareSets(resolvedSets);
+                    isInitialMount.current = true;
+                    saveToFinalJson(resolvedSets, []).catch(() => {});
                 }
             } else if (loadedSets.length > 0) {
                 const dsFallback = await fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' });
@@ -252,8 +274,13 @@ export function useProjectUploads({
                 const fallbackDoors = dsFallbackJson?.data?.scheduleJson
                     ? transformDoors(dsFallbackJson.data.scheduleJson, loadedSets)
                     : [];
-                if (fallbackDoors.length > 0) { setDoors(fallbackDoors); isInitialMount.current = true; }
-                saveToFinalJson(loadedSets, fallbackDoors).catch(() => {});
+                const { sets: autoSets, doors: autoDoors } = autoCreateVariants(loadedSets, fallbackDoors);
+                const resolvedSets = resolveAllSets(autoSets, autoDoors);
+                hasFinalJsonRef.current = true;
+                setHardwareSets(resolvedSets);
+                if (autoDoors.length > 0) { setDoors(autoDoors); }
+                isInitialMount.current = true;
+                saveToFinalJson(resolvedSets, autoDoors).catch(() => {});
             }
 
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
@@ -282,9 +309,16 @@ export function useProjectUploads({
         }
         const file = pdfs[0];
 
-        const check = await fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' });
+        const [check, mergeCheck] = await Promise.all([
+            fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
+            fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+        ]);
         const checkJson = check.ok ? await check.json() : null;
-        const hasExisting = !!checkJson?.data;
+        const mergeJson = mergeCheck.ok ? await mergeCheck.json() : null;
+        const hasExtracted = (checkJson?.data?.extractedJson?.length ?? 0) > 0;
+        const hasFinalSets = ((mergeJson?.data?.finalJson ?? []) as Array<{ setName: string }>)
+            .filter(s => s.setName !== '__unassigned__').length > 0;
+        const hasExisting = hasExtracted || hasFinalSets;
 
         if (hasExisting) {
             setHardwareUploadFiles([file]);
@@ -345,17 +379,26 @@ export function useProjectUploads({
                     ? transformHardwareSets(hwFreshJson.data.extractedJson)
                     : hardwareSets;
                 const freshDoors = transformDoors(dsJson.data.scheduleJson, freshSets);
-                if (hwFreshJson?.data?.extractedJson) { setHardwareSets(freshSets); isInitialMount.current = true; }
-                setDoors(freshDoors);
+                const { sets: autoSets, doors: autoDoors } = autoCreateVariants(freshSets, freshDoors);
+                const resolvedSets = resolveAllSets(autoSets, autoDoors);
+                hasFinalJsonRef.current = true;
+                setHardwareSets(resolvedSets);
+                setDoors(autoDoors);
                 isInitialMount.current = true;
-                saveToFinalJson(freshSets, freshDoors).catch(() => {});
+                saveToFinalJson(resolvedSets, autoDoors, trashWithoutLiveSets(resolvedSets)).catch(() => {});
             } else if (loadedDoors.length > 0) {
                 const hwFallback = await fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' });
                 const hwFallbackJson = hwFallback.ok ? await hwFallback.json() : null;
                 const fallbackSets = hwFallbackJson?.data?.extractedJson
                     ? transformHardwareSets(hwFallbackJson.data.extractedJson)
                     : hardwareSets;
-                saveToFinalJson(fallbackSets, loadedDoors).catch(() => {});
+                const { sets: autoSets, doors: autoDoors } = autoCreateVariants(fallbackSets, loadedDoors);
+                const resolvedSets = resolveAllSets(autoSets, autoDoors);
+                hasFinalJsonRef.current = true;
+                setHardwareSets(resolvedSets);
+                setDoors(autoDoors);
+                isInitialMount.current = true;
+                saveToFinalJson(resolvedSets, autoDoors, trashWithoutLiveSets(resolvedSets)).catch(() => {});
             }
 
             updateProcessingTask(taskId, { stage: 'Done!', progress: 100 });
@@ -377,9 +420,16 @@ export function useProjectUploads({
         if (!file) return;
         e.target.value = '';
 
-        const check = await fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' });
+        const [check, mergeCheck] = await Promise.all([
+            fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
+            fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+        ]);
         const checkJson = check.ok ? await check.json() : null;
-        const hasExisting = !!checkJson?.data;
+        const mergeJson = mergeCheck.ok ? await mergeCheck.json() : null;
+        const hasSchedule = (checkJson?.data?.scheduleJson?.length ?? 0) > 0;
+        const hasFinalDoors = ((mergeJson?.data?.finalJson ?? []) as Array<{ doors?: unknown[] }>)
+            .some(s => Array.isArray(s.doors) && s.doors.length > 0);
+        const hasExisting = hasSchedule || hasFinalDoors;
 
         if (hasExisting) {
             setDoorUploadFile(file);
@@ -400,13 +450,9 @@ export function useProjectUploads({
         if (!combinedExcelFile || !combinedPdfFile) return;
         setIsCombinedOverwriteChecking(true);
         try {
-            const [dsRes, pdfRes] = await Promise.all([
-                fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
-                fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
-            ]);
-            const dsJson = dsRes.ok ? await dsRes.json() : null;
-            const pdfJson = pdfRes.ok ? await pdfRes.json() : null;
-            const hasExisting = !!dsJson?.data || !!pdfJson?.data;
+            const mergeRes = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
+            const mergeJson = mergeRes.ok ? await mergeRes.json() : null;
+            const hasExisting = (mergeJson?.data?.finalJson?.length ?? 0) > 0;
             if (hasExisting) {
                 setIsCombinedOverwriteOpen(true);
             } else {
@@ -431,6 +477,7 @@ export function useProjectUploads({
         setCombinedLogs([]);
         logsRef.current = [];
         sessionStorage.setItem(`planckoff_proc_${projectId}`, Date.now().toString());
+        cancelControllerRef.current = new AbortController();
         setWidget({
             isActive: true,
             isProcessing: true,
@@ -464,8 +511,8 @@ export function useProjectUploads({
             form.append('pdf', pdfFile);
 
             let simulatedProgress = 15;
-            const pdfProgressTimer = setInterval(() => {
-                if (simulatedProgress >= 70) { clearInterval(pdfProgressTimer); return; }
+            progressTimerRef.current = setInterval(() => {
+                if (simulatedProgress >= 70) { clearInterval(progressTimerRef.current!); return; }
                 simulatedProgress = Math.min(simulatedProgress + 3, 70);
                 setCombinedProgress(simulatedProgress);
                 setWidget({ progress: simulatedProgress });
@@ -483,9 +530,10 @@ export function useProjectUploads({
                 method: 'POST',
                 credentials: 'include',
                 body: form,
+                signal: cancelControllerRef.current.signal,
             });
 
-            clearInterval(pdfProgressTimer);
+            if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
 
             let json: {
                 data?: {
@@ -563,7 +611,7 @@ export function useProjectUploads({
 
             if (resolvedSets.length > 0) { setHardwareSets(resolvedSets); isInitialMount.current = true; }
             if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
-            await saveToFinalJson(resolvedSets, autoDoors);
+            await saveToFinalJson(resolvedSets, autoDoors, trashWithoutLiveSets(resolvedSets));
 
             setPipelineStep(6);
             setCombinedProgress(100);
@@ -577,17 +625,35 @@ export function useProjectUploads({
             });
 
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            addLog('error', `Failed: ${msg}`);
-            setCombinedCurrentStep('Failed');
-            setCombinedProgress(0);
-            addToast({ type: 'error', message: ERRORS.HARDWARE.PROCESSING_FAILED.message, details: ERRORS.HARDWARE.PROCESSING_FAILED.action });
+            if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+            if (err instanceof Error && err.name === 'AbortError') {
+                // User cancelled — reset to a fresh state so they can re-upload
+                logsRef.current = [];
+                setCombinedLogs([]);
+                setCombinedProgress(0);
+                setCombinedCurrentStep('');
+                setPipelineStep(-1);
+                setCombinedExcelFile(null);
+                setCombinedPdfFile(null);
+            } else {
+                const msg = err instanceof Error ? err.message : 'Unknown error';
+                addLog('error', `Failed: ${msg}`);
+                setCombinedCurrentStep('Failed');
+                setCombinedProgress(0);
+                addToast({ type: 'error', message: ERRORS.HARDWARE.PROCESSING_FAILED.message, details: ERRORS.HARDWARE.PROCESSING_FAILED.action });
+            }
         } finally {
             setIsCombinedProcessing(false);
+            cancelControllerRef.current = null;
             sessionStorage.removeItem(`planckoff_proc_${projectId}`);
             clearWidget();
         }
     };
+
+    const handleCancelProcessing = useCallback(() => {
+        if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+        cancelControllerRef.current?.abort();
+    }, []);
 
     const handleSaveSet = (set: HardwareSet) => {
         const index = hardwareSets.findIndex(s => s.id === set.id);
@@ -624,7 +690,7 @@ export function useProjectUploads({
         setHardwareSets(resolvedAssignSets);
         setDoors(freshDoors);
         isInitialMount.current = true;
-        saveToFinalJson(resolvedAssignSets, freshDoors).catch(() => {});
+        saveToFinalJson(resolvedAssignSets, freshDoors, trashWithoutLiveSets(resolvedAssignSets)).catch(() => {});
 
         const matched = mergeStats.matchedDoorCount;
         const unmatched = mergeStats.unmatchedDoorCount;
@@ -712,6 +778,7 @@ export function useProjectUploads({
         validationReportTitle,
         resetCombinedModal,
         handleMinimizeCombinedModal,
+        handleCancelProcessing,
         handleHardwareUploads,
         handleConfirmHardwareUpload,
         handleDoorScheduleUpload,

@@ -15,6 +15,10 @@ import {
   AlertTriangle,
   ClipboardCheck,
 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { RoleName } from '@/types/auth';
 import type { MasterHardwareItem, MasterHardwarePending } from '@/lib/db/masterHardware';
 import { ERRORS } from '@/constants/errors';
@@ -55,6 +59,7 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Debounce search input — also resets page to 1
   useEffect(() => {
@@ -207,8 +212,12 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
   };
 
   // --- Delete ---
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this item from the master database?')) return;
+  const handleDelete = (id: string) => setPendingDeleteId(id);
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
     setDeletingId(id);
     try {
       const res = await fetch(`/api/master-hardware/${id}`, {
@@ -478,6 +487,21 @@ const DatabaseView: React.FC<DatabaseViewProps> = ({ userRole, addToast }) => {
         onClose={() => setIsReviewOpen(false)}
         onReview={handleReview}
       />
+
+      <AlertDialog open={!!pendingDeleteId} onOpenChange={open => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete database item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This item will be permanently removed from the master database and cannot be recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
