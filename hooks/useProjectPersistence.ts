@@ -147,6 +147,39 @@ export function useProjectPersistence({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ finalJson, trashJson: currentTrash }),
             });
+
+            // Keep individual extraction tables in sync with deletions from the UI.
+            // Both calls are fire-and-forget — a failure here is non-critical.
+            fetch(`/api/projects/${projectId}/hardware-pdf`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    extractedJson: currentSets.map(set => ({
+                        setName: set.name,
+                        isManualEntry: set.isManualEntry === true,
+                        hardwareItems: set.items.map(item => ({
+                            qty: item.quantity,
+                            item: item.name,
+                            manufacturer: item.manufacturer ?? '',
+                            description: item.description ?? '',
+                            processedDescription: item.processedDescription,
+                            userDescription: item.userDescription,
+                            finish: item.finish ?? '',
+                            multipliedQuantity: item.multipliedQuantity,
+                        })),
+                        notes: set.description ?? '',
+                        prep: set.prep,
+                    })),
+                }),
+            }).catch(() => {});
+
+            fetch(`/api/projects/${projectId}/door-schedule`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keepDoorTags: currentDoors.map(d => d.doorTag) }),
+            }).catch(() => {});
         } catch (err) {
             console.error('[saveToFinalJson] Failed to persist final JSON:', err);
             addToast({

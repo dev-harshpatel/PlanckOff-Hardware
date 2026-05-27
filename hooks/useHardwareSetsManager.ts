@@ -144,7 +144,9 @@ export function useHardwareSetsManager({
     };
 
     const handleFileSelect = (files: FileList | null) => {
-        if (files && files.length > 0) { setSelectedFiles(Array.from(files)); openConfirmModal(); }
+        if (!files || files.length === 0) return;
+        const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+        if (pdfFiles.length > 0) { onProcessUploads(pdfFiles, 'add'); }
     };
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false);

@@ -286,12 +286,15 @@ export function useTrashUndo({
     }, [trashItems, hardwareSets, addToast]);
 
     const handlePermanentDelete = useCallback((trashId: string) => {
-        setTrashItems(prev => prev.filter(t => t.id !== trashId));
-    }, []);
+        const newTrash = trashItemsRef.current.filter(t => t.id !== trashId);
+        setTrashItems(newTrash);
+        saveToFinalJson(hardwareSetsRef.current, doorsRef.current, newTrash).catch(() => {});
+    }, [saveToFinalJson, hardwareSetsRef, doorsRef, trashItemsRef]);
 
     const handleClearAllTrash = useCallback(() => {
         setTrashItems([]);
-    }, []);
+        saveToFinalJson(hardwareSetsRef.current, doorsRef.current, []).catch(() => {});
+    }, [saveToFinalJson, hardwareSetsRef, doorsRef]);
 
     const handleSplitSetAndReassign = useCallback((newSetData: HardwareSet, doorIds: string[], sourceSetId: string) => {
         const newSet: HardwareSet = {

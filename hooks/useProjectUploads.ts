@@ -309,9 +309,16 @@ export function useProjectUploads({
         }
         const file = pdfs[0];
 
-        const check = await fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' });
+        const [check, mergeCheck] = await Promise.all([
+            fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
+            fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+        ]);
         const checkJson = check.ok ? await check.json() : null;
-        const hasExisting = (checkJson?.data?.extractedJson?.length ?? 0) > 0;
+        const mergeJson = mergeCheck.ok ? await mergeCheck.json() : null;
+        const hasExtracted = (checkJson?.data?.extractedJson?.length ?? 0) > 0;
+        const hasFinalSets = ((mergeJson?.data?.finalJson ?? []) as Array<{ setName: string }>)
+            .filter(s => s.setName !== '__unassigned__').length > 0;
+        const hasExisting = hasExtracted || hasFinalSets;
 
         if (hasExisting) {
             setHardwareUploadFiles([file]);
@@ -413,9 +420,16 @@ export function useProjectUploads({
         if (!file) return;
         e.target.value = '';
 
-        const check = await fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' });
+        const [check, mergeCheck] = await Promise.all([
+            fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
+            fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+        ]);
         const checkJson = check.ok ? await check.json() : null;
-        const hasExisting = (checkJson?.data?.scheduleJson?.length ?? 0) > 0;
+        const mergeJson = mergeCheck.ok ? await mergeCheck.json() : null;
+        const hasSchedule = (checkJson?.data?.scheduleJson?.length ?? 0) > 0;
+        const hasFinalDoors = ((mergeJson?.data?.finalJson ?? []) as Array<{ doors?: unknown[] }>)
+            .some(s => Array.isArray(s.doors) && s.doors.length > 0);
+        const hasExisting = hasSchedule || hasFinalDoors;
 
         if (hasExisting) {
             setDoorUploadFile(file);
@@ -436,15 +450,9 @@ export function useProjectUploads({
         if (!combinedExcelFile || !combinedPdfFile) return;
         setIsCombinedOverwriteChecking(true);
         try {
-            const [dsRes, pdfRes] = await Promise.all([
-                fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
-                fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
-            ]);
-            const dsJson = dsRes.ok ? await dsRes.json() : null;
-            const pdfJson = pdfRes.ok ? await pdfRes.json() : null;
-            const hasExisting =
-                (dsJson?.data?.scheduleJson?.length ?? 0) > 0 ||
-                (pdfJson?.data?.extractedJson?.length ?? 0) > 0;
+            const mergeRes = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
+            const mergeJson = mergeRes.ok ? await mergeRes.json() : null;
+            const hasExisting = (mergeJson?.data?.finalJson?.length ?? 0) > 0;
             if (hasExisting) {
                 setIsCombinedOverwriteOpen(true);
             } else {

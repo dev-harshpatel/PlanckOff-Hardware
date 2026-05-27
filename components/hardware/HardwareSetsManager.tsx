@@ -138,7 +138,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 ref={fileInputRef}
                 onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
-                accept=".pdf,.csv,.xlsx,.xls,.docx,.txt"
+                accept=".pdf"
                 multiple
             />
 
@@ -147,7 +147,7 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                 <div className="absolute inset-0 bg-primary-50/95 flex flex-col items-center justify-center z-20 pointer-events-none rounded-xl border-2 border-dashed border-primary-400">
                     <Upload className="w-12 h-12 text-primary-500 mb-3" />
                     <p className="text-lg font-semibold text-primary-700">Drop to upload</p>
-                    <p className="text-sm text-primary-500 mt-1">PDF, Excel, Word supported</p>
+                    <p className="text-sm text-primary-500 mt-1">PDF files only</p>
                 </div>
             )}
 
