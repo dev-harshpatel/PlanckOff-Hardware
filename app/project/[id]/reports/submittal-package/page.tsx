@@ -10,6 +10,7 @@ import { transformHardwareSets, transformDoors } from '@/utils/hardwareTransform
 import { filterExcludedFromFinalJson, filterHardwareExcludedDoors } from '@/utils/reportFilters';
 import { Package } from 'lucide-react';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
+import type { ElevationType } from '@/types';
 
 const SubmittalGenerator = dynamic(() => import('@/components/submittals/SubmittalGenerator'), { ssr: false });
 
@@ -165,6 +166,7 @@ export default function SubmittalPackagePage() {
           <SubmittalGenerator
             finalJson={finalJson}
             projectName={activeProject.name}
+            elevationTypes={(activeProject.elevationTypes ?? []) as ElevationType[]}
           />
         )}
         {(!finalJson || finalJson.length === 0) && (

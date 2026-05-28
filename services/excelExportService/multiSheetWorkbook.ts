@@ -3,6 +3,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { applySheetTheme } from '../excelTheme';
+import { toExcelNumber } from '../../utils/excelUtils';
 import { Door, HardwareSet, HardwareItem } from '../../types';
 import { assignDoorCSISection, assignHardwareCSISection } from '../../utils/csiMasterFormat';
 import { buildExportFilename } from '../../utils/exportFilename';
@@ -78,14 +79,14 @@ function createComprehensiveDoorScheduleSheet(
         const csiSection = door.csiSection || assignDoorCSISection(door);
         const row = [
             door.tag || door.doorTag,
-            door.width || '',
-            door.height || '',
-            door.thickness || '',
+            toExcelNumber(door.width),
+            toExcelNumber(door.height),
+            toExcelNumber(door.thickness),
             door.material || door.doorMaterial || '',
             door.coreType || '',
             door.faceType || '',
             door.fireRating || '',
-            door.hardwareSet || door.assignedHardwareSet?.name || '',
+            toExcelNumber(door.hardwareSet || door.assignedHardwareSet?.name),
             door.location || '',
             door.handing || '',
             csiSection
@@ -210,10 +211,10 @@ function createFrameDetailsSheet(
         const row = [
             door.tag || door.doorTag,
             door.frameMaterial || '',
-            door.frameDepth || '',
+            toExcelNumber(door.frameDepth),
             door.frameProfile || '',
             door.anchorType || '',
-            door.anchorSpacing || '',
+            toExcelNumber(door.anchorSpacing),
             door.silencerQty ?? null,
             door.framePreparationNotes || ''
         ];

@@ -16,6 +16,7 @@ import type { ImageInfo } from '../../../utils/imageUtils';
 import { getDoorQuantity, sumDoorQuantities } from '../../../utils/doorUtils';
 import { collectGroupElevationTypes } from '../../../utils/elevationUtils';
 import { parseColId, aggregateDoorsBySelectedColumns, getRowValue } from '../../../utils/doorScheduleUtils';
+import { toExcelNumber } from '../../../utils/excelUtils';
 
 interface UseDoorScheduleDownloadParams {
   selectedColumns: string[];
@@ -107,7 +108,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
           const sheetName = rawName.replace(/[\\/*?[\]:]/g, '_').slice(0, 31) || `Sheet${i + 1}`;
 
           const rows = rowsByGroup[i].map(row =>
-            selectedColumns.map(col => getRowValue(row, col) || ''),
+            selectedColumns.map(col => toExcelNumber(getRowValue(row, col))),
           );
           const metaRows = buildMetadataRows({ reportTitle: 'Door Schedule', projectName });
           const ws = XLSX.utils.aoa_to_sheet([...metaRows, headers, ...rows]);
