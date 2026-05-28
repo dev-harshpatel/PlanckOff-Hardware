@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { X, Bold, Italic, List, ListOrdered, Heading2, Undo, Redo, Sparkles } from 'lucide-react';
+import { X, Bold, Italic, List, ListOrdered, Heading2, Undo, Redo, Sparkles, FileSpreadsheet, FileDown, Check } from 'lucide-react';
+import { buildExportFilename } from '@/utils/exportFilename';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +14,7 @@ import { generateAIContent } from '@/services/aiProviderService';
 
 interface ProjectNotesPanelProps {
   projectId: string;
+  projectName?: string;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -95,6 +97,19 @@ function plainTextToEditorHtml(text: string): string {
 
   closeList();
   return parts.join('') || '<p></p>';
+}
+
+function tiptapToText(node: Record<string, unknown> | null): string {
+  if (!node) return '';
+  const type = node.type as string;
+  const children = (node.content as Record<string, unknown>[] | undefined) ?? [];
+  if (type === 'text') return (node.text as string) ?? '';
+  if (type === 'hardBreak') return '\n';
+  if (type === 'paragraph' || type === 'heading')
+    return children.map(c => tiptapToText(c as Record<string, unknown>)).join('') + '\n';
+  if (type === 'listItem')
+    return '• ' + children.map(c => tiptapToText(c as Record<string, unknown>)).join('').trim() + '\n';
+  return children.map(c => tiptapToText(c as Record<string, unknown>)).join('');
 }
 
 const IMPROVE_NOTES_MODEL = 'google/gemini-2.0-flash-001';
@@ -274,7 +289,7 @@ function NoteEditor({ tab, initialContent, onUpdate }: NoteEditorProps) {
   );
 }
 
-export function ProjectNotesPanel({ projectId, isOpen, onClose }: ProjectNotesPanelProps) {
+export function ProjectNotesPanel({ projectId, projectName, isOpen, onClose }: ProjectNotesPanelProps) {
   const [savedNotes, setSavedNotes] = useState<DraftState>(EMPTY_DRAFT);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [loading, setLoading] = useState(false);
@@ -282,6 +297,10 @@ export function ProjectNotesPanel({ projectId, isOpen, onClose }: ProjectNotesPa
   const [activeTab, setActiveTab] = useState<NoteTab>('hardware');
   const [editorKey, setEditorKey] = useState(0);
   const didFetch = useRef<string | null>(null);
+
+  const [exportDialog, setExportDialog] = useState<null | 'excel' | 'pdf'>(null);
+  const [exportSections, setExportSections] = useState({ hardware: true, door: true, frame: true });
+  const exportDialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (didFetch.current === projectId) return;
@@ -309,6 +328,73 @@ export function ProjectNotesPanel({ projectId, isOpen, onClose }: ProjectNotesPa
     setDraft(EMPTY_DRAFT);
     setEditorKey((k) => k + 1);
   }, [projectId]);
+
+  useEffect(() => {
+    if (!exportDialog) return;
+    const handler = (e: MouseEvent) => {
+      if (exportDialogRef.current && !exportDialogRef.current.contains(e.target as Node)) {
+        setExportDialog(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportDialog]);
+
+  const handleDownloadExcel = useCallback(async () => {
+    try {
+      const { utils, writeFile } = await import('xlsx-js-style');
+      const wb = utils.book_new();
+      const sections = [['hardware', 'Hardware'], ['door', 'Door'], ['frame', 'Frame']] as const;
+      for (const [key, label] of sections) {
+        if (!exportSections[key]) continue;
+        const text = tiptapToText(draft[key]);
+        const lines = text.split('\n').filter(l => l.trim() !== '');
+        utils.book_append_sheet(wb, utils.aoa_to_sheet(lines.length > 0 ? lines.map(l => [l]) : [['(No notes)']]), label);
+      }
+      if (wb.SheetNames.length === 0) return;
+      writeFile(wb, buildExportFilename(projectName ?? 'project', 'notes', 'xlsx'));
+    } catch (err) {
+      console.error('[NotesPanel] Excel export failed:', err);
+    }
+  }, [draft, exportSections, projectName]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.width;
+      const margin = 14;
+      let y = 14;
+      const sections = [['hardware', 'Hardware'], ['door', 'Door'], ['frame', 'Frame']] as const;
+      let first = true;
+      for (const [key, label] of sections) {
+        if (!exportSections[key]) continue;
+        if (!first) y += 8;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label} Notes`, margin, y);
+        y += 6;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        const text = tiptapToText(draft[key]).trim();
+        const splitLines = doc.splitTextToSize(text || '(No notes)', pageW - margin * 2) as string[];
+        doc.text(splitLines, margin, y);
+        y += splitLines.length * 5 + 4;
+        first = false;
+      }
+      if (first) return;
+      doc.save(buildExportFilename(projectName ?? 'project', 'notes', 'pdf'));
+    } catch (err) {
+      console.error('[NotesPanel] PDF export failed:', err);
+    }
+  }, [draft, exportSections, projectName]);
+
+  const handleExportConfirm = useCallback(() => {
+    if (!exportDialog) return;
+    if (exportDialog === 'excel') void handleDownloadExcel();
+    else void handleDownloadPdf();
+    setExportDialog(null);
+  }, [exportDialog, handleDownloadExcel, handleDownloadPdf]);
 
   const handleUpdate = useCallback((tab: NoteTab, content: Record<string, unknown>) => {
     setDraft((prev) => ({ ...prev, [tab]: content }));
@@ -358,12 +444,79 @@ export function ProjectNotesPanel({ projectId, isOpen, onClose }: ProjectNotesPa
       >
         <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--border)] flex-shrink-0">
           <span className="text-sm font-semibold text-[var(--text)]">Project Notes</span>
-          <button
-            onClick={handleCancel}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <div ref={exportDialogRef} className="relative flex items-center gap-1.5">
+              <button
+                onClick={() => setExportDialog(prev => prev === 'excel' ? null : 'excel')}
+                title="Download Notes Excel"
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Excel
+              </button>
+              <button
+                onClick={() => setExportDialog(prev => prev === 'pdf' ? null : 'pdf')}
+                title="Download Notes PDF"
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                PDF
+              </button>
+
+              {exportDialog && (
+                <div className="absolute right-0 top-full mt-2 z-[60] w-52 rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-lg">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
+                    <span className="text-[11px] font-semibold text-[var(--text)]">
+                      Include in {exportDialog === 'excel' ? 'Excel' : 'PDF'}
+                    </span>
+                    <button onClick={() => setExportDialog(null)} className="text-[var(--text-faint)] hover:text-[var(--text)] transition-colors">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="px-3 py-2 space-y-2">
+                    {([['hardware', 'Hardware'], ['door', 'Door'], ['frame', 'Frame']] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
+                        <span
+                          className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                            exportSections[key]
+                              ? 'bg-[var(--primary-action)] border-[var(--primary-action)]'
+                              : 'border-[var(--border)] bg-[var(--bg)] group-hover:border-[var(--primary-ring)]'
+                          }`}
+                          onClick={() => setExportSections(prev => ({ ...prev, [key]: !prev[key] }))}
+                        >
+                          {exportSections[key] && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                        </span>
+                        <span
+                          className="text-xs text-[var(--text)] select-none"
+                          onClick={() => setExportSections(prev => ({ ...prev, [key]: !prev[key] }))}
+                        >
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="px-3 pb-3">
+                    <button
+                      onClick={handleExportConfirm}
+                      disabled={!exportSections.hardware && !exportSections.door && !exportSections.frame}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-[var(--primary-action)] text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {exportDialog === 'excel' ? <FileSpreadsheet className="w-3.5 h-3.5" /> : <FileDown className="w-3.5 h-3.5" />}
+                      Download {exportDialog === 'excel' ? 'Excel' : 'PDF'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleCancel}
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-muted)] transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

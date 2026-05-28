@@ -128,6 +128,7 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
 
       <ProjectNotesPanel
         projectId={id}
+        projectName={activeProject?.name}
         isOpen={isNotesOpen}
         onClose={() => setIsNotesOpen(false)}
       />
