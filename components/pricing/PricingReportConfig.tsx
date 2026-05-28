@@ -33,6 +33,9 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
 
+  const [zoom, setZoom] = useState(1.0);
+  const adjustZoom = (delta: number) => setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
+
   // Export dialog state
   const [exportDialog, setExportDialog] = useState<null | 'excel' | 'pdf'>(null);
   const [exportSections, setExportSections] = useState<ExportSections>({ doors: true, frames: true, hardware: true });
@@ -343,8 +346,25 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           ))}
         </div>
 
+        <div className="flex items-center gap-1 border border-[var(--border)] rounded-md overflow-hidden ml-auto">
+          <button
+            onClick={() => adjustZoom(-0.1)}
+            disabled={zoom <= 0.4}
+            className="px-2.5 py-1 text-sm font-bold text-[var(--text-muted)] hover:bg-[var(--bg-muted)] disabled:opacity-30 transition-colors"
+            title="Zoom out"
+          >−</button>
+          <span className="px-1 text-xs font-medium text-[var(--text-muted)] min-w-[36px] text-center select-none">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => adjustZoom(0.1)}
+            disabled={zoom >= 2}
+            className="px-2.5 py-1 text-sm font-bold text-[var(--text-muted)] hover:bg-[var(--bg-muted)] disabled:opacity-30 transition-colors"
+            title="Zoom in"
+          >+</button>
+        </div>
         {activeTab !== 'proposal' && (
-          <div className="flex flex-wrap items-center gap-3 ml-auto">
+          <div className="flex flex-wrap items-center gap-3">
             <MultiFilterSelect label="Material"          selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
             <MultiFilterSelect label="Building Location" selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
             <MultiFilterSelect label="Building"          selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
@@ -407,7 +427,7 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
           <div className="w-5 h-5 border-2 border-[var(--primary-action)] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="rounded-lg border border-[var(--border)] overflow-y-auto max-h-[520px] bg-[var(--bg)]">
+        <div className="rounded-lg border border-[var(--border)] overflow-y-auto max-h-[520px] bg-[var(--bg)]" style={{ zoom: zoom }}>
           <table className="min-w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10">
               <tr className="bg-[var(--bg-subtle)]">

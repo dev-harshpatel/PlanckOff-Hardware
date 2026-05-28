@@ -3,6 +3,7 @@ import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadat
 import { Door, ElevationType } from '../../types';
 import type { DoorScheduleExportConfig } from '../../types/doorScheduleTypes';
 import { buildExportFilename } from '../../utils/exportFilename';
+import { toExcelNumber } from '../../utils/excelUtils';
 
 function resolveElevationImageUrl(door: Door, elevationTypes: ElevationType[]): string {
   if (!door.elevationTypeId) return '';
@@ -76,10 +77,10 @@ const buildDoorScheduleRow = (
   if (columns.basic.includes('type')) row.push(door.type || '');
 
   // Dimensions
-  if (columns.dimensions.includes('width')) row.push(door.width || '');
-  if (columns.dimensions.includes('height')) row.push(door.height || '');
-  if (columns.dimensions.includes('thickness')) row.push(door.thickness || '');
-  if (columns.dimensions.includes('frameDepth')) row.push(door.frameDepth || '');
+  if (columns.dimensions.includes('width')) row.push(toExcelNumber(door.width));
+  if (columns.dimensions.includes('height')) row.push(toExcelNumber(door.height));
+  if (columns.dimensions.includes('thickness')) row.push(toExcelNumber(door.thickness));
+  if (columns.dimensions.includes('frameDepth')) row.push(toExcelNumber(door.frameDepth));
 
   // Materials
   if (columns.materials.includes('doorMaterial')) row.push(door.doorMaterial || '');
@@ -90,11 +91,11 @@ const buildDoorScheduleRow = (
   // Fire & Safety
   if (columns.fireSafety.includes('fireRating')) row.push(door.fireRating || '');
   if (columns.fireSafety.includes('smokeRating')) row.push(door.smokeRating || '');
-  if (columns.fireSafety.includes('stcRating')) row.push(door.stcRating || '');
+  if (columns.fireSafety.includes('stcRating')) row.push(toExcelNumber(door.stcRating));
   if (columns.fireSafety.includes('egressRequired')) row.push(door.egressRequired ? 'Yes' : 'No');
 
   // Hardware
-  if (columns.hardware.includes('assignedHardwareSet')) row.push(door.assignedHardwareSet?.name || '');
+  if (columns.hardware.includes('assignedHardwareSet')) row.push(toExcelNumber(door.assignedHardwareSet?.name));
   if (columns.hardware.includes('hardwarePrep')) row.push(door.hardwarePrep || '');
   if (columns.hardware.includes('hingeType')) row.push(door.hingeType || '');
   if (columns.hardware.includes('lockType')) row.push(door.lockType || '');
@@ -102,7 +103,7 @@ const buildDoorScheduleRow = (
   // Additional
   if (columns.additional.includes('interiorExterior')) row.push(door.interiorExterior || '');
   if (columns.additional.includes('swingDirection')) row.push(door.swingDirection || '');
-  if (columns.additional.includes('undercut')) row.push(door.undercut || '');
+  if (columns.additional.includes('undercut')) row.push(toExcelNumber(door.undercut));
   if (columns.additional.includes('louvers')) row.push(door.louvers || '');
   if (columns.additional.includes('visionPanels')) row.push(door.visionPanels || '');
   if (columns.additional.includes('specialNotes')) row.push(door.specialNotes || '');

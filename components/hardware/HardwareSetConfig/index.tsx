@@ -54,6 +54,8 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
   const [format, setFormat]                   = useState<ExportFormat>('xlsx');
   const [previewReady, setPreviewReady]         = useState(false);
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
+  const [zoom, setZoom]                         = useState(1.0);
+  const adjustZoom = (delta: number) => setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
 
   // ── Usage stats (for flat / manufacturer / type groupings) ───────────────
   // Deduplicates items across all sets using the identifying fields plus Qty/Set.
@@ -420,7 +422,26 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
               />
             )}
           </div>
-          <div className="flex justify-self-end">
+          <div className="flex justify-self-end items-center gap-2">
+            {previewReady && (
+              <div className="flex items-center gap-1 border border-[var(--border)] rounded-md overflow-hidden">
+                <button
+                  onClick={() => adjustZoom(-0.1)}
+                  disabled={zoom <= 0.4}
+                  className="px-2.5 py-1 text-sm font-bold text-[var(--text-muted)] hover:bg-[var(--bg-muted)] disabled:opacity-30 transition-colors"
+                  title="Zoom out"
+                >−</button>
+                <span className="px-1 text-xs font-medium text-[var(--text-muted)] min-w-[36px] text-center select-none">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  onClick={() => adjustZoom(0.1)}
+                  disabled={zoom >= 2}
+                  className="px-2.5 py-1 text-sm font-bold text-[var(--text-muted)] hover:bg-[var(--bg-muted)] disabled:opacity-30 transition-colors"
+                  title="Zoom in"
+                >+</button>
+              </div>
+            )}
             {previewReady && (
               <button
                 onClick={handleDownload}
@@ -467,7 +488,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
             </div>
           ) : (
             /* ── Preview tables ── */
-            <div className={`p-5 space-y-4 animate-fadeIn ${format === 'pdf' ? 'max-w-[900px] mx-auto' : ''}`}>
+            <div className={`p-5 space-y-4 animate-fadeIn ${format === 'pdf' ? 'max-w-[900px] mx-auto' : ''}`} style={{ zoom: zoom }}>
               {/* PDF header banner */}
               {format === 'pdf' && (
                 <div className="bg-white dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[var(--border)] shadow-sm px-5 py-4 mb-5">
