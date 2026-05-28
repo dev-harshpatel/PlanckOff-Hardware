@@ -569,6 +569,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
             {/* Project Notes slide-in panel */}
             <ProjectNotesPanel
                 projectId={project.id}
+                projectName={project.name}
                 isOpen={isNotesOpen}
                 onClose={() => setIsNotesOpen(false)}
             />
