@@ -447,7 +447,6 @@ export function useProjectUploads({
     };
 
     const handleCombinedProcessClick = async () => {
-        if (!combinedExcelFile || !combinedPdfFile) return;
         setIsCombinedOverwriteChecking(true);
         try {
             const mergeRes = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
@@ -455,7 +454,7 @@ export function useProjectUploads({
             const hasExisting = (mergeJson?.data?.finalJson?.length ?? 0) > 0;
             if (hasExisting) {
                 setIsCombinedOverwriteOpen(true);
-            } else {
+            } else if (combinedExcelFile && combinedPdfFile) {
                 processCombinedUpload(combinedExcelFile, combinedPdfFile);
             }
         } finally {

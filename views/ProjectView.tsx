@@ -450,7 +450,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <input
                                         type="file"
                                         accept=".xlsx"
-                                        disabled={isCombinedProcessing}
                                         onChange={(e) => setCombinedExcelFile(e.target.files?.[0] ?? null)}
                                         className="text-sm text-[var(--text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[var(--bg-muted)] file:text-[var(--text-secondary)] hover:file:bg-[var(--bg-subtle)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
@@ -467,7 +466,6 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <input
                                         type="file"
                                         accept=".pdf"
-                                        disabled={isCombinedProcessing}
                                         onChange={(e) => setCombinedPdfFile(e.target.files?.[0] ?? null)}
                                         className="text-sm text-[var(--text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[var(--bg-muted)] file:text-[var(--text-secondary)] hover:file:bg-[var(--bg-subtle)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
@@ -523,7 +521,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <Button
                                         size="sm"
                                         onClick={handleCombinedProcessClick}
-                                        disabled={!combinedExcelFile || !combinedPdfFile || isCombinedProcessing || isCombinedOverwriteChecking}
+                                        disabled={isCombinedProcessing || isCombinedOverwriteChecking}
                                         loading={isCombinedProcessing || isCombinedOverwriteChecking}
                                         loadingText={isCombinedProcessing ? 'Processing...' : 'Checking...'}
                                         className="gap-1.5"

@@ -80,11 +80,15 @@ const DOOR_PARAMS = (door: MergedDoor): Array<{ label: string; value: string }> 
   { label: 'Jamb Depth',     value: formatParamValue(getDoorParam(door, 'JAMB DEPTH', 'THROAT THICKNESS', 'JAMB')) },
 ];
 
-function getElevationType(door: MergedDoor, elevationTypes: ElevationType[]): ElevationType | undefined {
-  const code = door.doorElevationType ?? getDoorParam(door, 'DOOR ELEVATION TYPE');
+function getElevationType(door: MergedDoor, elevationTypes: ElevationType[], kind: 'door' | 'frame'): ElevationType | undefined {
+  const code = kind === 'door'
+    ? (door.doorElevationType ?? getDoorParam(door, 'DOOR ELEVATION TYPE'))
+    : getDoorParam(door, 'FRAME ELEVATION TYPE');
   if (!code) return undefined;
-  return elevationTypes.find(
-    e => e.code?.toLowerCase() === code.toLowerCase() || e.name?.toLowerCase() === code.toLowerCase()
+  // Prefer matching by kind; fall back to any match so legacy entries (kind=undefined) still work
+  return (
+    elevationTypes.find(e => e.kind === kind && (e.code?.toLowerCase() === code.toLowerCase() || e.name?.toLowerCase() === code.toLowerCase())) ??
+    elevationTypes.find(e => e.code?.toLowerCase() === code.toLowerCase() || e.name?.toLowerCase() === code.toLowerCase())
   );
 }
 
@@ -552,6 +556,25 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 padding-bottom: 2px;
                 margin-bottom: 2mm;
               }
+              /* Two-column row when both door + frame elevations exist */
+              .selev-row {
+                display: flex;
+                gap: 3mm;
+              }
+              .selev-col {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+              }
+              .selev-col-label {
+                font-size: 6.5pt;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #64748b;
+                margin-bottom: 1.5mm;
+              }
               .selev-image-wrap {
                 border: 1.5px dashed #cbd5e1;
                 border-radius: 3px;
@@ -595,15 +618,16 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 const doorTags = group.doors.map(d => String(d.doorTag));
                 const fs = hwFontScale(group.items.length);
 
-                // Find elevation
-                const elevCode = firstDoor.doorElevationType
-                  ?? getDoorParam(firstDoor, 'DOOR ELEVATION TYPE');
-                const elevType = getElevationType(firstDoor, elevationTypes);
-                const elevLabel = elevCode ? `Elevation: ${elevCode}` : 'Elevation';
-                const elevImg = elevType?.imageUrl ?? elevType?.imageData;
+                // Resolve door and frame elevations separately
+                const doorElevType  = getElevationType(firstDoor, elevationTypes, 'door');
+                const frameElevType = getElevationType(firstDoor, elevationTypes, 'frame');
+                const doorElevCode  = firstDoor.doorElevationType ?? getDoorParam(firstDoor, 'DOOR ELEVATION TYPE');
+                const frameElevCode = getDoorParam(firstDoor, 'FRAME ELEVATION TYPE');
+                const doorElevImg   = doorElevType?.imageUrl  ?? doorElevType?.imageData;
+                const frameElevImg  = frameElevType?.imageUrl ?? frameElevType?.imageData;
+                const hasBothElev   = !!(doorElevImg && frameElevImg);
 
-                // Determine available height for elevation image
-                // Rough: smaller for more items
+                // Available height for elevation image(s) — tighter when more hardware items
                 const elevH = group.items.length <= 8 ? 90 : group.items.length <= 12 ? 72 : group.items.length <= 16 ? 58 : 48;
 
                 return (
@@ -682,19 +706,49 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                           </div>
                         )}
 
-                        {/* Elevation */}
+                        {/* Elevation — door and frame side by side when both exist */}
                         <div className="selev-section">
-                          <div className="selev-title">{elevLabel}</div>
-                          <div
-                            className="selev-image-wrap"
-                            style={{ height: `${elevH}mm` }}
-                          >
-                            {elevImg ? (
-                              <img src={elevImg} alt={elevCode || 'Elevation'} />
-                            ) : (
-                              <span className="selev-no-elev">No Elevation Linked</span>
-                            )}
-                          </div>
+                          <div className="selev-title">Elevation</div>
+                          {hasBothElev ? (
+                            <div className="selev-row">
+                              <div className="selev-col">
+                                <div className="selev-col-label">
+                                  Door{doorElevCode ? ` · ${doorElevCode}` : ''}
+                                </div>
+                                <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
+                                  <img src={doorElevImg!} alt={doorElevCode || 'Door Elevation'} />
+                                </div>
+                              </div>
+                              <div className="selev-col">
+                                <div className="selev-col-label">
+                                  Frame{frameElevCode ? ` · ${frameElevCode}` : ''}
+                                </div>
+                                <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
+                                  <img src={frameElevImg!} alt={frameElevCode || 'Frame Elevation'} />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              {(doorElevImg || frameElevImg) && (
+                                <div className="selev-col-label">
+                                  {doorElevImg
+                                    ? `Door${doorElevCode ? ` · ${doorElevCode}` : ''}`
+                                    : `Frame${frameElevCode ? ` · ${frameElevCode}` : ''}`}
+                                </div>
+                              )}
+                              <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
+                                {(doorElevImg || frameElevImg) ? (
+                                  <img
+                                    src={(doorElevImg ?? frameElevImg)!}
+                                    alt={doorElevCode || frameElevCode || 'Elevation'}
+                                  />
+                                ) : (
+                                  <span className="selev-no-elev">No Elevation Linked</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

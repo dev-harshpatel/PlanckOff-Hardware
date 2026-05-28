@@ -255,12 +255,7 @@ export function transformFromFinalJson(
   for (const set of finalJson) {
     const assignedSet = setsByName.get(set.setName.toLowerCase()) ?? null;
 
-    // Deduplicate doors within the same set by doorTag (last-write wins)
-    const uniqueDoorsInSet = Array.from(
-      new Map(set.doors.map((d) => [String(d.doorTag).toLowerCase(), d])).values(),
-    );
-
-    for (const door of uniqueDoorsInSet) {
+    for (const door of set.doors) {
       const bi = door.sections?.basic_information;
       const ds = door.sections?.door;
 
@@ -360,16 +355,7 @@ export function transformFromFinalJson(
   // Restore the original door schedule row order across all sets
   doorsWithOrder.sort((a, b) => a.order - b.order);
 
-  // A door tag can appear in multiple sets; keep only the first occurrence (lowest order).
-  const seenTags = new Set<string>();
-  const doors = doorsWithOrder
-    .filter(({ door }) => {
-      const tag = String(door.doorTag).toLowerCase();
-      if (seenTags.has(tag)) return false;
-      seenTags.add(tag);
-      return true;
-    })
-    .map((d) => d.door);
+  const doors = doorsWithOrder.map((d) => d.door);
 
   return { hardwareSets, doors };
 }
