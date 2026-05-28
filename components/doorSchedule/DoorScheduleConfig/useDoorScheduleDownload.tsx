@@ -97,10 +97,6 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
         const wb = XLSX.utils.book_new();
         const useSingleSheet = groupsToExport.length === 1 && groupsToExport[0].breadcrumb.length === 0;
 
-        // Per-sheet image payloads collected alongside sheet creation
-        type ImgPayload = { base64: string; ext: string; w: number; h: number; startRow: number };
-        const sheetImageData: ImgPayload[][] = [];
-
         for (const [i, group] of groupsToExport.entries()) {
           const rawName = useSingleSheet
             ? 'Door Schedule'
@@ -118,132 +114,212 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
           applyFreezeAt(ws, 4);
 
           XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        }
 
-          // Collect elevation images for this sheet
-          const imgs: ImgPayload[] = [];
-          if (showElevationImages) {
-            const groupElevTypes = collectGroupElevationTypes(group.doors, elevationTypes)
-              .filter(et => imageInfoMap.has(et.id));
+        // ── Elevation Types sheet ─────────────────────────────────────────────
+        // One dedicated sheet listing every project elevation type with its image.
+        type ElevImgPayload = { base64: string; ext: string; w: number; h: number; rowIdx: number };
+        const elevImgPayloads: ElevImgPayload[] = [];
 
-            if (groupElevTypes.length > 0) {
-              // Images start 2 rows below the data table (0-indexed for OOXML)
-              // 3 metadata rows + 1 header row + data rows + 2-row gap
-              let currentRow = group.doors.length + 4 + 2;
-              for (const et of groupElevTypes) {
-                const info = imageInfoMap.get(et.id)!;
-                const match = info.dataUrl.match(/^data:image\/(\w+);base64,(.+)$/s);
-                if (!match) continue;
-                const rawExt = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
-                if (!['png', 'jpeg', 'gif'].includes(rawExt)) continue;
+        if (showElevationImages && imageInfoMap.size > 0) {
+          const elevTypes    = elevationTypes.filter(et => imageInfoMap.has(et.id));
+          const doorElevTypes  = elevTypes.filter(et => et.kind !== 'frame');
+          const frameElevTypes = elevTypes.filter(et => et.kind === 'frame');
 
-                imgs.push({ base64: match[2], ext: rawExt, w: info.w, h: info.h, startRow: currentRow });
+          if (elevTypes.length > 0) {
+            const DISPLAY_H = 100; // px — max display height per image row
+            const ROW_HPT   = Math.ceil(DISPLAY_H * 0.75) + 6;
 
-                // Advance past this image (each Excel row ≈ 20px at default height)
-                currentRow += Math.ceil(info.h / 20) + 3;
+            // Build sheet rows with section headers so row indices stay exact
+            const sheetRows: string[][] = [];
+            const imgMeta: { et: ElevationType; rowIdx: number }[] = [];
+
+            sheetRows.push(['Code', '']); // row 0 — column header
+
+            const appendSection = (label: string, types: ElevationType[]) => {
+              if (types.length === 0) return;
+              sheetRows.push([label, '']); // section label row
+              for (const et of types) {
+                imgMeta.push({ et, rowIdx: sheetRows.length });
+                sheetRows.push([et.code || '', '']);
+              }
+            };
+
+            appendSection('Door Elevations', doorElevTypes);
+            if (doorElevTypes.length > 0 && frameElevTypes.length > 0) {
+              sheetRows.push(['', '']); // blank gap between sections
+            }
+            appendSection('Frame Elevations', frameElevTypes);
+
+            // Row heights: header=20, section-label=15, data=ROW_HPT, blank=8
+            const sectionLabelRows = new Set<number>();
+            const blankRows        = new Set<number>();
+            let cursor = 1;
+            const buildHeights = (types: ElevationType[], hasLabel: boolean) => {
+              if (types.length === 0) return;
+              if (hasLabel) { sectionLabelRows.add(cursor); cursor++; }
+              cursor += types.length;
+            };
+            buildHeights(doorElevTypes, true);
+            if (doorElevTypes.length > 0 && frameElevTypes.length > 0) {
+              blankRows.add(cursor); cursor++;
+            }
+            buildHeights(frameElevTypes, doorElevTypes.length > 0);
+
+            const rowHeights = sheetRows.map((_, r) =>
+              r === 0 ? { hpt: 20 }
+              : sectionLabelRows.has(r) ? { hpt: 15 }
+              : blankRows.has(r) ? { hpt: 8 }
+              : { hpt: ROW_HPT },
+            );
+
+            const elevSheet = XLSX.utils.aoa_to_sheet(sheetRows);
+            elevSheet['!cols'] = [{ wch: 18 }, { wch: 28 }];
+            elevSheet['!rows'] = rowHeights;
+            applyHeaderRowAt(elevSheet, 0, 2);
+
+            // Bold the section label cells
+            for (const r of sectionLabelRows) {
+              const addr = XLSX.utils.encode_cell({ r, c: 0 });
+              if (elevSheet[addr]) {
+                elevSheet[addr].s = {
+                  font: { bold: true, sz: 10, color: { rgb: '1E3A5F' } },
+                  fill: { fgColor: { rgb: 'E8F0FE' }, patternType: 'solid' },
+                };
               }
             }
+
+            XLSX.utils.book_append_sheet(wb, elevSheet, 'Elevation Types');
+
+            // Collect OOXML image payloads using the exact row indices computed above
+            for (const { et, rowIdx } of imgMeta) {
+              const info = imageInfoMap.get(et.id)!;
+              const match = info.dataUrl.match(/^data:image\/(\w+);base64,(.+)$/s);
+              if (!match) continue;
+              const rawExt = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
+
+              // Excel only supports png/jpeg/gif — convert webp/avif/etc. to PNG via canvas.
+              let finalBase64 = match[2];
+              let finalExt    = rawExt;
+              if (!['png', 'jpeg', 'gif'].includes(rawExt)) {
+                const pngDataUrl = await new Promise<string>(resolve => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width  = info.w;
+                  canvas.height = info.h;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) { resolve(''); return; }
+                  const img = new window.Image();
+                  img.onload = () => { ctx.drawImage(img, 0, 0); resolve(canvas.toDataURL('image/png')); };
+                  img.onerror = () => resolve('');
+                  img.src = info.dataUrl;
+                });
+                if (!pngDataUrl) continue;
+                const pngMatch = pngDataUrl.match(/^data:image\/png;base64,(.+)$/s);
+                if (!pngMatch) continue;
+                finalBase64 = pngMatch[1];
+                finalExt    = 'png';
+              }
+
+              const scale = Math.min(1, DISPLAY_H / info.h);
+              elevImgPayloads.push({
+                base64: finalBase64, ext: finalExt,
+                w: Math.round(info.w * scale), h: Math.round(info.h * scale),
+                rowIdx,
+              });
+            }
           }
-          sheetImageData.push(imgs);
         }
 
         // Write base xlsx (data only)
         const xlsxBytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as Uint8Array;
 
-        const hasImages = sheetImageData.some(imgs => imgs.length > 0);
         let finalBlob: Blob;
 
-        if (hasImages) {
-          // Inject images via OOXML manipulation
+        if (elevImgPayloads.length > 0) {
+          // Inject elevation images into the "Elevation Types" sheet via OOXML
           const zip = await JSZip.loadAsync(xlsxBytes);
           let ctXml = await zip.file('[Content_Types].xml')!.async('string');
 
-          for (const [sheetIdx, imgs] of sheetImageData.entries()) {
-            if (imgs.length === 0) continue;
-            const sheetNum  = sheetIdx + 1;
-            const drawingId = sheetIdx + 1;
+          const elevSheetNum = wb.SheetNames.length; // 1-indexed position of the last (Elevation Types) sheet
+          const drawingId    = elevSheetNum;
+          const IMG_COL      = 1; // column B (0-indexed)
 
-            let anchors = '';
-            let relsEntries = '';
+          let anchors     = '';
+          let relsEntries = '';
 
-            for (const [imgIdx, img] of imgs.entries()) {
-              const rId       = `rId${imgIdx + 1}`;
-              const mediaFile = `image_s${sheetNum}_${imgIdx + 1}.${img.ext}`;
-              const emuW      = img.w * 9525; // 1 px = 9525 EMU at 96 DPI
-              const emuH      = img.h * 9525;
+          for (const [imgIdx, img] of elevImgPayloads.entries()) {
+            const rId       = `rId${imgIdx + 1}`;
+            const mediaFile = `elev_${imgIdx + 1}.${img.ext}`;
+            const emuW      = img.w * 9525;
+            const emuH      = img.h * 9525;
 
-              zip.file(`xl/media/${mediaFile}`, img.base64, { base64: true });
+            zip.file(`xl/media/${mediaFile}`, img.base64, { base64: true });
 
-              relsEntries += `<Relationship Id="${rId}" `
-                + `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" `
-                + `Target="../media/${mediaFile}"/>`;
+            relsEntries += `<Relationship Id="${rId}" `
+              + `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" `
+              + `Target="../media/${mediaFile}"/>`;
 
-              anchors += `<xdr:oneCellAnchor>`
-                + `<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff>`
-                + `<xdr:row>${img.startRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`
-                + `<xdr:ext cx="${emuW}" cy="${emuH}"/>`
-                + `<xdr:pic><xdr:nvPicPr>`
-                + `<xdr:cNvPr id="${imgIdx + 2}" name="Elevation${imgIdx + 1}"/>`
-                + `<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>`
-                + `</xdr:nvPicPr>`
-                + `<xdr:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>`
-                + `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emuW}" cy="${emuH}"/></a:xfrm>`
-                + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>`
-                + `</xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+            anchors += `<xdr:oneCellAnchor>`
+              + `<xdr:from><xdr:col>${IMG_COL}</xdr:col><xdr:colOff>114300</xdr:colOff>`
+              + `<xdr:row>${img.rowIdx}</xdr:row><xdr:rowOff>114300</xdr:rowOff></xdr:from>`
+              + `<xdr:ext cx="${emuW}" cy="${emuH}"/>`
+              + `<xdr:pic><xdr:nvPicPr>`
+              + `<xdr:cNvPr id="${imgIdx + 2}" name="ElevType${imgIdx + 1}"/>`
+              + `<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>`
+              + `</xdr:nvPicPr>`
+              + `<xdr:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>`
+              + `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emuW}" cy="${emuH}"/></a:xfrm>`
+              + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>`
+              + `</xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
 
-              const mimeType = img.ext === 'jpeg' ? 'image/jpeg' : `image/${img.ext}`;
-              if (!ctXml.includes(`Extension="${img.ext}"`)) {
-                ctXml = ctXml.replace('</Types>',
-                  `<Default Extension="${img.ext}" ContentType="${mimeType}"/></Types>`);
-              }
+            const mimeType = img.ext === 'jpeg' ? 'image/jpeg' : `image/${img.ext}`;
+            if (!ctXml.includes(`Extension="${img.ext}"`)) {
+              ctXml = ctXml.replace('</Types>',
+                `<Default Extension="${img.ext}" ContentType="${mimeType}"/></Types>`);
             }
+          }
 
-            // drawing XML
-            zip.file(`xl/drawings/drawing${drawingId}.xml`,
-              `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-              + `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"`
-              + ` xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"`
-              + ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
-              + anchors + `</xdr:wsDr>`);
+          zip.file(`xl/drawings/drawing${drawingId}.xml`,
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+            + `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"`
+            + ` xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"`
+            + ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+            + anchors + `</xdr:wsDr>`);
 
-            // drawing rels
-            zip.file(`xl/drawings/_rels/drawing${drawingId}.xml.rels`,
+          zip.file(`xl/drawings/_rels/drawing${drawingId}.xml.rels`,
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+            + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+            + relsEntries + `</Relationships>`);
+
+          if (!ctXml.includes(`drawing${drawingId}.xml`)) {
+            ctXml = ctXml.replace('</Types>',
+              `<Override PartName="/xl/drawings/drawing${drawingId}.xml" `
+              + `ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+          }
+
+          const wsFile = zip.file(`xl/worksheets/sheet${elevSheetNum}.xml`);
+          if (wsFile) {
+            let wsXml = await wsFile.async('string');
+            if (!wsXml.includes('xmlns:r='))
+              wsXml = wsXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+            if (!wsXml.includes('<drawing '))
+              wsXml = wsXml.replace('</worksheet>', `<drawing r:id="rId_draw${drawingId}"/></worksheet>`);
+            zip.file(`xl/worksheets/sheet${elevSheetNum}.xml`, wsXml);
+          }
+
+          const wsRelsPath = `xl/worksheets/_rels/sheet${elevSheetNum}.xml.rels`;
+          const drawingRel = `<Relationship Id="rId_draw${drawingId}" `
+            + `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" `
+            + `Target="../drawings/drawing${drawingId}.xml"/>`;
+          const wsRelsFile = zip.file(wsRelsPath);
+          if (wsRelsFile) {
+            const existing = await wsRelsFile.async('string');
+            zip.file(wsRelsPath, existing.replace('</Relationships>', drawingRel + '</Relationships>'));
+          } else {
+            zip.file(wsRelsPath,
               `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
               + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-              + relsEntries + `</Relationships>`);
-
-            // drawing content type
-            if (!ctXml.includes(`drawing${drawingId}.xml`)) {
-              ctXml = ctXml.replace('</Types>',
-                `<Override PartName="/xl/drawings/drawing${drawingId}.xml" `
-                + `ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
-            }
-
-            // Patch worksheet: add xmlns:r + <drawing> ref
-            const wsFile = zip.file(`xl/worksheets/sheet${sheetNum}.xml`);
-            if (wsFile) {
-              let wsXml = await wsFile.async('string');
-              if (!wsXml.includes('xmlns:r='))
-                wsXml = wsXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
-              if (!wsXml.includes('<drawing '))
-                wsXml = wsXml.replace('</worksheet>', `<drawing r:id="rId_draw${drawingId}"/></worksheet>`);
-              zip.file(`xl/worksheets/sheet${sheetNum}.xml`, wsXml);
-            }
-
-            // Patch worksheet rels
-            const wsRelsPath = `xl/worksheets/_rels/sheet${sheetNum}.xml.rels`;
-            const drawingRel = `<Relationship Id="rId_draw${drawingId}" `
-              + `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" `
-              + `Target="../drawings/drawing${drawingId}.xml"/>`;
-            const wsRelsFile = zip.file(wsRelsPath);
-            if (wsRelsFile) {
-              const existing = await wsRelsFile.async('string');
-              zip.file(wsRelsPath, existing.replace('</Relationships>', drawingRel + '</Relationships>'));
-            } else {
-              zip.file(wsRelsPath,
-                `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-                + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-                + drawingRel + `</Relationships>`);
-            }
+              + drawingRel + `</Relationships>`);
           }
 
           zip.file('[Content_Types].xml', ctXml);
@@ -355,7 +431,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
             // fontSize/cellPadding already in groupTheme via buildAutoTableOptions → styles
           });
 
-          // ── Elevation images for this group (new page per group) ───────
+          // ── Elevation images for this group (door + frame sections) ─────
           if (showElevationImages) {
             const groupElevTypes = collectGroupElevationTypes(group.doors, elevationTypes)
               .filter(et => imageInfoMap.has(et.id));
@@ -376,54 +452,58 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
               const MAX_IMG_W = Math.max(20, cardW - INNER_PAD * 2);
               const MAX_IMG_H = Math.max(20, cardH - CARD_LABEL_SPACE - INNER_PAD * 2);
 
-              const addElevPageHeader = (sub: string) => {
-                const elevExportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                drawPageHeader(doc, `Elevation Types — ${sub}`, elevExportDate, PAGE_W, PDF_MARGIN, projectName, logoDataUrl, projectLocation, projectProvince);
+              const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+              const addElevPageHeader = (title: string) =>
+                drawPageHeader(doc, title, exportDate, PAGE_W, PDF_MARGIN, projectName, logoDataUrl, projectLocation, projectProvince);
+
+              const renderElevCards = (types: ElevationType[], sectionTitle: string) => {
+                if (types.length === 0) return;
+                doc.addPage();
+                addElevPageHeader(sectionTitle);
+
+                for (const [idx, et] of types.entries()) {
+                  const info = imageInfoMap.get(et.id)!;
+                  const slotIndex = idx % cardsPerPage;
+                  const row = Math.floor(slotIndex / colsPerPage);
+                  const col = slotIndex % colsPerPage;
+
+                  if (idx > 0 && slotIndex === 0) {
+                    doc.addPage();
+                    addElevPageHeader(`${sectionTitle} (continued)`);
+                  }
+
+                  const cardX = MARGIN + col * (cardW + COL_GAP);
+                  const cardY = HEADER_Y + row * (cardH + ROW_GAP);
+                  const scale = Math.min(MAX_IMG_W / info.w, MAX_IMG_H / info.h, 1);
+                  const imgW = info.w * scale;
+                  const imgH = info.h * scale;
+                  const imgX = cardX + (cardW - imgW) / 2;
+                  const imgY = cardY + INNER_PAD;
+
+                  doc.setDrawColor(220, 220, 220);
+                  doc.setLineWidth(0.25);
+                  doc.setFillColor(250, 250, 250);
+                  doc.roundedRect(cardX, cardY, cardW, cardH, 1.5, 1.5, 'FD');
+
+                  try { doc.addImage(info.dataUrl, imgX, imgY, imgW, imgH); } catch { /* skip broken */ }
+
+                  const labelY = cardY + cardH - LABEL_H;
+                  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+                  doc.text(et.code || et.id, cardX + INNER_PAD, labelY, { maxWidth: cardW - INNER_PAD * 2 });
+                  if (et.name && et.code && et.name !== et.code) {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(100);
+                    doc.text(et.name, cardX + INNER_PAD, labelY + 4, { maxWidth: cardW - INNER_PAD * 2 });
+                  }
+                  doc.setTextColor(0);
+                }
               };
 
-              doc.addPage();
-              addElevPageHeader(subtitle);
+              const doorElev  = groupElevTypes.filter(et => et.kind !== 'frame');
+              const frameElev = groupElevTypes.filter(et => et.kind === 'frame');
 
-              for (const [idx, et] of groupElevTypes.entries()) {
-                const info = imageInfoMap.get(et.id)!;
-                const slotIndex = idx % cardsPerPage;
-                const row = Math.floor(slotIndex / colsPerPage);
-                const col = slotIndex % colsPerPage;
-
-                if (idx > 0 && slotIndex === 0) {
-                  doc.addPage();
-                  addElevPageHeader(`${subtitle} (continued)`);
-                }
-
-                const cardX = MARGIN + col * (cardW + COL_GAP);
-                const cardY = HEADER_Y + row * (cardH + ROW_GAP);
-                const scale = Math.min(MAX_IMG_W / info.w, MAX_IMG_H / info.h, 1);
-                const imgW = info.w * scale;
-                const imgH = info.h * scale;
-                const imgX = cardX + (cardW - imgW) / 2;
-                const imgY = cardY + INNER_PAD;
-
-                // Subtle card background
-                doc.setDrawColor(220, 220, 220);
-                doc.setLineWidth(0.25);
-                doc.setFillColor(250, 250, 250);
-                doc.roundedRect(cardX, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-                // Image at natural aspect ratio
-                try {
-                  doc.addImage(info.dataUrl, imgX, imgY, imgW, imgH);
-                } catch { /* skip broken */ }
-
-                // Label below image
-                const labelY = cardY + cardH - LABEL_H;
-                doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-                doc.text(et.code || et.id, cardX + INNER_PAD, labelY, { maxWidth: cardW - INNER_PAD * 2 });
-                if (et.name && et.code && et.name !== et.code) {
-                  doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(100);
-                  doc.text(et.name, cardX + INNER_PAD, labelY + 4, { maxWidth: cardW - INNER_PAD * 2 });
-                }
-                doc.setTextColor(0);
-              }
+              renderElevCards(doorElev,  `Door Elevations — ${subtitle}`);
+              renderElevCards(frameElev, `Frame Elevations — ${subtitle}`);
             }
           }
         }
