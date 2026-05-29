@@ -91,6 +91,11 @@ coverage/
 .temp/
 tmp/
 
+# ============================================================
+# Internal docs / reference material
+# ============================================================
+docs/material/
+
 .planning/
 .planning
 
@@ -103,3 +108,4 @@ CLAUDE.md
 .claude/settings.local.json
 .claude/worktrees/
 .claude/
+
