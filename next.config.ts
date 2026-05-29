@@ -4,7 +4,7 @@ import path from 'path';
 const nextConfig: NextConfig = {
   // Prevent browser-only packages from being bundled into the server build.
   // These packages access browser globals (DOMMatrix, canvas, etc.) at module init time.
-  serverExternalPackages: ['jspdf', 'jspdf-autotable', 'xlsx', 'file-saver', 'pdfjs-dist'],
+  serverExternalPackages: ['jspdf', 'jspdf-autotable', 'xlsx', 'xlsx-js-style', 'file-saver', 'pdfjs-dist'],
 
   // Prevents pdfjs-dist from trying to spawn its own nested worker inside upload.worker.ts.
   // pdfjs internally uses `new URL('pdf.worker.min.mjs', import.meta.url)` which Turbopack
