@@ -43,7 +43,10 @@ function normalize(name: string): string {
   return name
     .toLowerCase()
     .trim()
+    .replace(/\s*\([^)]*\)/g, '') // strip qualifiers like "(Brush)", "(Interlock)", "(8" x 1/2" Rise)"
+    .replace(/-/g, ' ')            // Weather-Strip → weather strip
     .replace(/\s+/g, ' ')
+    .trim()
     .replace(/[.,;:]+$/, '');
 }
 
@@ -109,6 +112,9 @@ const ALIAS_MAP: Record<string, string> = {
   'smoke seals':        'weatherstrip',
   'door seal':          'weatherstrip',
   'door seals':         'weatherstrip',
+  'astragal':           'astragal',
+  'astragals':          'astragal',
+  'meeting stile seal': 'weatherstrip',
 
   // Meeting Stile
   'meeting stile':      'meeting_stile',
@@ -173,6 +179,11 @@ const RULES: Record<string, RuleFn> = {
       rule: isPair ? '(2 × H) + (2 × W) [pair]' : '(2 × H) + W',
     };
   },
+
+  astragal: (door) => ({
+    value: formatInches(door.height),
+    rule: 'H',
+  }),
 
   meeting_stile: (door) => ({
     value: formatInches(door.height),
