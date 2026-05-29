@@ -59,6 +59,12 @@ function parseDimension(val: string | undefined): number {
   if (mm !== null) return mm;
   const fr = parseFraction(val);
   if (fr !== null) return fr < 10 ? fr * 12 : fr; // bare number < 10 assumed feet
+  // Compound expression: "(3'-0\"+ 1'-8\")" — sum all leaf widths
+  const compound = val.trim().match(/^\(([^)]+)\)$/);
+  if (compound) {
+    const total = compound[1].split('+').reduce((sum, p) => sum + parseDimension(p.trim()), 0);
+    if (total > 0) return total;
+  }
   return 0;
 }
 

@@ -154,9 +154,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         setProcessingTasks(prev => prev.filter(t => t.id !== doorActiveTask.id));
     }, [doorActiveTask, setProcessingTasks]);
 
-    // Individual re-upload buttons are only enabled after the first combined upload completes.
-    // If there's already data (loaded from DB on mount), they're also enabled immediately.
-    const individualUploadsEnabled = !isDataLoading && !isPollingForResult && (hardwareSets.length > 0 || doors.length > 0);
+    const individualUploadsEnabled = !isDataLoading && !isPollingForResult;
 
     const hardwareSetsPanel = (
         <div className="h-full min-h-0 p-5 flex flex-col">
@@ -473,6 +471,24 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                         <span className="text-xs text-[var(--text-muted)] truncate">{combinedPdfFile.name}</span>
                                     )}
                                 </label>
+
+                                {/* Contextual hint for single-file uploads */}
+                                {combinedExcelFile && !combinedPdfFile && (
+                                    <p className="text-xs text-[var(--text-muted)] bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
+                                        {hardwareSets.length > 0
+                                            ? <>Hardware sets already loaded. After uploading, click <span className="font-semibold text-[var(--text-secondary)]">Assign All</span> in the Doors panel to link them.</>
+                                            : <>Add a hardware PDF to automatically link doors and sets, or process just the door schedule now.</>
+                                        }
+                                    </p>
+                                )}
+                                {combinedPdfFile && !combinedExcelFile && (
+                                    <p className="text-xs text-[var(--text-muted)] bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
+                                        {doors.length > 0
+                                            ? <>Door schedule already loaded. After uploading, click <span className="font-semibold text-[var(--text-secondary)]">Assign All</span> in the Doors panel to link them.</>
+                                            : <>Add a door schedule (.xlsx) to automatically link doors and sets, or process just the hardware PDF now.</>
+                                        }
+                                    </p>
+                                )}
                             </div>
                         )}
 
@@ -521,7 +537,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                                     <Button
                                         size="sm"
                                         onClick={handleCombinedProcessClick}
-                                        disabled={isCombinedProcessing || isCombinedOverwriteChecking}
+                                        disabled={isCombinedProcessing || isCombinedOverwriteChecking || (!combinedExcelFile && !combinedPdfFile)}
                                         loading={isCombinedProcessing || isCombinedOverwriteChecking}
                                         loadingText={isCombinedProcessing ? 'Processing...' : 'Checking...'}
                                         className="gap-1.5"

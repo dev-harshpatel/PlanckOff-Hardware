@@ -112,8 +112,12 @@ interface UsePricingFiltersParams {
 }
 
 export function usePricingFilters({ projectId, doors, hardwareSets, prices, activeTab }: UsePricingFiltersParams) {
-  const [filters, setFilters]                 = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
+  const [doorFilters,  setDoorFilters]  = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
+  const [frameFilters, setFrameFilters] = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
+  const [hwFilters,    setHwFilters]    = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
   const [proposalFilters, setProposalFilters] = useState<Filters>({ material: [], floor: [], building: [], prep: [] });
+
+  const filters = activeTab === 'door' ? doorFilters : activeTab === 'frame' ? frameFilters : hwFilters;
   const [variants, setVariants]               = useState<PricingVariant[]>([]);
 
   useEffect(() => {
@@ -170,23 +174,23 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const proposalFloors    = useMemo(() => Array.from(new Set([...doorFloors, ...frameFloors])).sort(),       [doorFloors, frameFloors]);
   const proposalBuildings = useMemo(() => Array.from(new Set([...doorBuildings, ...frameBuildings])).sort(), [doorBuildings, frameBuildings]);
 
-  const visibleDoors  = useMemo(() => filterDoorGroups(doorGroups,  filters), [doorGroups,  filters]);
-  const visibleFrames = useMemo(() => filterDoorGroups(frameGroups, filters), [frameGroups, filters]);
+  const visibleDoors  = useMemo(() => filterDoorGroups(doorGroups,  doorFilters),  [doorGroups,  doorFilters]);
+  const visibleFrames = useMemo(() => filterDoorGroups(frameGroups, frameFilters), [frameGroups, frameFilters]);
 
   const filteredDoorsForHw = useMemo(() => {
-    const hasFilter = filters.material.length > 0 || filters.floor.length > 0 || filters.building.length > 0;
+    const hasFilter = hwFilters.material.length > 0 || hwFilters.floor.length > 0 || hwFilters.building.length > 0;
     if (!hasFilter) return doors;
     return doors.filter(d => {
       const mat   = (d.doorMaterial ?? '').trim();
       const floor = (d.buildingLocation ?? d.location ?? '').trim();
       const bldg  = (d.buildingTag ?? '').trim();
       return (
-        (filters.material.length === 0 || filters.material.includes(mat))  &&
-        (filters.floor.length    === 0 || filters.floor.includes(floor))   &&
-        (filters.building.length === 0 || filters.building.includes(bldg))
+        (hwFilters.material.length === 0 || hwFilters.material.includes(mat))  &&
+        (hwFilters.floor.length    === 0 || hwFilters.floor.includes(floor))   &&
+        (hwFilters.building.length === 0 || hwFilters.building.includes(bldg))
       );
     });
-  }, [doors, filters.material, filters.floor, filters.building]);
+  }, [doors, hwFilters.material, hwFilters.floor, hwFilters.building]);
 
   const visibleHardware = useMemo(() => {
     const groups = filteredDoorsForHw === doors
@@ -247,7 +251,11 @@ export function usePricingFilters({ projectId, doors, hardwareSets, prices, acti
   const currentBuildings = activeTab === 'door' ? doorBuildings : activeTab === 'frame' ? frameBuildings : hwBuildings;
   const currentPreps     = activeTab === 'door' ? doorPreps     : activeTab === 'frame' ? framePreps     : [];
 
-  const setFilter         = (k: keyof Filters, v: string[]) => setFilters(prev => ({ ...prev, [k]: v }));
+  const setFilter = (k: keyof Filters, v: string[]) => {
+    if (activeTab === 'door')   setDoorFilters( prev => ({ ...prev, [k]: v }));
+    else if (activeTab === 'frame') setFrameFilters(prev => ({ ...prev, [k]: v }));
+    else                            setHwFilters(   prev => ({ ...prev, [k]: v }));
+  };
   const setProposalFilter = (k: keyof Filters, v: string[]) => setProposalFilters(prev => ({ ...prev, [k]: v }));
 
   const handleCreateVariant = async (doorIds: string[], label: string) => {

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { HardwareSet, Door, Toast, ValidationReport } from '../types';
 import { ERRORS } from '@/constants/errors';
 import type { TrashItem } from '@/lib/db/hardware';
-import { transformHardwareSets, transformDoors } from '../utils/hardwareTransformers';
+import { transformHardwareSets, transformDoors, transformFromFinalJson } from '../utils/hardwareTransformers';
 import { autoCreateVariants } from '../utils/autoVariantUtils';
 import { resolveAllSets } from '../utils/descriptionResolver';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
@@ -446,16 +446,51 @@ export function useProjectUploads({
         if (file) processDoorSchedule(file);
     };
 
+    // Like handleDoorScheduleUpload but accepts a File directly (used by single-file path from combined modal)
+    const handleDoorScheduleFileDirect = async (file: File) => {
+        const [check, mergeCheck] = await Promise.all([
+            fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
+            fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' }),
+        ]);
+        const checkJson = check.ok ? await check.json() : null;
+        const mergeJson = mergeCheck.ok ? await mergeCheck.json() : null;
+        const hasSchedule = (checkJson?.data?.scheduleJson?.length ?? 0) > 0;
+        const hasFinalDoors = ((mergeJson?.data?.finalJson ?? []) as Array<{ doors?: unknown[] }>)
+            .some(s => Array.isArray(s.doors) && s.doors.length > 0);
+
+        if (hasSchedule || hasFinalDoors) {
+            setDoorUploadFile(file);
+            setIsDoorUploadModalOpen(true);
+        } else {
+            processDoorSchedule(file);
+        }
+    };
+
     const handleCombinedProcessClick = async () => {
+        if (!combinedExcelFile && !combinedPdfFile) return;
+
         setIsCombinedOverwriteChecking(true);
         try {
-            const mergeRes = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
-            const mergeJson = mergeRes.ok ? await mergeRes.json() : null;
-            const hasExisting = (mergeJson?.data?.finalJson?.length ?? 0) > 0;
-            if (hasExisting) {
-                setIsCombinedOverwriteOpen(true);
-            } else if (combinedExcelFile && combinedPdfFile) {
-                processCombinedUpload(combinedExcelFile, combinedPdfFile);
+            if (combinedExcelFile && combinedPdfFile) {
+                // Both files — existing combined overwrite-check flow
+                const mergeRes = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
+                const mergeJson = mergeRes.ok ? await mergeRes.json() : null;
+                const hasExisting = (mergeJson?.data?.finalJson?.length ?? 0) > 0;
+                if (hasExisting) {
+                    setIsCombinedOverwriteOpen(true);
+                } else {
+                    processCombinedUpload(combinedExcelFile, combinedPdfFile);
+                }
+            } else if (combinedExcelFile) {
+                // Single door-schedule file — close modal and process individually
+                const file = combinedExcelFile;
+                resetCombinedModal();
+                await handleDoorScheduleFileDirect(file);
+            } else if (combinedPdfFile) {
+                // Single hardware PDF — close modal and process individually
+                const file = combinedPdfFile;
+                resetCombinedModal();
+                await handleHardwareUploads([file]);
             }
         } finally {
             setIsCombinedOverwriteChecking(false);
@@ -584,23 +619,41 @@ export function useProjectUploads({
 
             setPipelineStep(5);
             step('Populating project view…', 94);
-            const [hwFresh, dsFresh] = await Promise.all([
-                fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
-                fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
-            ]);
-            const hwFreshJson = hwFresh.ok ? await hwFresh.json() : null;
-            const dsFreshJson = dsFresh.ok ? await dsFresh.json() : null;
-            const freshSets = hwFreshJson?.data?.extractedJson
-                ? transformHardwareSets(hwFreshJson.data.extractedJson) : [];
-            const freshDoors = dsFreshJson?.data?.scheduleJson
-                ? transformDoors(dsFreshJson.data.scheduleJson, freshSets) : [];
 
-            // Auto-split sets where assigned doors have differing profiles
-            // (W×H, Leaf Count, Rating, Material, Door Operation, Frame Material, Int/Ext).
-            const { sets: autoSets, doors: autoDoors, variantsCreated } = autoCreateVariants(freshSets, freshDoors);
+            // Load the already-merged and dimension-resolved final_json from the server.
+            // The server's merge step runs resolveAllMergedSets which handles all edge cases
+            // (e.g. compound widths like "(3'-0\"+ 1'-8\")"). Loading from final_json avoids
+            // a client-side re-resolution that would overwrite the server's correct values.
+            const mergeFresh = await fetch(`/api/projects/${projectId}/hardware-merge`, { credentials: 'include' });
+            const mergeFreshJson = mergeFresh.ok ? await mergeFresh.json() : null;
+            const finalRaw = Array.isArray(mergeFreshJson?.data?.finalJson) && mergeFreshJson.data.finalJson.length > 0
+                ? mergeFreshJson.data.finalJson : null;
 
-            // Resolve dimension placeholders now that every set has homogeneous door dimensions.
-            const resolvedSets = resolveAllSets(autoSets, autoDoors);
+            let resolvedSets: HardwareSet[];
+            let autoDoors: Door[];
+            let variantsCreated = 0;
+
+            if (finalRaw) {
+                const finalData = transformFromFinalJson(finalRaw);
+                resolvedSets = finalData.hardwareSets.filter(s => s.name !== '__unassigned__');
+                autoDoors = finalData.doors;
+            } else {
+                // Fallback: re-build from raw extracted data if final_json isn't available yet
+                const [hwFresh, dsFresh] = await Promise.all([
+                    fetch(`/api/projects/${projectId}/hardware-pdf`, { credentials: 'include' }),
+                    fetch(`/api/projects/${projectId}/door-schedule`, { credentials: 'include' }),
+                ]);
+                const hwFreshJson = hwFresh.ok ? await hwFresh.json() : null;
+                const dsFreshJson = dsFresh.ok ? await dsFresh.json() : null;
+                const freshSets = hwFreshJson?.data?.extractedJson
+                    ? transformHardwareSets(hwFreshJson.data.extractedJson) : [];
+                const freshDoors = dsFreshJson?.data?.scheduleJson
+                    ? transformDoors(dsFreshJson.data.scheduleJson, freshSets) : [];
+                const autoResult = autoCreateVariants(freshSets, freshDoors);
+                resolvedSets = resolveAllSets(autoResult.sets, autoResult.doors);
+                autoDoors = autoResult.doors;
+                variantsCreated = autoResult.variantsCreated;
+            }
 
             // Mark final_json as the source of truth BEFORE updating state.
             // This prevents the Supabase realtime handler (reloadDoorSchedule) from

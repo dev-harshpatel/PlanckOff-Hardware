@@ -318,13 +318,13 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
         </div>
       </div>
 
-      {/* ── Tabs + filter bar ── */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* ── Tabs + zoom row ── */}
+      <div className="flex items-center gap-3">
         <div className="flex rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--bg-subtle)]">
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => { setActiveTab(t.id); setFilter('material', []); setFilter('floor', []); setFilter('building', []); setFilter('prep', []); }}
+              onClick={() => setActiveTab(t.id)}
               className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold transition-all border-r border-[var(--border)] last:border-r-0 ${
                 activeTab === t.id
                   ? 'bg-[var(--primary-action)] text-white'
@@ -363,17 +363,19 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
             title="Zoom in"
           >+</button>
         </div>
-        {activeTab !== 'proposal' && (
-          <div className="flex flex-wrap items-center gap-3">
-            <MultiFilterSelect label="Material"          selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
-            <MultiFilterSelect label="Building Location" selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
-            <MultiFilterSelect label="Building"          selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
-            {activeTab !== 'hardware' && currentPreps.length > 0 && (
-              <MultiFilterSelect label="Prep" selected={filters.prep} options={currentPreps} onChange={v => setFilter('prep', v)} />
-            )}
-          </div>
-        )}
       </div>
+
+      {/* ── Filter bar (always same row, below tabs) ── */}
+      {activeTab !== 'proposal' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <MultiFilterSelect label="Material"          selected={filters.material} options={currentMaterials} onChange={v => setFilter('material', v)} />
+          <MultiFilterSelect label="Building Location" selected={filters.floor}    options={currentFloors}    onChange={v => setFilter('floor',    v)} />
+          <MultiFilterSelect label="Building"          selected={filters.building} options={currentBuildings} onChange={v => setFilter('building', v)} />
+          {activeTab !== 'hardware' && currentPreps.length > 0 && (
+            <MultiFilterSelect label="Prep" selected={filters.prep} options={currentPreps} onChange={v => setFilter('prep', v)} />
+          )}
+        </div>
+      )}
 
       {/* ── Proposal tab ── */}
       {activeTab === 'proposal' && (

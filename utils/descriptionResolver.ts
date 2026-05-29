@@ -83,6 +83,13 @@ function parseDimensionStr(val: string | undefined): number {
   const mm = clean.match(/^(\d+(?:\.\d+)?)\s*mm/i);
   if (mm) return Math.round(parseFloat(mm[1]) / 25.4);
 
+  // Compound expression: "(3'-0\"+ 1'-8\")" — sum all leaf widths
+  const compound = clean.match(/^\(([^)]+)\)$/);
+  if (compound) {
+    const total = compound[1].split('+').reduce((sum, p) => sum + parseDimensionStr(p.trim()), 0);
+    if (total > 0) return total;
+  }
+
   return 0;
 }
 
@@ -109,10 +116,14 @@ function getDimensionsFromMergedDoor(door: MergedDoor): {
     leafStr.includes('pair') ||
     parseInt(leafStr, 10) > 1;
 
+  // When width is a compound expression like "(3'-0\"+ 1'-8\")", the parsed value
+  // is already the total opening width — don't let isPair formulas double it.
+  const isCompoundWidth = /\(.*\+.*\)/.test(String(rawWidth ?? ''));
+
   return {
     width: parseDimensionStr(rawWidth),
     height: parseDimensionStr(rawHeight),
-    isPair,
+    isPair: isCompoundWidth ? false : isPair,
   };
 }
 

@@ -22,7 +22,16 @@ export const calculateHardwareUsage = (
 
   hardwareSets.forEach(set => {
     set.items.forEach(item => {
-      const key = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+      // Key on Item Name + Description + Manufacturer + Finish only.
+      // Quantity is intentionally excluded so the same item appearing in multiple
+      // sets (possibly with different per-set quantities) merges into one row
+      // and has its total quantity summed correctly.
+      const key = [
+        (item.name || '').trim().toLowerCase(),
+        ((item.processedDescription ?? item.description) || '').trim().toLowerCase(),
+        (item.manufacturer || '').trim().toLowerCase(),
+        (item.finish || '').trim().toLowerCase(),
+      ].join('|');
 
       if (!itemUsageMap.has(key)) {
         itemUsageMap.set(key, {

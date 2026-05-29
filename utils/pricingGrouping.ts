@@ -316,6 +316,8 @@ export function groupHardwareItems(
     const setName   = set.name.toLowerCase();
     const setDoors  = includedDoors.filter(d => getDoorHwSetName(d)?.toLowerCase() === setName);
 
+    if (setDoors.length === 0) continue;
+
     for (const item of set.items) {
       const key = `${item.name}|${item.description ?? ''}|${item.manufacturer ?? ''}|${item.finish ?? ''}`;
 
