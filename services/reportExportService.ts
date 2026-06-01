@@ -28,7 +28,7 @@ export const calculateHardwareUsage = (
       // and has its total quantity summed correctly.
       const key = [
         (item.name || '').trim().toLowerCase(),
-        ((item.processedDescription ?? item.description) || '').trim().toLowerCase(),
+        ((item.userDescription ?? item.processedDescription ?? item.description) || '').trim().toLowerCase(),
         (item.manufacturer || '').trim().toLowerCase(),
         (item.finish || '').trim().toLowerCase(),
       ].join('|');

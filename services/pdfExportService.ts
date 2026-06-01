@@ -229,7 +229,7 @@ const buildHardwareSetRow = (item: any, config: HardwareSetExportConfig): any[] 
 
   // Required columns
   row.push(item.item.name || '');
-  row.push((item.item.processedDescription ?? item.item.description) || '');
+  row.push((item.item.userDescription ?? item.item.processedDescription ?? item.item.description) || '');
   row.push(item.item.manufacturer || '');
   row.push(item.item.finish || '');
   row.push(formatUsage(item.doorTags, config.usageDisplay));
@@ -571,7 +571,7 @@ export const exportSubmittalPackageToPDF = async (
       const setRows = set.items.map(item => [
          item.quantity,
          item.name,
-         item.processedDescription ?? item.description,
+         item.userDescription ?? item.processedDescription ?? item.description,
          item.manufacturer,
          item.finish
       ]);

@@ -511,7 +511,9 @@ export async function extractHardwareSetsFromPdf(
       tier = 1;
     } catch (tier1Err) {
       if (tier1Err instanceof Error && tier1Err.name === 'AbortError') throw tier1Err;
-      console.warn(`[hardwarePdf] Tier 1 failed: ${tier1Err instanceof Error ? tier1Err.message : String(tier1Err)} — falling back to Tier 2`);
+      const t1Msg = tier1Err instanceof Error ? tier1Err.message : String(tier1Err);
+      warnings.push(`Tier 1 failed: ${t1Msg}`);
+      console.warn(`[hardwarePdf] Tier 1 failed: ${t1Msg} — falling back to Tier 2`);
     }
   } else {
     console.warn(`[hardwarePdf] File is ${fileSizeMb.toFixed(1)} MB — exceeds 15 MB Tier 1 limit, using Tier 2 directly.`);
@@ -522,6 +524,23 @@ export async function extractHardwareSetsFromPdf(
     const t2Result = await tier2Extract(client, buffer, projectId, warnings, signal);
     sets = t2Result.sets;
     tier = 2;
+  }
+
+  // ── Surface API-level errors (e.g. 402 insufficient credits) ─────────────
+  // When both tiers produce 0 sets and warnings contain recognisable API
+  // error codes, throw so the route can return a meaningful message instead
+  // of the generic "No hardware sets were found."
+  if (sets.length === 0) {
+    const apiError = warnings.find(
+      w => w.includes('402') || w.includes('insufficient credits') || w.includes('requires more credits') ||
+           w.includes('401') || w.includes('403') || w.includes('API key'),
+    );
+    if (apiError) {
+      throw new Error(
+        `OpenRouter API error — ${apiError}. ` +
+        'Please check your OPENROUTER_API_KEY and ensure the account has sufficient credits.',
+      );
+    }
   }
 
   const durationMs = Date.now() - startMs;

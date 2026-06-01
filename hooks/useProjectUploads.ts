@@ -635,8 +635,11 @@ export function useProjectUploads({
 
             if (finalRaw) {
                 const finalData = transformFromFinalJson(finalRaw);
-                resolvedSets = finalData.hardwareSets.filter(s => s.name !== '__unassigned__');
-                autoDoors = finalData.doors;
+                const filteredSets = finalData.hardwareSets.filter(s => s.name !== '__unassigned__');
+                const autoResult = autoCreateVariants(filteredSets, finalData.doors);
+                resolvedSets = autoResult.sets;
+                autoDoors = autoResult.doors;
+                variantsCreated = autoResult.variantsCreated;
             } else {
                 // Fallback: re-build from raw extracted data if final_json isn't available yet
                 const [hwFresh, dsFresh] = await Promise.all([
