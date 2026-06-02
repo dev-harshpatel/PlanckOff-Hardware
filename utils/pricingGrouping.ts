@@ -336,7 +336,7 @@ export function groupHardwareItems(
       }
 
       const group = map.get(key)!;
-      const multipliedQty = item.multipliedQuantity ?? (item.quantity * Math.max(setDoors.length, 1));
+      const multipliedQty = item.quantity * Math.max(setDoors.length, 1);
 
       group.sets.push({ setName: set.name, setId: set.id, multipliedQty });
       group.totalQty += multipliedQty;
