@@ -58,7 +58,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
   const adjustZoom = (delta: number) => setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
 
   // ── Usage stats (for flat / manufacturer / type groupings) ───────────────
-  // Deduplicates items across all sets using the identifying fields plus Qty/Set.
+  // Deduplicates items across all sets using Item Name, Description, Manufacturer, Finish.
   // Accumulates multipliedQuantity (qty × doors for that set) so totals
   // reflect the real procurement count across every set the item appears in.
   const usageStats = useMemo(() => {
@@ -67,7 +67,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
       const setName = set.name.toLowerCase();
       const doorsWithSet = doors.filter(d => getDoorHwSetName(d)?.toLowerCase() === setName);
       set.items.forEach(item => {
-        const key = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+        const key = `${(item.name ?? '').trim()}|${(item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
         if (!map.has(key)) map.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
         const usage = map.get(key)!;
         doorsWithSet.forEach(door => {

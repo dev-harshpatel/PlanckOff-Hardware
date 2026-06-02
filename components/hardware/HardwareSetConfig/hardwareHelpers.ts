@@ -161,7 +161,7 @@ export function buildDoorFieldGroups(
         if (!set) continue;
 
         for (const item of set.items) {
-          const key = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+          const key = `${(item.name ?? '').trim()}|${(item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
           if (!itemMap.has(key)) {
             itemMap.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
           }
@@ -215,7 +215,7 @@ function buildCompoundGroups(
 
     for (const item of set.items) {
       const compoundKey = groupBy.map(opt => getGroupKeyPart(opt, door, item, set.name)).join(' · ');
-      const itemKey = `${item.name}|${item.processedDescription ?? item.description ?? ''}|${item.manufacturer || ''}|${item.finish || ''}|${item.quantity || 0}`;
+      const itemKey = `${(item.name ?? '').trim()}|${(item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
 
       if (!groupMap.has(compoundKey)) groupMap.set(compoundKey, new Map());
       const itemMap = groupMap.get(compoundKey)!;
