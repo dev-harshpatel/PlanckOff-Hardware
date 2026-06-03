@@ -68,7 +68,7 @@ export function getItemValue(usage: HardwareItemUsage, colId: string): string {
   switch (colId) {
     case 'hw_set_name':   return usage.sets.length > 0 ? usage.sets.join(', ') : '—';
     case 'name':          return usage.item.name         || '—';
-    case 'description':   return (usage.item.processedDescription ?? usage.item.description) || '—';
+    case 'description':   return (usage.item.userDescription ?? usage.item.processedDescription ?? usage.item.description) || '—';
     case 'manufacturer':  return usage.item.manufacturer || '—';
     case 'finish':        return usage.item.finish       || '—';
     case 'qty_per_set':   return usage.item.quantity > 0 ? String(usage.item.quantity) : '—';
@@ -161,7 +161,7 @@ export function buildDoorFieldGroups(
         if (!set) continue;
 
         for (const item of set.items) {
-          const key = `${(item.name ?? '').trim()}|${(item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
+          const key = `${(item.name ?? '').trim()}|${(item.userDescription ?? item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
           if (!itemMap.has(key)) {
             itemMap.set(key, { item, doorTags: [], totalQuantity: 0, sets: [], doorQuantitySum: 0, doorMaterials: [] });
           }
@@ -215,7 +215,7 @@ function buildCompoundGroups(
 
     for (const item of set.items) {
       const compoundKey = groupBy.map(opt => getGroupKeyPart(opt, door, item, set.name)).join(' · ');
-      const itemKey = `${(item.name ?? '').trim()}|${(item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
+      const itemKey = `${(item.name ?? '').trim()}|${(item.userDescription ?? item.processedDescription ?? item.description ?? '').trim()}|${(item.manufacturer ?? '').trim()}|${(item.finish ?? '').trim()}`;
 
       if (!groupMap.has(compoundKey)) groupMap.set(compoundKey, new Map());
       const itemMap = groupMap.get(compoundKey)!;
