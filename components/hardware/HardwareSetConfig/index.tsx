@@ -20,6 +20,7 @@ import {
   type HardwareItemUsage,
 } from './hardwareHelpers';
 import { HardwareGroupTable } from './HardwareGroupTable';
+import { buildExportFilename } from '../../../utils/exportFilename';
 
 // ─── Exported types (kept for downstream services) ───────────────────────────
 
@@ -186,7 +187,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Hardware Sets');
-      XLSX.writeFile(wb, `${safeProjectName}.xlsx`, { cellStyles: true });
+      XLSX.writeFile(wb, buildExportFilename(projectName || '', 'Hardware Set Report', 'xlsx'), { cellStyles: true });
       return;
     }
 
@@ -236,7 +237,7 @@ const HardwareSetConfig: React.FC<HardwareSetConfigProps> = ({
       }
       // Two-pass page numbers — called after all autoTable() calls complete (PDF-03)
       addPageNumbers(doc, projectName || 'Hardware Set Report', pageW, pageH, PDF_MARGIN);
-      doc.save(`${safeProjectName}.pdf`);
+      doc.save(buildExportFilename(projectName || '', 'Hardware Set Report', 'pdf'));
     }
   }, [groups, requiredColumns, usageDisplay, format, projectName]);
 

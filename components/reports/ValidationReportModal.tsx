@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ValidationReport, ValidationError } from '../../types';
+import { buildExportFilename } from '../../utils/exportFilename';
 import {
     ExclamationTriangleIcon,
     ExclamationCircleIcon,
@@ -65,7 +66,7 @@ const ValidationReportModal: React.FC<ValidationReportModalProps> = ({ isOpen, o
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
-        link.setAttribute('download', `${title.replace(/\s+/g, '_')}_Validation_Report.csv`);
+        link.setAttribute('download', buildExportFilename(title, 'Validation Report', 'csv'));
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

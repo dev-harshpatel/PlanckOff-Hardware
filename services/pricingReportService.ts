@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { applySheetTheme, contentAwareColWidths, buildMetadataRows, applyMetadataStyles, applyHeaderRowAt, applyFreezeAt } from './excelTheme';
+import { buildExportFilename } from '../utils/exportFilename';
 import {
     Door,
     HardwareSet,
@@ -67,7 +68,7 @@ export function exportPricingReportToExcel(
     }
 
     // Export
-    const fileName = `${metadata.projectName.replace(/[^a-z0-9]/gi, '_')}_Pricing_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = buildExportFilename(metadata.projectName, 'Pricing Report', 'xlsx');
     XLSX.writeFile(wb, fileName, { cellStyles: true });
 }
 
@@ -377,7 +378,7 @@ export function exportPricingSummaryToCSV(
     // Convert to CSV
     const csv = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const fileName = `${projectName.replace(/[^a-z0-9]/gi, '_')}_Pricing_Summary.csv`;
+    const fileName = buildExportFilename(projectName, 'Pricing Summary', 'csv');
     saveAs(blob, fileName);
 }
 

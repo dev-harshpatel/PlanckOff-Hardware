@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { PrinterIcon } from '../shared/icons';
 import type { MergedHardwareSet, MergedDoor, HardwareItem } from '@/lib/db/hardware';
 import type { ElevationType } from '@/types';
+import { buildExportFilename } from '@/utils/exportFilename';
 
 interface SubmittalGeneratorProps {
   finalJson: MergedHardwareSet[];
@@ -239,8 +240,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
       });
 
-      const safeName = projectName.replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
-      pdf.save(`${safeName}_Submittal_Package.pdf`);
+      pdf.save(buildExportFilename(projectName, 'Submittal Package', 'pdf'));
     } finally {
       setIsDownloading(false);
     }

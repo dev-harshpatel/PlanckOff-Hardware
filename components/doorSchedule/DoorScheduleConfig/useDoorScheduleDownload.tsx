@@ -17,6 +17,7 @@ import { getDoorQuantity, sumDoorQuantities } from '../../../utils/doorUtils';
 import { collectGroupElevationTypes } from '../../../utils/elevationUtils';
 import { parseColId, aggregateDoorsBySelectedColumns, getRowValue } from '../../../utils/doorScheduleUtils';
 import { toExcelNumber } from '../../../utils/excelUtils';
+import { buildExportFilename } from '../../../utils/exportFilename';
 
 interface UseDoorScheduleDownloadParams {
   selectedColumns: string[];
@@ -393,7 +394,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
 
         const url = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
-        a.href = url; a.download = `${fileName}.xlsx`; a.click();
+        a.href = url; a.download = buildExportFilename(projectName || '', 'Door Schedule', 'xlsx'); a.click();
         URL.revokeObjectURL(url);
 
       } else {
@@ -553,7 +554,7 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
         }
 
         addPageNumbers(doc, projectName || 'Door Schedule', PAGE_W, PAGE_H, PDF_MARGIN);
-        doc.save(`${fileName}.pdf`);
+        doc.save(buildExportFilename(projectName || '', 'Door Schedule', 'pdf'));
       }
     } finally {
       setIsDownloading(false);

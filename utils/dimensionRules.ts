@@ -75,7 +75,6 @@ const ALIAS_MAP: Record<string, string> = {
   'armor plate':        'kick_plate',
   'armour plate':       'kick_plate',
   'mop plate':          'kick_plate',
-  'push plate':         'kick_plate',
 
   // Sweep
   'sweep':              'sweep',
