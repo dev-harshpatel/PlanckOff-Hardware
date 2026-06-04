@@ -1,4 +1,5 @@
 import { Door, HardwareSet, ElevationType } from '../types';
+import type { CompanySettings } from '../lib/db/companySettings';
 import type { DoorScheduleExportConfig } from '../types/doorScheduleTypes';
 import type { HardwareSetExportConfig } from '../types/hardwareSetTypes';
 import { buildExportFilename } from '../utils/exportFilename';
@@ -424,84 +425,166 @@ export const exportSubmittalPackageToPDF = async (
   const pageHeight  = doc.internal.pageSize.getHeight();
   const logoDataUrl = await loadLogoDataUrl();
 
+  // Fetch company settings for cover page
+  let companySettings: CompanySettings | null = null;
+  try {
+    const res = await fetch('/api/settings/company', { credentials: 'include' });
+    if (res.ok) {
+      const json = await res.json() as { data?: CompanySettings };
+      companySettings = json?.data ?? null;
+    }
+  } catch { /* skip — cover page renders without company info */ }
+
   const { coverPageDetails, sections } = config;
 
   // 1. COVER PAGE
   if (sections.coverPage) {
-    // Border
-    doc.setLineWidth(1);
+    // Double border
+    doc.setLineWidth(0.8);
+    doc.setDrawColor(...DEFAULT_THEME.headFill);
     doc.rect(10, 10, 190, 277);
-    doc.setLineWidth(0.5);
-    doc.rect(12, 12, 186, 273);
+    doc.setLineWidth(0.25);
+    doc.setDrawColor(180, 195, 220);
+    doc.rect(13, 13, 184, 271);
+    doc.setDrawColor(0, 0, 0);
 
-    let y = 60;
+    let y = 26;
 
-    // Project Name
-    doc.setFontSize(24);
+    // ── Company section ─────────────────────────────────────────────────
+    if (companySettings?.companyName) {
+      const co = companySettings;
+
+      // Company logo
+      if (co.logoUrl) {
+        try {
+          const resp    = await fetch(co.logoUrl);
+          const blob    = await resp.blob();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader    = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror   = reject;
+            reader.readAsDataURL(blob);
+          });
+          const img = new Image();
+          await new Promise<void>(res => { img.onload = () => res(); img.src = dataUrl; });
+          const MAX_LOGO_H = 28;
+          const scale      = MAX_LOGO_H / img.height;
+          const logoW      = Math.min(img.width * scale, 72);
+          const canvas     = document.createElement('canvas');
+          canvas.width     = logoW;
+          canvas.height    = MAX_LOGO_H;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, logoW, MAX_LOGO_H);
+          doc.addImage(canvas.toDataURL('image/png'), 'PNG', 105 - logoW / 2, y, logoW, MAX_LOGO_H);
+          y += MAX_LOGO_H + 8;
+        } catch { /* skip logo on error */ }
+      }
+
+      // Company name
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(12, 18, 40);
+      doc.text(co.companyName, 105, y, { align: 'center' });
+      y += 10;
+
+      // Contact details
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(85, 95, 115);
+      const contactLines: string[] = [];
+      if (co.websiteUrl || co.email)
+        contactLines.push([co.websiteUrl, co.email].filter(Boolean).join('   ·   '));
+      if (co.phone) contactLines.push(co.phone);
+      const addrParts = [co.address, co.province, co.country].filter(Boolean).join(', ');
+      if (addrParts) contactLines.push(addrParts);
+      for (const line of contactLines) {
+        doc.text(line, 105, y, { align: 'center' });
+        y += 6;
+      }
+      doc.setTextColor(0, 0, 0);
+      y += 6;
+
+      // Decorative separator
+      doc.setDrawColor(...DEFAULT_THEME.headFill);
+      doc.setLineWidth(0.7);
+      doc.line(28, y, 182, y);
+      doc.setLineWidth(0.2);
+      doc.setDrawColor(180, 195, 220);
+      doc.line(28, y + 1.8, 182, y + 1.8);
+      doc.setDrawColor(0, 0, 0);
+      y += 14;
+    } else {
+      y = 72; // original centred position when no company info
+    }
+
+    // ── Submittal title section ──────────────────────────────────────────
+    // "SUBMITTAL PACKAGE" label
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(coverPageDetails.projectName, 105, y, { align: 'center' });
-    y += 20;
-
-    // Document Title
-    doc.setFontSize(32);
-    doc.setTextColor(...DEFAULT_THEME.headFill); // Brand Navy
+    doc.setTextColor(...DEFAULT_THEME.headFill);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setCharSpace(3);
     doc.text('SUBMITTAL PACKAGE', 105, y, { align: 'center' });
-    doc.setTextColor(0, 0, 0); // Reset
-    y += 15;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (doc as any).setCharSpace(0);
+    doc.setTextColor(0, 0, 0);
+    y += 10;
 
-    // Submittal Number
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Submittal #${coverPageDetails.submittalNumber}`, 105, y, { align: 'center' });
-    y += 50;
-
-    // Details Box
-    doc.roundedRect(50, y, 110, 80, 5, 5);
-    y += 15;
-
-    const leftX = 60;
-    const rightX = 150;
-
-    doc.setFontSize(11);
-    
-    // Date
+    // Project name
+    doc.setFontSize(26);
     doc.setFont('helvetica', 'bold');
-    doc.text('Date:', leftX, y);
+    doc.setTextColor(10, 15, 35);
+    const projLines = doc.splitTextToSize(coverPageDetails.projectName || 'Untitled Project', 168);
+    doc.text(projLines, 105, y, { align: 'center' });
+    y += (projLines.length as number) * 11 + 5;
+
+    // Submittal number
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'normal');
-    doc.text(new Date(coverPageDetails.submittalDate).toLocaleDateString(), rightX, y, { align: 'right' });
-    y += 12;
+    doc.setTextColor(110, 120, 140);
+    doc.text(`Submittal  #${coverPageDetails.submittalNumber}`, 105, y, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    y += 16;
 
-    // Client
-    if (coverPageDetails.clientName) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Client:', leftX, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(coverPageDetails.clientName, rightX, y, { align: 'right' });
-      y += 12;
-    }
+    // ── Details box ──────────────────────────────────────────────────────
+    const detailRows: [string, string][] = [
+      ['Date', new Date(coverPageDetails.submittalDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
+    ];
+    if (coverPageDetails.clientName) detailRows.push(['Client', coverPageDetails.clientName]);
+    if (coverPageDetails.architect)  detailRows.push(['Architect', coverPageDetails.architect]);
+    if (coverPageDetails.contractor) detailRows.push(['Contractor', coverPageDetails.contractor]);
 
-    // Architect
-    if (coverPageDetails.architect) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Architect:', leftX, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(coverPageDetails.architect, rightX, y, { align: 'right' });
-      y += 12;
-    }
+    const ROW_H   = 13;
+    const BOX_PAD = 12;
+    const BOX_H   = BOX_PAD * 2 + detailRows.length * ROW_H;
+    const BOX_X   = 32;
+    const BOX_W   = 146;
 
-    // Contractor
-    if (coverPageDetails.contractor) {
+    doc.setFillColor(244, 247, 253);
+    doc.setDrawColor(195, 210, 235);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(BOX_X, y, BOX_W, BOX_H, 4, 4, 'FD');
+
+    const detailLeftX  = BOX_X + 12;
+    const detailRightX = BOX_X + BOX_W - 12;
+    y += BOX_PAD;
+
+    doc.setFontSize(12);
+    for (const [label, value] of detailRows) {
       doc.setFont('helvetica', 'bold');
-      doc.text('Contractor:', leftX, y);
+      doc.setTextColor(35, 45, 65);
+      doc.text(label, detailLeftX, y);
       doc.setFont('helvetica', 'normal');
-      doc.text(coverPageDetails.contractor, rightX, y, { align: 'right' });
-      y += 12;
+      doc.setTextColor(60, 72, 95);
+      doc.text(String(value), detailRightX, y, { align: 'right' });
+      y += ROW_H;
     }
+    doc.setTextColor(0, 0, 0);
 
     // Footer
-    doc.setFontSize(10);
-    doc.setTextColor(128, 128, 128);
-    doc.text('Generated by Planckoff Hardware Estimating', 105, 270, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(160, 168, 180);
+    doc.text('Generated by Planckoff Hardware Estimating', 105, 278, { align: 'center' });
     doc.setTextColor(0, 0, 0);
 
     doc.addPage();

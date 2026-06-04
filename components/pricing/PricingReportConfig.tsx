@@ -1,8 +1,9 @@
 ﻿'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { DollarSign, FileSpreadsheet, FileDown, X, Check } from 'lucide-react';
-import type { Door, HardwareSet } from '@/types';
+import { DollarSign, FileSpreadsheet, FileDown, X, Check, Image } from 'lucide-react';
+import type { Door, HardwareSet, ElevationType } from '@/types';
+import { useElevationImages } from '@/hooks/useElevationImages';
 import type { CompanySettings } from '@/lib/db/companySettings';
 import {
   type PriceMap,
@@ -21,12 +22,13 @@ interface Props {
   projectId: string;
   doors: Door[];
   hardwareSets: HardwareSet[];
+  elevationTypes?: ElevationType[];
   projectName: string;
 }
 
 const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
-const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, projectName }) => {
+const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, elevationTypes = [], projectName }) => {
   const [activeTab, setActiveTab]   = useState<PricingTab>('door');
   const [prices, setPrices]         = useState<PriceMap>(new Map());
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
@@ -40,6 +42,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const [exportDialog, setExportDialog] = useState<null | 'excel' | 'pdf'>(null);
   const [exportSections, setExportSections] = useState<ExportSections>({ doors: true, frames: true, hardware: true });
   const exportDialogRef = useRef<HTMLDivElement>(null);
+
+  const { showElevationImages, setShowElevationImages } = useElevationImages(elevationTypes);
 
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -202,6 +206,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
     taxSubtotal,
     totalAfterTax,
     remarks,
+    showElevationImages,
+    elevationTypes,
     addToast,
   });
 
@@ -300,6 +306,31 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
                       </label>
                     ))}
                   </div>
+
+                  {elevationTypes.length > 0 && (
+                    <div className="px-3 pb-2 border-t border-[var(--border)]">
+                      <label className="flex items-start gap-2.5 pt-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={showElevationImages}
+                          onChange={e => setShowElevationImages(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-[var(--border-strong)] text-[var(--primary-action)] focus:ring-[var(--primary-ring)] cursor-pointer flex-shrink-0 mt-0.5"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-medium text-[var(--text-secondary)] group-hover:text-[var(--primary-text)] transition-colors flex items-center gap-1.5">
+                            <Image className="w-3 h-3 flex-shrink-0" />
+                            Include Elevation Images
+                          </span>
+                          <span className="text-[10px] text-[var(--text-faint)] block mt-0.5">
+                            {exportDialog === 'pdf'
+                              ? `Thumbnail pages appended · ${elevationTypes.length} type${elevationTypes.length !== 1 ? 's' : ''}`
+                              : `Adds elevation sheets · ${elevationTypes.length} type${elevationTypes.length !== 1 ? 's' : ''}`
+                            }
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
 
                   <div className="px-3 pb-3">
                     <button
