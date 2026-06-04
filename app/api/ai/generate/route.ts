@@ -12,12 +12,22 @@ const ALLOWED_MODELS = [
   'gemini-2.5-flash',
 ] as const;
 
+// Increase body size limit for vision requests that include large base64 images
+export const maxDuration = 120;
+
+
 interface GenerateRequestBody {
   prompt: string;
   schema?: Record<string, unknown>;
   provider?: 'openrouter' | 'gemini';
   model?: string;
   temperature?: number;
+  imageBase64?: string;
+}
+
+interface GenerateResult {
+  text: string;
+  usage?: { promptTokens: number; completionTokens: number; estimatedCostUSD: number };
 }
 
 /** Calls OpenRouter with retry logic. */
@@ -27,7 +37,8 @@ async function generateWithOpenRouter(
   schema: Record<string, unknown> | undefined,
   temperature: number,
   maxRetries: number,
-): Promise<string> {
+  imageBase64?: string,
+): Promise<GenerateResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured on the server.');
 
@@ -48,13 +59,35 @@ async function generateWithOpenRouter(
         temperature,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
+          {
+            role: 'user',
+            content: imageBase64
+              ? [
+                  { type: 'text' as const, text: prompt },
+                  { type: 'image_url' as const, image_url: { url: imageBase64 } },
+                ]
+              : prompt,
+          },
         ],
-        response_format: schema ? { type: 'json_object' } : undefined,
+        response_format: schema && !imageBase64 ? { type: 'json_object' } : undefined,
       });
-      return response.choices[0]?.message?.content ?? '';
+      const u = response.usage;
+      const inputCost  = ((u?.prompt_tokens     ?? 0) / 1_000_000) * 0.15;
+      const outputCost = ((u?.completion_tokens ?? 0) / 1_000_000) * 0.60;
+      const estimatedCostUSD = inputCost + outputCost;
+      if (u) {
+        console.log(
+          `[AI cost] model: ${model} | in: ${u.prompt_tokens} tok | out: ${u.completion_tokens} tok` +
+          ` | ~$${estimatedCostUSD.toFixed(5)} | hasImage: ${!!imageBase64}`,
+        );
+      }
+      return {
+        text: response.choices[0]?.message?.content ?? '',
+        usage: u ? { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, estimatedCostUSD } : undefined,
+      };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      console.error(`[OpenRouter] attempt ${attempt + 1} failed — model: ${model}, hasImage: ${!!imageBase64}, error:`, lastError.message);
       if (attempt < maxRetries - 1) {
         await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
       }
@@ -70,7 +103,8 @@ async function generateWithGemini(
   schema: Record<string, unknown> | undefined,
   temperature: number,
   maxRetries: number,
-): Promise<string> {
+  imageBase64?: string,
+): Promise<GenerateResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
@@ -83,12 +117,25 @@ async function generateWithGemini(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      const contents = imageBase64
+        ? {
+            parts: [
+              { text: fullPrompt },
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg' as const,
+                  data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+                },
+              },
+            ],
+          }
+        : fullPrompt;
       const result = await genai.models.generateContent({
         model,
-        contents: fullPrompt,
+        contents,
         config: { temperature },
       });
-      return result.text ?? '';
+      return { text: result.text ?? '' };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < maxRetries - 1) {
@@ -108,9 +155,11 @@ export const POST = withRoleAuth(
         prompt,
         schema,
         provider = 'openrouter',
-        model = 'google/gemini-2.0-flash-001',
         temperature = 0.1,
+        imageBase64,
       } = body;
+
+      const model: string = body.model || 'google/gemini-2.0-flash-001';
 
       if (!prompt || typeof prompt !== 'string') {
         return NextResponse.json({ error: 'prompt is required and must be a string' }, { status: 400 });
@@ -131,14 +180,15 @@ export const POST = withRoleAuth(
         return NextResponse.json({ error: 'temperature must be between 0 and 1.' }, { status: 400 });
       }
 
-      const text =
+      const { text, usage } =
         provider === 'gemini'
-          ? await generateWithGemini(prompt, model, schema, temperature, 5)
-          : await generateWithOpenRouter(prompt, model, schema, temperature, 5);
+          ? await generateWithGemini(prompt, model, schema, temperature, 5, imageBase64)
+          : await generateWithOpenRouter(prompt, model, schema, temperature, 5, imageBase64);
 
-      return NextResponse.json({ text }, { status: 200 });
+      return NextResponse.json({ text, usage }, { status: 200 });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal server error';
+      console.error('[/api/ai/generate] 500 error:', message);
       return NextResponse.json({ error: message }, { status: 500 });
     }
   },
