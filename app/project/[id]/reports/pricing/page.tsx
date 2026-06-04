@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { DollarSign } from 'lucide-react';
-import type { Door, HardwareSet } from '@/types';
+import type { Door, HardwareSet, ElevationType } from '@/types';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { transformFromFinalJson, transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
 import { filterHardwareExcludedDoors, filterSetsWithNoDoors } from '@/utils/reportFilters';
@@ -20,6 +20,7 @@ export default function PricingReportPage() {
 
   const [doors, setDoors] = useState<Door[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
+  const [elevationTypes, setElevationTypes] = useState<ElevationType[]>([]);
   const [projectName, setProjectName] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -49,6 +50,7 @@ export default function PricingReportPage() {
         ]);
 
         setProjectName(projJson?.data?.name ?? '');
+        setElevationTypes((projJson?.data?.elevationTypes ?? []) as ElevationType[]);
 
         let sets: HardwareSet[] = [];
         let loadedDoors: Door[] = [];
@@ -103,6 +105,7 @@ export default function PricingReportPage() {
           projectId={id}
           doors={doors}
           hardwareSets={hardwareSets}
+          elevationTypes={elevationTypes}
           projectName={projectName}
         />
       </div>

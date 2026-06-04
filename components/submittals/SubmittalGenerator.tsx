@@ -10,28 +10,47 @@ interface SubmittalGeneratorProps {
   elevationTypes?: ElevationType[];
 }
 
-interface SetGroup {
-  fingerprint: string;
-  setNames: string[];
-  items: HardwareItem[];
+// ── Data shapes ──────────────────────────────────────────────────────────────
+
+interface DoorMaterialGroup {
+  material: string;
   doors: MergedDoor[];
   totalQuantity: number;
 }
 
-function itemsFingerprint(items: HardwareItem[]): string {
-  const normalized = [...items]
-    .sort((a, b) => (a.item || '').localeCompare(b.item || ''))
-    .map(item => ({
-      n: (item.item || '').trim().toLowerCase(),
-      q: item.qty,
-      m: (item.manufacturer || '').trim().toLowerCase(),
-      f: (item.finish || '').trim().toLowerCase(),
-    }));
-  return JSON.stringify(normalized);
+interface HwSetRowItem {
+  itemName: string;
+  description: string;
+  manufacturer: string;
+  finish: string;
+  qtyPerSet: number;
+  totalQty: number;
+  doorMaterials: string[];
 }
 
+interface HwSetDisplay {
+  setName: string;
+  items: HwSetRowItem[];
+  totalDoorQty: number;
+  doorTags: string[];
+}
+
+interface FlatListRow {
+  itemName: string;
+  description: string;
+  manufacturer: string;
+  finish: string;
+  totalQty: number;
+  doorTags: string[];
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function doorQuantity(door: MergedDoor): number {
-  const raw = door.sections?.door?.['QUANTITY'] ?? door.sections?.basic_information?.['QUANTITY'] ?? String(door.quantity ?? 1);
+  const raw =
+    door.sections?.door?.['QUANTITY'] ??
+    door.sections?.basic_information?.['QUANTITY'] ??
+    String(door.quantity ?? 1);
   return parseInt(raw) || 1;
 }
 
@@ -58,49 +77,324 @@ function buildDimensions(door: MergedDoor): string {
   return parts.join(' x ');
 }
 
-function formatParamValue(val: string): string {
+function fmt(val: string): string {
   return val || '-';
 }
 
-const DOOR_PARAMS = (door: MergedDoor): Array<{ label: string; value: string }> => [
-  { label: 'Opening Number', value: formatParamValue(door.doorTag) },
-  { label: 'Handing',        value: formatParamValue(getDoorParam(door, 'HAND OF OPENINGS', 'HANDING', 'HAND')) },
-  { label: 'Operation',      value: formatParamValue(getDoorParam(door, 'DOOR OPERATION', 'OPERATION')) },
-  { label: 'Dimensions',     value: formatParamValue(buildDimensions(door)) },
-  { label: 'Undercut',       value: formatParamValue(getDoorParam(door, 'DOOR UNDERCUT', 'UNDERCUT')) },
-  { label: 'Leaf Count',     value: formatParamValue(getDoorParam(door, 'LEAF COUNT') || String(door.leafCount ?? '')) },
-  { label: 'Core Type',      value: formatParamValue(getDoorParam(door, 'DOOR CORE', 'DOOR MATERIAL', 'CORE TYPE') || door.doorMaterial || '') },
-  { label: 'Face Type',      value: formatParamValue(getDoorParam(door, 'DOOR FACE', 'FACE TYPE')) },
-  { label: 'Finish Base Prep', value: formatParamValue(getDoorParam(door, 'FINISH BASE PREP', 'FINISH PREP')) },
-  { label: 'Finish Type',    value: formatParamValue(getDoorParam(door, 'DOOR FINISH', 'FINISH TYPE', 'FINISH')) },
-  { label: 'Fire Rating',    value: formatParamValue(door.fireRating ?? getDoorParam(door, 'FIRE RATING')) },
-  { label: 'STC Rating',     value: formatParamValue(getDoorParam(door, 'STC RATING', 'STC')) },
-  { label: 'Frame Material', value: formatParamValue(String(door.frameMaterial ?? getDoorParam(door, 'FRAME MATERIAL'))) },
-  { label: 'Frame Type',     value: formatParamValue(getDoorParam(door, 'FRAME TYPE', 'FRAME GUAGE', 'FRAME PROFILE')) },
-  { label: 'Wall Type',      value: formatParamValue(getDoorParam(door, 'WALL TYPE')) },
-  { label: 'Jamb Depth',     value: formatParamValue(getDoorParam(door, 'JAMB DEPTH', 'THROAT THICKNESS', 'JAMB')) },
-];
+function getDoorMaterial(door: MergedDoor): string {
+  const fromSection = door.sections?.door?.['DOOR MATERIAL'];
+  if (fromSection?.trim()) return fromSection.trim();
+  const fromAll = getDoorParam(door, 'DOOR MATERIAL');
+  if (fromAll) return fromAll;
+  return door.doorMaterial?.trim() || 'Unspecified';
+}
 
-function getElevationType(door: MergedDoor, elevationTypes: ElevationType[], kind: 'door' | 'frame'): ElevationType | undefined {
-  const code = kind === 'door'
-    ? (door.doorElevationType ?? getDoorParam(door, 'DOOR ELEVATION TYPE'))
-    : getDoorParam(door, 'FRAME ELEVATION TYPE');
+function getElevationType(
+  door: MergedDoor,
+  elevationTypes: ElevationType[],
+  kind: 'door' | 'frame',
+): ElevationType | undefined {
+  const code =
+    kind === 'door'
+      ? (door.doorElevationType ?? getDoorParam(door, 'DOOR ELEVATION TYPE'))
+      : getDoorParam(door, 'FRAME ELEVATION TYPE');
   if (!code) return undefined;
-  // Prefer matching by kind; fall back to any match so legacy entries (kind=undefined) still work
   return (
-    elevationTypes.find(e => e.kind === kind && (e.code?.toLowerCase() === code.toLowerCase() || e.name?.toLowerCase() === code.toLowerCase())) ??
-    elevationTypes.find(e => e.code?.toLowerCase() === code.toLowerCase() || e.name?.toLowerCase() === code.toLowerCase())
+    elevationTypes.find(
+      e =>
+        e.kind === kind &&
+        (e.code?.toLowerCase() === code.toLowerCase() ||
+          e.name?.toLowerCase() === code.toLowerCase()),
+    ) ??
+    elevationTypes.find(
+      e =>
+        e.code?.toLowerCase() === code.toLowerCase() ||
+        e.name?.toLowerCase() === code.toLowerCase(),
+    )
   );
 }
 
-// Determine font-size scaling for the hardware items list based on item count
-function hwFontScale(itemCount: number): number {
-  if (itemCount <= 8)  return 11;
-  if (itemCount <= 11) return 10;
-  if (itemCount <= 14) return 9;
-  if (itemCount <= 18) return 8;
-  return 7.5;
+// Keys to always skip — internal system/workflow flags
+const SKIP_SECTION_KEYS = new Set([
+  'DOOR INCLUDE/EXCLUDE',
+  'FRAME INCLUDE/EXCLUDE',
+  'HARDWARE INCLUDE/EXCLUDE',
+  'EXCLUDE REASON',
+]);
+
+function formatSectionLabel(key: string): string {
+  return key
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 }
+
+// Reads params directly from the sections data in the JSON.
+// sectionOrder controls which sections are merged and in what order.
+// Duplicate keys (same key appearing in multiple sections) are shown only once.
+function buildSectionParams(
+  door: MergedDoor,
+  sectionOrder: Array<'basic_information' | 'door' | 'frame'>,
+): Array<{ label: string; value: string }> {
+  const seen = new Set<string>();
+  const params: Array<{ label: string; value: string }> = [];
+
+  for (const sKey of sectionOrder) {
+    const section = door.sections?.[sKey] ?? {};
+    for (const [key, val] of Object.entries(section)) {
+      const upper = key.toUpperCase().trim();
+      if (SKIP_SECTION_KEYS.has(upper)) continue;
+      if (seen.has(upper)) continue;
+      seen.add(upper);
+      params.push({ label: formatSectionLabel(key), value: val?.trim() || '-' });
+    }
+  }
+
+  return params;
+}
+
+// ── Material type classification ─────────────────────────────────────────────
+
+type DoorMatType  = 'hm' | 'wood' | 'fiberglass' | 'vinyl' | 'other';
+type FrameMatType = 'hm' | 'wood' | 'fiberglass' | 'aluminum' | 'other';
+
+interface DoorTypeGroup  { matType: DoorMatType;  displayName: string; doors: MergedDoor[]; totalQuantity: number; }
+interface FrameTypeGroup { matType: FrameMatType; displayName: string; doors: MergedDoor[]; totalQuantity: number; }
+
+type SectionKey = 'basic_information' | 'door' | 'frame' | 'hardware';
+interface ColumnDef { key: string; section: SectionKey; }
+
+// Aliases — order matters: first match wins.
+function classifyDoorMat(raw: string): DoorMatType {
+  const m = raw.trim().toLowerCase();
+  if (/\bhm\b|hollow[\s-]?metal/i.test(m))                               return 'hm';
+  if (/\bwd\b|\bwood\b|wooden|timber|solid[\s-]?wood/i.test(m))          return 'wood';
+  if (/fibr[ei][\s-]?glass|fiberglass|fibreglass|\bfg\b|\bfrp\b/i.test(m)) return 'fiberglass';
+  if (/vinyl|\bvd\b|\bpvc\b|\bupvc\b/i.test(m))                          return 'vinyl';
+  return 'other';
+}
+
+function classifyFrameMat(raw: string): FrameMatType {
+  const m = raw.trim().toLowerCase();
+  if (/\bhm\b|hollow[\s-]?metal/i.test(m))                               return 'hm';
+  if (/\bwd\b|\bwood\b|wooden|timber/i.test(m))                          return 'wood';
+  if (/fibr[ei][\s-]?glass|fiberglass|fibreglass|\bfg\b|\bfrp\b/i.test(m)) return 'fiberglass';
+  if (/alumin[ui]m|\bal\b|\balu\b/i.test(m))                             return 'aluminum';
+  return 'other';
+}
+
+function getFrameMaterialValue(door: MergedDoor): string {
+  return (door.sections?.frame?.['FRAME MATERIAL'] ?? door.frameMaterial ?? '').trim();
+}
+
+const DOOR_TYPE_DISPLAY: Record<DoorMatType,  string> = { hm: 'Hollow Metal', wood: 'Wood', fiberglass: 'Fiberglass', vinyl: 'Vinyl', other: 'Other' };
+const FRAME_TYPE_DISPLAY: Record<FrameMatType, string> = { hm: 'Hollow Metal', wood: 'Wood', fiberglass: 'Fiberglass', aluminum: 'Aluminum', other: 'Other' };
+
+// ── Column definitions ────────────────────────────────────────────────────────
+
+// Shared basic-info block (no DOOR LOCATION)
+const BI: ColumnDef[] = [
+  { key: 'DOOR TAG',          section: 'basic_information' },
+  { key: 'QUANTITY',          section: 'basic_information' },
+  { key: 'HAND OF OPENINGS',  section: 'basic_information' },
+  { key: 'DOOR OPERATION',    section: 'basic_information' },
+  { key: 'LEAF COUNT',        section: 'basic_information' },
+  { key: 'INTERIOR/EXTERIOR', section: 'basic_information' },
+  { key: 'WIDTH',             section: 'basic_information' },
+  { key: 'HEIGHT',            section: 'basic_information' },
+  { key: 'THICKNESS',         section: 'basic_information' },
+  { key: 'FIRE RATING',       section: 'basic_information' },
+];
+
+// Shared basic-info block WITH DOOR LOCATION
+const BI_LOC: ColumnDef[] = [
+  { key: 'DOOR TAG',          section: 'basic_information' },
+  { key: 'DOOR LOCATION',     section: 'basic_information' },
+  { key: 'QUANTITY',          section: 'basic_information' },
+  { key: 'HAND OF OPENINGS',  section: 'basic_information' },
+  { key: 'DOOR OPERATION',    section: 'basic_information' },
+  { key: 'LEAF COUNT',        section: 'basic_information' },
+  { key: 'INTERIOR/EXTERIOR', section: 'basic_information' },
+  { key: 'WIDTH',             section: 'basic_information' },
+  { key: 'HEIGHT',            section: 'basic_information' },
+  { key: 'THICKNESS',         section: 'basic_information' },
+  { key: 'FIRE RATING',       section: 'basic_information' },
+];
+
+const HW_SET: ColumnDef = { key: 'HARDWARE SET', section: 'hardware' };
+
+// ── Door column sets ──
+const HM_DOOR_COLS: ColumnDef[] = [
+  ...BI,
+  { key: 'DOOR MATERIAL',       section: 'door' },
+  { key: 'DOOR ELEVATION TYPE', section: 'door' },
+  { key: 'DOOR CORE',           section: 'door' },
+  { key: 'DOOR FACE',           section: 'door' },
+  { key: 'DOOR EDGE',           section: 'door' },
+  { key: 'DOOR GUAGE',          section: 'door' },
+  { key: 'DOOR FINISH',         section: 'door' },
+  { key: 'STC RATING',          section: 'door' },
+  { key: 'DOOR UNDERCUT',       section: 'door' },
+  HW_SET,
+];
+
+// Wood and Fiberglass share the same column set
+const WOOD_FG_DOOR_COLS: ColumnDef[] = [
+  ...BI,
+  { key: 'DOOR MATERIAL',       section: 'door' },
+  { key: 'DOOR ELEVATION TYPE', section: 'door' },
+  { key: 'DOOR CORE',           section: 'door' },
+  { key: 'DOOR FINISH',         section: 'door' },
+  { key: 'STC RATING',          section: 'door' },
+  { key: 'DOOR UNDERCUT',       section: 'door' },
+  HW_SET,
+];
+
+const VINYL_DOOR_COLS: ColumnDef[] = [
+  ...BI_LOC,
+  { key: 'DOOR MATERIAL',       section: 'door' },
+  { key: 'DOOR ELEVATION TYPE', section: 'door' },
+  { key: 'DOOR CORE',           section: 'door' },
+  { key: 'DOOR FINISH',         section: 'door' },
+  { key: 'DOOR UNDERCUT',       section: 'door' },
+  HW_SET,
+];
+
+const DOOR_TYPE_COLS: Record<DoorMatType, ColumnDef[] | null> = {
+  hm:         HM_DOOR_COLS,
+  wood:       WOOD_FG_DOOR_COLS,
+  fiberglass: WOOD_FG_DOOR_COLS,
+  vinyl:      VINYL_DOOR_COLS,
+  other:      null,  // null → fall back to dynamic buildSectionParams
+};
+
+// ── Frame column sets ──
+// Wood and Fiberglass share the same column set (includes DOOR LOCATION)
+const WOOD_FG_FRAME_COLS: ColumnDef[] = [
+  ...BI_LOC,
+  { key: 'FRAME MATERIAL',       section: 'frame' },
+  { key: 'WALL TYPE',            section: 'frame' },
+  { key: 'THROAT THICKNESS',     section: 'frame' },
+  { key: 'FRAME PROFILE',        section: 'frame' },
+  { key: 'FRAME ELEVATION TYPE', section: 'frame' },
+  { key: 'FRAME FINISH',         section: 'frame' },
+  { key: 'FRAME HEAD',           section: 'frame' },
+  { key: 'CASING',               section: 'frame' },
+];
+
+const HM_FRAME_COLS: ColumnDef[] = [
+  ...BI,
+  { key: 'FRAME MATERIAL',       section: 'frame' },
+  { key: 'WALL TYPE',            section: 'frame' },
+  { key: 'THROAT THICKNESS',     section: 'frame' },
+  { key: 'FRAME ANCHOR',         section: 'frame' },
+  { key: 'BASE ANCHOR',          section: 'frame' },
+  { key: 'NO OF ANCHOR',         section: 'frame' },
+  { key: 'FRAME PROFILE',        section: 'frame' },
+  { key: 'FRAME ELEVATION TYPE', section: 'frame' },
+  { key: 'FRAME ASSEMBLY',       section: 'frame' },
+  { key: 'FRAME GUAGE',          section: 'frame' },
+  { key: 'FRAME FINISH',         section: 'frame' },
+  { key: 'FRAME HEAD',           section: 'frame' },
+  { key: 'CASING',               section: 'frame' },
+  HW_SET,
+];
+
+const AL_FRAME_COLS: ColumnDef[] = [
+  ...BI,
+  { key: 'FRAME MATERIAL',       section: 'frame' },
+  { key: 'WALL TYPE',            section: 'frame' },
+  { key: 'THROAT THICKNESS',     section: 'frame' },
+  { key: 'FRAME ELEVATION TYPE', section: 'frame' },
+  { key: 'FRAME FINISH',         section: 'frame' },
+  { key: 'FRAME HEAD',           section: 'frame' },
+  HW_SET,
+];
+
+const FRAME_TYPE_COLS: Record<FrameMatType, ColumnDef[] | null> = {
+  hm:         HM_FRAME_COLS,
+  wood:       WOOD_FG_FRAME_COLS,
+  fiberglass: WOOD_FG_FRAME_COLS,
+  aluminum:   AL_FRAME_COLS,
+  other:      null,  // null → fall back to dynamic buildSectionParams
+};
+
+// Build params from an explicit column list
+function buildParamsFromCols(
+  door: MergedDoor,
+  cols: ColumnDef[],
+): Array<{ label: string; value: string }> {
+  return cols.map(col => {
+    const section = door.sections?.[col.section] ?? {};
+    return {
+      label: formatSectionLabel(col.key),
+      value: (section[col.key] ?? '').trim() || '-',
+    };
+  });
+}
+
+// ── Prehung helpers ───────────────────────────────────────────────────────────
+
+// Exact columns to show in the Prehung section, in order, with section grouping
+interface PrehungColumn {
+  key: string;
+  section: 'basic_information' | 'door' | 'frame' | 'hardware';
+  sectionHeader?: string; // emitted before this row as a sub-section title
+}
+
+const PREHUNG_COLUMNS: PrehungColumn[] = [
+  { key: 'DOOR TAG',             section: 'basic_information', sectionHeader: 'Basic Information' },
+  { key: 'QUANTITY',             section: 'basic_information' },
+  { key: 'HAND OF OPENINGS',     section: 'basic_information' },
+  { key: 'DOOR OPERATION',       section: 'basic_information' },
+  { key: 'LEAF COUNT',           section: 'basic_information' },
+  { key: 'INTERIOR/EXTERIOR',    section: 'basic_information' },
+  { key: 'WIDTH',                section: 'basic_information' },
+  { key: 'HEIGHT',               section: 'basic_information' },
+  { key: 'THICKNESS',            section: 'basic_information' },
+  { key: 'FIRE RATING',          section: 'basic_information' },
+  { key: 'DOOR MATERIAL',        section: 'door',             sectionHeader: 'Door' },
+  { key: 'DOOR ELEVATION TYPE',  section: 'door' },
+  { key: 'DOOR CORE',            section: 'door' },
+  { key: 'DOOR FINISH',          section: 'door' },
+  { key: 'DOOR UNDERCUT',        section: 'door' },
+  { key: 'FRAME MATERIAL',       section: 'frame',            sectionHeader: 'Frame' },
+  { key: 'WALL TYPE',            section: 'frame' },
+  { key: 'THROAT THICKNESS',     section: 'frame' },
+  { key: 'FRAME PROFILE',        section: 'frame' },
+  { key: 'FRAME ELEVATION TYPE', section: 'frame' },
+  { key: 'FRAME FINISH',         section: 'frame' },
+  { key: 'PREHUNG',              section: 'frame' },
+  { key: 'FRAME HEAD',           section: 'frame' },
+  { key: 'CASING',               section: 'frame' },
+  { key: 'HARDWARE SET',         section: 'hardware',         sectionHeader: 'Hardware' },
+];
+
+function isPrehung(door: MergedDoor): boolean {
+  return (door.sections?.frame?.['PREHUNG'] ?? '').trim().toLowerCase() === 'prehung';
+}
+
+function buildPrehungParams(
+  door: MergedDoor,
+): Array<{ key: string; label: string; value: string; sectionHeader?: string; section: string }> {
+  return PREHUNG_COLUMNS.map(col => {
+    const sectionData = col.section === 'hardware'
+      ? door.sections?.hardware
+      : door.sections?.[col.section];
+    const raw = sectionData?.[col.key] ?? '';
+    return {
+      key: col.key,
+      label: formatSectionLabel(col.key),
+      value: raw.trim() || '-',
+      sectionHeader: col.sectionHeader,
+      section: col.section,
+    };
+  });
+}
+
+const FLAT_ROWS_PER_PAGE = 22;
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   finalJson,
@@ -110,59 +404,152 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   const componentRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [zoom, setZoom] = useState(1.0);
-  const adjustZoom = (delta: number) => setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
+  const adjustZoom = (delta: number) =>
+    setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
 
-  const groups = useMemo<SetGroup[]>(() => {
-    const map = new Map<string, SetGroup>();
+  // All doors across all sets
+  const allDoors = useMemo(() => finalJson.flatMap(s => s.doors), [finalJson]);
 
-    for (const set of finalJson) {
-      if (!set.hardwareItems?.length) continue;
-
-      const fp = itemsFingerprint(set.hardwareItems);
-
-      if (!map.has(fp)) {
-        map.set(fp, {
-          fingerprint: fp,
-          setNames: [],
-          items: set.hardwareItems,
-          doors: [],
-          totalQuantity: 0,
-        });
+  // Section 1: group by classified Door Material type
+  const doorTypeGroups = useMemo<DoorTypeGroup[]>(() => {
+    const map = new Map<DoorMatType, DoorTypeGroup>();
+    for (const door of allDoors) {
+      const raw = getDoorMaterial(door);
+      const matType = classifyDoorMat(raw);
+      if (!map.has(matType)) {
+        map.set(matType, { matType, displayName: DOOR_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
       }
-
-      const group = map.get(fp)!;
-
-      if (!group.setNames.includes(set.setName)) {
-        group.setNames.push(set.setName);
-      }
-
-      for (const door of set.doors) {
-        group.doors.push(door);
-        group.totalQuantity += doorQuantity(door);
-      }
+      const g = map.get(matType)!;
+      g.doors.push(door);
+      g.totalQuantity += doorQuantity(door);
     }
+    // Preferred display order
+    const order: DoorMatType[] = ['hm', 'wood', 'fiberglass', 'vinyl', 'other'];
+    return order.map(t => map.get(t)).filter((g): g is DoorTypeGroup => g !== undefined);
+  }, [allDoors]);
 
-    return Array.from(map.values());
+  // Section 2: group by classified Frame Material type (reads FRAME MATERIAL, not DOOR MATERIAL)
+  const frameTypeGroups = useMemo<FrameTypeGroup[]>(() => {
+    const map = new Map<FrameMatType, FrameTypeGroup>();
+    for (const door of allDoors) {
+      const raw = getFrameMaterialValue(door);
+      const matType = classifyFrameMat(raw);
+      if (!map.has(matType)) {
+        map.set(matType, { matType, displayName: FRAME_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
+      }
+      const g = map.get(matType)!;
+      g.doors.push(door);
+      g.totalQuantity += doorQuantity(door);
+    }
+    const order: FrameMatType[] = ['hm', 'wood', 'fiberglass', 'aluminum', 'other'];
+    return order.map(t => map.get(t)).filter((g): g is FrameTypeGroup => g !== undefined);
+  }, [allDoors]);
+
+  // Section 3A: one entry per MergedHardwareSet
+  const hwSetDisplays = useMemo<HwSetDisplay[]>(() => {
+    return finalJson
+      .filter(set => set.hardwareItems?.length > 0)
+      .map(set => {
+        const totalDoorQty = set.doors.reduce((s, d) => s + doorQuantity(d), 0);
+        const doorMaterials = [...new Set(set.doors.map(getDoorMaterial))];
+        return {
+          setName: set.setName,
+          totalDoorQty,
+          doorTags: set.doors.map(d => d.doorTag),
+          items: set.hardwareItems.map(item => ({
+            itemName: item.item,
+            description: (item.userDescription ?? item.processedDescription ?? item.description) || '',
+            manufacturer: item.manufacturer || '',
+            finish: item.finish || '',
+            qtyPerSet: item.qty,
+            totalQty: item.qty * totalDoorQty,
+            doorMaterials,
+          })),
+        };
+      });
   }, [finalJson]);
 
-  const setsWithDoors = groups.filter(g => g.doors.length > 0);
-  const emptyGroups = groups.filter(g => g.doors.length === 0);
-  const totalPages = setsWithDoors.length;
+  // Section 3B: flat list — aggregate by item identity
+  const flatListItems = useMemo<FlatListRow[]>(() => {
+    const map = new Map<string, FlatListRow>();
+    for (const set of finalJson) {
+      const totalDoorQty = set.doors.reduce((s, d) => s + doorQuantity(d), 0);
+      for (const item of set.hardwareItems) {
+        const key = [
+          (item.item || '').trim().toLowerCase(),
+          (item.manufacturer || '').trim().toLowerCase(),
+          (item.finish || '').trim().toLowerCase(),
+        ].join('|');
+        if (!map.has(key)) {
+          map.set(key, {
+            itemName: item.item,
+            description: (item.userDescription ?? item.processedDescription ?? item.description) || '',
+            manufacturer: item.manufacturer || '',
+            finish: item.finish || '',
+            totalQty: 0,
+            doorTags: [],
+          });
+        }
+        const entry = map.get(key)!;
+        entry.totalQty += item.qty * totalDoorQty;
+        for (const door of set.doors) {
+          if (!entry.doorTags.includes(door.doorTag)) entry.doorTags.push(door.doorTag);
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.itemName.localeCompare(b.itemName));
+  }, [finalJson]);
 
+  const flatListPages = useMemo<FlatListRow[][]>(() => {
+    const pages: FlatListRow[][] = [];
+    for (let i = 0; i < flatListItems.length; i += FLAT_ROWS_PER_PAGE) {
+      pages.push(flatListItems.slice(i, i + FLAT_ROWS_PER_PAGE));
+    }
+    return pages.length > 0 ? pages : [[]];
+  }, [flatListItems]);
+
+  // Section 3: Prehung — doors where frame.PREHUNG = "prehung", grouped by Door Material
+  const prehungGroups = useMemo<DoorMaterialGroup[]>(() => {
+    const map = new Map<string, DoorMaterialGroup>();
+    for (const door of allDoors) {
+      if (!isPrehung(door)) continue;
+      const mat = getDoorMaterial(door);
+      if (!map.has(mat)) map.set(mat, { material: mat, doors: [], totalQuantity: 0 });
+      const g = map.get(mat)!;
+      g.doors.push(door);
+      g.totalQuantity += doorQuantity(door);
+    }
+    return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
+  }, [allDoors]);
+
+  const totalDoorOpenings = useMemo(
+    () => allDoors.reduce((s, d) => s + doorQuantity(d), 0),
+    [allDoors],
+  );
+
+  const totalPages =
+    doorTypeGroups.length +
+    frameTypeGroups.length +
+    prehungGroups.length +
+    hwSetDisplays.length +
+    flatListPages.length;
+
+  const hasContent = allDoors.length > 0 || hwSetDisplays.length > 0;
+
+  // ── Download (unchanged capture logic) ────────────────────────────────────
   const handleDownload = async () => {
-    if (!componentRef.current || isDownloading || setsWithDoors.length === 0) return;
+    if (!componentRef.current || isDownloading || !hasContent) return;
     setIsDownloading(true);
     try {
       const { jsPDF } = await import('jspdf');
       const html2canvas = (await import('html2canvas')).default;
 
-      // Wait for the font link to fully load before proceeding — appending the link
-      // and immediately calling document.fonts.ready races against the CSS fetch.
       if (!document.querySelector('link[data-submittal-font]')) {
-        await new Promise<void>((resolve) => {
+        await new Promise<void>(resolve => {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
-          link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=block';
+          link.href =
+            'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=block';
           link.dataset.submittalFont = '1';
           link.onload = () => resolve();
           link.onerror = () => resolve();
@@ -170,9 +557,6 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
         });
       }
 
-      // Force-load every weight actually used in the layout so html2canvas gets Inter,
-      // not the fallback (Arial/Helvetica). Different metrics in the fallback cause text
-      // to render slightly taller/wider, overflowing the overflow:hidden A4 page.
       await Promise.allSettled([
         document.fonts.load('400 12px Inter'),
         document.fonts.load('500 12px Inter'),
@@ -183,57 +567,50 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       ]);
       await document.fonts.ready;
 
-      // Reset zoom to 1 before capture — CSS zoom shifts offsetWidth/offsetHeight and
-      // causes html2canvas to measure at the wrong scale, producing clipped output.
       const zoomWrapper = componentRef.current.parentElement as HTMLElement;
       const savedZoom = zoomWrapper.style.zoom;
       zoomWrapper.style.zoom = '1';
 
-      // html2canvas renders fonts 2-4 px taller than the browser due to sub-pixel
-      // rounding differences. Every intermediate overflow:hidden container in the flex
-      // hierarchy (.spage-body, .scol-right, .shw-items) clips that extra height and
-      // slashes the bottom of text lines. Inject a temporary override that makes all
-      // intermediate containers overflow:visible for the duration of the capture, keeping
-      // only .spage as the final A4 boundary clip.
       const captureOverride = document.createElement('style');
       captureOverride.textContent = `
         .submittal-root .spage-body,
         .submittal-root .scol-left,
         .submittal-root .scol-right,
         .submittal-root .shw-items,
-        .submittal-root .shw-item-detail {
+        .submittal-root .shw-item-detail,
+        .submittal-root .shw-table-wrap {
           overflow: visible !important;
           max-height: none !important;
         }
       `;
       document.head.appendChild(captureOverride);
 
-      // Two rAF ticks to let the browser apply both style changes before measuring.
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-      const pages = Array.from(componentRef.current.querySelectorAll<HTMLElement>('.spage'));
+      const pages = Array.from(
+        componentRef.current.querySelectorAll<HTMLElement>('.spage'),
+      );
       if (!pages.length) {
         document.head.removeChild(captureOverride);
         zoomWrapper.style.zoom = savedZoom;
         return;
       }
 
-      const canvases = await Promise.all(pages.map(el =>
-        html2canvas(el, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-        })
-      ));
+      const canvases = await Promise.all(
+        pages.map(el =>
+          html2canvas(el, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+          }),
+        ),
+      );
 
-      // Restore both overrides immediately after capture.
       document.head.removeChild(captureOverride);
       zoomWrapper.style.zoom = savedZoom;
 
-      // Each .spage is exactly A4 (210×297 mm) — use fixed dimensions instead of
-      // computing from aspect ratio to avoid floating-point drift.
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       canvases.forEach((canvas, i) => {
         if (i > 0) pdf.addPage();
@@ -246,28 +623,30 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
       {/* Toolbar */}
       <div className="bg-[var(--bg)] border-b border-[var(--border)] px-5 py-2.5 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
           <span>
-            <span className="font-semibold text-[var(--text)]">{setsWithDoors.length}</span>
-            {' '}unique hardware set{setsWithDoors.length !== 1 ? 's' : ''}
+            <span className="font-semibold text-[var(--text)]">{doorTypeGroups.length}</span>
+            {' '}door type{doorTypeGroups.length !== 1 ? 's' : ''}
           </span>
           <span>
-            <span className="font-semibold text-[var(--text)]">
-              {groups.reduce((s, g) => s + g.totalQuantity, 0)}
-            </span>
-            {' '}total door openings
+            <span className="font-semibold text-[var(--text)]">{totalDoorOpenings}</span>
+            {' '}total openings
           </span>
-          {emptyGroups.length > 0 && (
-            <span className="text-amber-600 dark:text-amber-400">
-              · {emptyGroups.length} set{emptyGroups.length !== 1 ? 's' : ''} with no doors assigned
-            </span>
-          )}
+          <span>
+            <span className="font-semibold text-[var(--text)]">{hwSetDisplays.length}</span>
+            {' '}hardware set{hwSetDisplays.length !== 1 ? 's' : ''}
+          </span>
+          <span>
+            <span className="font-semibold text-[var(--text)]">{flatListItems.length}</span>
+            {' '}unique items
+          </span>
         </div>
-        {setsWithDoors.length > 0 && (
+        {hasContent && (
           <div className="flex items-center gap-1 border border-[var(--border)] rounded-md overflow-hidden">
             <button
               onClick={() => adjustZoom(-0.1)}
@@ -288,7 +667,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
         )}
         <button
           onClick={handleDownload}
-          disabled={setsWithDoors.length === 0 || isDownloading}
+          disabled={!hasContent || isDownloading}
           className="flex items-center gap-2 bg-[var(--primary-action)] text-[var(--text-inverted)] px-4 py-2 rounded-md hover:bg-[var(--primary-action-hover)] text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <PrinterIcon className="w-4 h-4" />
@@ -296,7 +675,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
         </button>
       </div>
 
-      {groups.length === 0 && (
+      {!hasContent && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-[var(--text-muted)]">
             <p className="text-sm font-medium">No hardware sets found in final JSON</p>
@@ -304,465 +683,764 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
           </div>
         </div>
       )}
-      {groups.length > 0 && setsWithDoors.length === 0 && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-[var(--text-muted)]">
-            <p className="text-sm font-medium">No door assignments found</p>
-            <p className="text-xs mt-1">Hardware sets exist but no doors are matched to them. Re-run the merge pipeline.</p>
-          </div>
-        </div>
-      )}
 
-      {setsWithDoors.length > 0 && (
+      {hasContent && (
         <div className="flex-1 overflow-auto p-4">
-          <div style={{ zoom: zoom }}>
-          <div ref={componentRef}>
-            <style>{`
-              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+          <div style={{ zoom }}>
+            <div ref={componentRef}>
+              <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-              .submittal-root {
-                font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-                color: #0f172a;
-              }
-
-              /* Each page wrapper */
-              .spage {
-                background: #fff;
-                width: 210mm;
-                min-height: 297mm;
-                max-height: 297mm;
-                overflow: hidden;
-                box-sizing: border-box;
-                padding: 12mm 14mm 10mm;
-                display: flex;
-                flex-direction: column;
-                position: relative;
-                margin: 0 auto 24px;
-                box-shadow: 0 2px 12px rgba(0,0,0,0.10);
-              }
-
-              @media print {
-                .spage {
-                  box-shadow: none;
-                  margin: 0;
-                  width: 100%;
-                  min-height: 100vh;
-                  max-height: 100vh;
-                  padding: 10mm 12mm 8mm;
+                .submittal-root {
+                  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+                  color: #0f172a;
                 }
-              }
 
-              /* ── Page top: title + quantity ── */
-              .spage-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 5mm;
-                border-bottom: 1.5px solid #1e293b;
-                padding-bottom: 4mm;
-              }
-              .spage-title {
-                font-size: 22pt;
-                font-weight: 900;
-                color: #0f172a;
-                line-height: 1.1;
-                margin: 0;
-              }
-              .spage-subtitle {
-                font-size: 8.5pt;
-                color: #64748b;
-                margin: 2px 0 0;
-              }
-              .spage-qty-block {
-                text-align: right;
-                flex-shrink: 0;
-                margin-left: 12mm;
-              }
-              .spage-qty-label {
-                font-size: 7pt;
-                font-weight: 700;
-                letter-spacing: 0.12em;
-                text-transform: uppercase;
-                color: #64748b;
-                margin-bottom: 2px;
-              }
-              .spage-qty-value {
-                font-size: 36pt;
-                font-weight: 900;
-                color: #1e3a5f;
-                line-height: 1;
-              }
+                /* ── A4 page wrapper ── */
+                .spage {
+                  background: #fff;
+                  width: 210mm;
+                  min-height: 297mm;
+                  max-height: 297mm;
+                  overflow: hidden;
+                  box-sizing: border-box;
+                  padding: 10mm 14mm 8mm;
+                  display: flex;
+                  flex-direction: column;
+                  position: relative;
+                  margin: 0 auto 24px;
+                  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+                }
 
-              /* ── Two-column body ── */
-              .spage-body {
-                display: grid;
-                grid-template-columns: 45% 55%;
-                gap: 6mm;
-                flex: 1;
-                min-height: 0;
-                overflow: hidden;
-              }
+                @media print {
+                  .spage {
+                    box-shadow: none;
+                    margin: 0;
+                    width: 100%;
+                    min-height: 100vh;
+                    max-height: 100vh;
+                  }
+                }
 
-              /* ── LEFT COLUMN ── */
-              .scol-left {
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-              }
+                /* ── Section badge ── */
+                .ssec-badge {
+                  display: inline-block;
+                  background: #1e3a5f;
+                  color: #fff;
+                  font-size: 6pt;
+                  font-weight: 800;
+                  letter-spacing: 0.14em;
+                  text-transform: uppercase;
+                  padding: 2.5px 7px;
+                  border-radius: 3px;
+                  margin-bottom: 2.5mm;
+                  flex-shrink: 0;
+                }
 
-              /* Door params section */
-              .sparam-section {
-                flex-shrink: 0;
-              }
-              .ssection-title {
-                font-size: 7.5pt;
-                font-weight: 800;
-                letter-spacing: 0.12em;
-                text-transform: uppercase;
-                color: #1e293b;
-                border-bottom: 1px solid #cbd5e1;
-                padding-bottom: 4px;
-                margin-bottom: 2mm;
-                line-height: 1.5;
-              }
-              .sparam-row {
-                display: flex;
-                align-items: baseline;
-                padding: 5px 0 6px;
-                border-bottom: 1px solid #e8edf2;
-              }
-              .sparam-label {
-                font-size: 7.5pt;
-                color: #64748b;
-                width: 38%;
-                flex-shrink: 0;
-                line-height: 1.5;
-              }
-              .sparam-value {
-                font-size: 7.5pt;
-                font-weight: 700;
-                color: #0f172a;
-                flex: 1;
-                line-height: 1.5;
-                word-break: break-word;
-                overflow-wrap: break-word;
-              }
-              .sparam-value.is-dash {
-                font-weight: 400;
-                color: #94a3b8;
-              }
+                /* ── Page header ── */
+                .spage-header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                  margin-bottom: 4mm;
+                  border-bottom: 1.5px solid #1e293b;
+                  padding-bottom: 3.5mm;
+                  flex-shrink: 0;
+                }
+                .spage-title {
+                  font-size: 20pt;
+                  font-weight: 900;
+                  color: #0f172a;
+                  line-height: 1.1;
+                  margin: 0;
+                }
+                .spage-subtitle {
+                  font-size: 8pt;
+                  color: #64748b;
+                  margin: 2px 0 0;
+                }
+                .spage-qty-block {
+                  text-align: right;
+                  flex-shrink: 0;
+                  margin-left: 12mm;
+                }
+                .spage-qty-label {
+                  font-size: 7pt;
+                  font-weight: 700;
+                  letter-spacing: 0.12em;
+                  text-transform: uppercase;
+                  color: #64748b;
+                  margin-bottom: 2px;
+                }
+                .spage-qty-value {
+                  font-size: 32pt;
+                  font-weight: 900;
+                  color: #1e3a5f;
+                  line-height: 1;
+                }
 
-              /* Affected door tags */
-              .stags-section {
-                margin-top: 3mm;
-                flex-shrink: 0;
-              }
-              .stags-wrap {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 2px;
-                margin-top: 2px;
-              }
-              .stag {
-                font-size: 7pt;
-                font-weight: 500;
-                color: #334155;
-                background: #f1f5f9;
-                border: 1px solid #e2e8f0;
-                border-radius: 3px;
-                padding: 3px 6px;
-                line-height: 1.5;
-              }
+                /* ── Two-column body (Door / Frame pages) ── */
+                .spage-body {
+                  display: grid;
+                  grid-template-columns: 45% 55%;
+                  gap: 6mm;
+                  flex: 1;
+                  min-height: 0;
+                  overflow: hidden;
+                }
+                .scol-left {
+                  display: flex;
+                  flex-direction: column;
+                  overflow: hidden;
+                }
+                .scol-right {
+                  display: flex;
+                  flex-direction: column;
+                  overflow: hidden;
+                }
 
-              /* ── RIGHT COLUMN ── */
-              .scol-right {
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-              }
+                /* ── Param rows ── */
+                .sparam-section { flex-shrink: 0; }
+                .ssection-title {
+                  font-size: 7pt;
+                  font-weight: 800;
+                  letter-spacing: 0.12em;
+                  text-transform: uppercase;
+                  color: #1e293b;
+                  border-bottom: 1px solid #cbd5e1;
+                  padding-bottom: 3px;
+                  margin-bottom: 1.5mm;
+                  line-height: 1.5;
+                }
+                .sparam-row {
+                  display: flex;
+                  align-items: baseline;
+                  padding: 4px 0 5px;
+                  border-bottom: 1px solid #e8edf2;
+                }
+                .sparam-label {
+                  font-size: 7pt;
+                  color: #64748b;
+                  width: 40%;
+                  flex-shrink: 0;
+                  line-height: 1.5;
+                }
+                .sparam-value {
+                  font-size: 7pt;
+                  font-weight: 700;
+                  color: #0f172a;
+                  flex: 1;
+                  line-height: 1.5;
+                  word-break: break-word;
+                }
+                .sparam-value.is-dash {
+                  font-weight: 400;
+                  color: #94a3b8;
+                }
 
-              /* Hardware set header box */
-              .shw-set-name {
-                background: #f1f5f9;
-                border-radius: 3px;
-                padding: 2.5px 7px;
-                font-size: 9pt;
-                font-weight: 700;
-                color: #1e293b;
-                margin-bottom: 1.5mm;
-                flex-shrink: 0;
-              }
-              .shw-invalid {
-                font-size: 8.5pt;
-                font-style: italic;
-                color: #dc2626;
-                padding: 3px 0;
-              }
+                /* ── Door tags ── */
+                .stags-section { flex-shrink: 0; }
+                .stags-wrap {
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 2px;
+                  margin-top: 2px;
+                }
+                .stag {
+                  font-size: 6.5pt;
+                  font-weight: 500;
+                  color: #334155;
+                  background: #f1f5f9;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 3px;
+                  padding: 2px 5px;
+                  line-height: 1.5;
+                }
 
-              /* Hardware items list */
-              .shw-items {
-                flex: 1;
-                overflow-x: hidden;
-                overflow-y: visible;
-              }
-              .shw-item-row {
-                display: flex;
-                align-items: flex-start;
-                padding: 4px 0 5px;
-                border-bottom: 1px solid #e8edf2;
-              }
-              .shw-item-qty {
-                font-weight: 800;
-                color: #0f172a;
-                width: 16px;
-                flex-shrink: 0;
-                text-align: right;
-                margin-right: 8px;
-                line-height: 1.4;
-                padding-top: 1px;
-              }
-              .shw-item-detail {
-                flex: 1;
-                min-width: 0;
-                overflow-x: hidden;
-                overflow-y: visible;
-              }
-              .shw-item-name {
-                font-weight: 600;
-                color: #1e293b;
-                word-break: break-word;
-                overflow-wrap: break-word;
-                line-height: 1.3;
-              }
-              .shw-item-sub {
-                color: #64748b;
-                line-height: 1.5;
-                margin-top: 2px;
-                padding-bottom: 1px;
-              }
+                /* ── Elevation ── */
+                .selev-section { flex-shrink: 0; margin-bottom: 3mm; }
+                .selev-title {
+                  font-size: 7pt;
+                  font-weight: 800;
+                  letter-spacing: 0.10em;
+                  text-transform: uppercase;
+                  color: #1e293b;
+                  border-bottom: 1px solid #cbd5e1;
+                  padding-bottom: 2px;
+                  margin-bottom: 1.5mm;
+                }
+                .selev-image-wrap {
+                  border: 1.5px dashed #cbd5e1;
+                  border-radius: 3px;
+                  overflow: hidden;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  background: #f8fafc;
+                }
+                .selev-image-wrap img {
+                  max-width: 100%;
+                  max-height: 100%;
+                  object-fit: contain;
+                  display: block;
+                }
+                .selev-no-elev {
+                  font-size: 7.5pt;
+                  color: #94a3b8;
+                  padding: 12px 0;
+                  text-align: center;
+                }
 
-              /* Elevation section */
-              .selev-section {
-                margin-top: 3mm;
-                flex-shrink: 0;
-              }
-              .selev-title {
-                font-size: 8pt;
-                font-weight: 800;
-                letter-spacing: 0.10em;
-                text-transform: uppercase;
-                color: #1e293b;
-                border-bottom: 1px solid #cbd5e1;
-                padding-bottom: 2px;
-                margin-bottom: 2mm;
-              }
-              /* Two-column row when both door + frame elevations exist */
-              .selev-row {
-                display: flex;
-                gap: 3mm;
-              }
-              .selev-col {
-                flex: 1;
-                min-width: 0;
-                display: flex;
-                flex-direction: column;
-              }
-              .selev-col-label {
-                font-size: 6.5pt;
-                font-weight: 700;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-                color: #64748b;
-                margin-bottom: 1.5mm;
-              }
-              .selev-image-wrap {
-                border: 1.5px dashed #cbd5e1;
-                border-radius: 3px;
-                overflow: hidden;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: #f8fafc;
-              }
-              .selev-image-wrap img {
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-                display: block;
-              }
-              .selev-no-elev {
-                font-size: 8pt;
-                color: #94a3b8;
-                padding: 16px 0;
-                text-align: center;
-              }
+                /* ── Prehung sub-section headers ── */
+                .prehung-sub-hdr {
+                  font-size: 6pt;
+                  font-weight: 800;
+                  letter-spacing: 0.12em;
+                  text-transform: uppercase;
+                  padding: 3px 4px 2px;
+                  margin: 3px 0 1px;
+                  border-radius: 2px;
+                }
+                .prehung-sub-hdr.ph-basic { background: #f1f5f9; color: #475569; }
+                .prehung-sub-hdr.ph-door  { background: #dcfce7; color: #15803d; }
+                .prehung-sub-hdr.ph-frame { background: #dbeafe; color: #1d4ed8; }
+                .prehung-sub-hdr.ph-hw    { background: #fef3c7; color: #92400e; }
 
-              /* Footer */
-              .spage-footer {
-                display: flex;
-                justify-content: space-between;
-                font-size: 7pt;
-                color: #94a3b8;
-                border-top: 1px solid #e2e8f0;
-                margin-top: 3mm;
-                padding-top: 2mm;
-                flex-shrink: 0;
-              }
-            `}</style>
+                .prehung-param-row {
+                  display: flex;
+                  align-items: baseline;
+                  padding: 3px 0 3px;
+                  border-bottom: 1px solid #f1f5f9;
+                }
 
-            <div className="submittal-root">
-              {setsWithDoors.map((group, idx) => {
-                const firstDoor = group.doors[0];
-                const params = DOOR_PARAMS(firstDoor);
-                const setDisplayName = group.setNames.join(', ');
-                const doorTags = group.doors.map(d => String(d.doorTag));
-                const fs = hwFontScale(group.items.length);
+                /* ── Hardware table pages ── */
+                .shw-table-wrap {
+                  flex: 1;
+                  overflow: hidden;
+                }
+                .shw-set-label {
+                  background: #f1f5f9;
+                  border-radius: 3px;
+                  padding: 3px 8px;
+                  font-size: 8.5pt;
+                  font-weight: 700;
+                  color: #1e293b;
+                  margin-bottom: 2mm;
+                  flex-shrink: 0;
+                }
+                .shw-table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 7pt;
+                }
+                .shw-table th {
+                  background: #1e293b;
+                  color: #e2e8f0;
+                  padding: 4px 6px;
+                  text-align: left;
+                  font-size: 6.5pt;
+                  font-weight: 700;
+                  letter-spacing: 0.06em;
+                  text-transform: uppercase;
+                  white-space: nowrap;
+                }
+                .shw-table th.th-r { text-align: right; }
+                .shw-table td {
+                  padding: 4px 6px;
+                  border-bottom: 1px solid #e8edf2;
+                  color: #0f172a;
+                  line-height: 1.4;
+                  vertical-align: top;
+                }
+                .shw-table tr:nth-child(even) td { background: #f8fafc; }
+                .shw-table td.td-name {
+                  font-weight: 600;
+                  color: #1e293b;
+                }
+                .shw-table td.td-r {
+                  text-align: right;
+                  font-weight: 700;
+                  color: #1e3a5f;
+                  white-space: nowrap;
+                }
+                .shw-table td.td-muted {
+                  color: #64748b;
+                  font-size: 6.5pt;
+                }
 
-                // Resolve door and frame elevations separately
-                const doorElevType  = getElevationType(firstDoor, elevationTypes, 'door');
-                const frameElevType = getElevationType(firstDoor, elevationTypes, 'frame');
-                const doorElevCode  = firstDoor.doorElevationType ?? getDoorParam(firstDoor, 'DOOR ELEVATION TYPE');
-                const frameElevCode = getDoorParam(firstDoor, 'FRAME ELEVATION TYPE');
-                const doorElevImg   = doorElevType?.imageUrl  ?? doorElevType?.imageData;
-                const frameElevImg  = frameElevType?.imageUrl ?? frameElevType?.imageData;
-                const hasBothElev   = !!(doorElevImg && frameElevImg);
+                /* ── Door tags below hardware table ── */
+                .shw-affected {
+                  margin-top: 3mm;
+                  flex-shrink: 0;
+                }
+                .shw-affected-title {
+                  font-size: 6.5pt;
+                  font-weight: 700;
+                  letter-spacing: 0.10em;
+                  text-transform: uppercase;
+                  color: #64748b;
+                  border-top: 1px solid #e2e8f0;
+                  padding-top: 2mm;
+                  margin-bottom: 1.5mm;
+                }
 
-                // Available height for elevation image(s) — tighter when more hardware items
-                const elevH = group.items.length <= 8 ? 90 : group.items.length <= 12 ? 72 : group.items.length <= 16 ? 58 : 48;
+                /* ── Footer ── */
+                .spage-footer {
+                  display: flex;
+                  justify-content: space-between;
+                  font-size: 6.5pt;
+                  color: #94a3b8;
+                  border-top: 1px solid #e2e8f0;
+                  margin-top: 3mm;
+                  padding-top: 1.5mm;
+                  flex-shrink: 0;
+                }
+              `}</style>
 
-                return (
-                  <div
-                    key={group.fingerprint}
-                    className="spage"
-                  >
-                    {/* ── Header ── */}
-                    <div className="spage-header">
-                      <div>
-                        <h1 className="spage-title">Door Type Specification</h1>
-                        <p className="spage-subtitle">Submittal Data Sheet</p>
+              <div className="submittal-root">
+
+                {/* ══════════════════════════════════════════════════
+                    SECTION 1 — DOOR SPECIFICATION
+                    One page per unique Door Material
+                ══════════════════════════════════════════════════ */}
+                {doorTypeGroups.map((group, idx) => {
+                  const rep = group.doors[0];
+                  const colSet = DOOR_TYPE_COLS[group.matType];
+                  const params = colSet
+                    ? buildParamsFromCols(rep, colSet)
+                    : buildSectionParams(rep, ['basic_information', 'door']);
+                  const elevType = getElevationType(rep, elevationTypes, 'door');
+                  const elevCode = rep.doorElevationType ?? getDoorParam(rep, 'DOOR ELEVATION TYPE');
+                  const elevImg = elevType?.imageUrl ?? elevType?.imageData;
+                  const pageNum = idx + 1;
+
+                  return (
+                    <div key={`door-${group.matType}`} className="spage">
+                      <div className="ssec-badge">Section 1 · Door Specification</div>
+                      <div className="spage-header">
+                        <div>
+                          <h1 className="spage-title">{group.displayName}</h1>
+                          <p className="spage-subtitle">Door Material Type · Basic Information</p>
+                        </div>
+                        <div className="spage-qty-block">
+                          <div className="spage-qty-label">Total Openings</div>
+                          <div className="spage-qty-value">{group.totalQuantity}</div>
+                        </div>
                       </div>
-                      <div className="spage-qty-block">
-                        <div className="spage-qty-label">Total Quantity</div>
-                        <div className="spage-qty-value">{group.totalQuantity}</div>
-                      </div>
-                    </div>
 
-                    {/* ── Body ── */}
-                    <div className="spage-body">
-                      {/* ── LEFT COLUMN ── */}
-                      <div className="scol-left">
-                        {/* Door Parameters */}
-                        <div className="sparam-section">
-                          <div className="ssection-title">Door Parameters</div>
-                          {params.map((p, pi) => (
-                            <div key={pi} className="sparam-row">
-                              <span className="sparam-label">{p.label}</span>
-                              <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
-                                {p.value}
-                              </span>
-                            </div>
-                          ))}
+                      <div className="spage-body">
+                        {/* Left: door params */}
+                        <div className="scol-left">
+                          <div className="sparam-section">
+                            <div className="ssection-title">Door Parameters</div>
+                            {params.map((p, pi) => (
+                              <div key={pi} className="sparam-row">
+                                <span className="sparam-label">{p.label}</span>
+                                <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
+                                  {p.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
-                        {/* Affected Door Tags */}
-                        <div className="stags-section">
-                          <div className="ssection-title">Affected Door Tags</div>
+                        {/* Right: elevation + tags */}
+                        <div className="scol-right">
+                          <div className="selev-section">
+                            <div className="selev-title">
+                              Door Elevation{elevCode ? ` · ${elevCode}` : ''}
+                            </div>
+                            <div className="selev-image-wrap" style={{ height: '72mm' }}>
+                              {elevImg ? (
+                                <img src={elevImg} alt={elevCode || 'Door Elevation'} />
+                              ) : (
+                                <span className="selev-no-elev">No Elevation Linked</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="stags-section">
+                            <div className="ssection-title">
+                              Affected Door Tags ({group.doors.length})
+                            </div>
+                            <div className="stags-wrap">
+                              {group.doors.slice(0, 100).map((d, ti) => (
+                                <span key={ti} className="stag">{d.doorTag}</span>
+                              ))}
+                              {group.doors.length > 100 && (
+                                <span
+                                  className="stag"
+                                  style={{ color: '#94a3b8', background: 'none', border: 'none' }}
+                                >
+                                  +{group.doors.length - 100} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="spage-footer">
+                        <span>Generated by Planckoff Estimating</span>
+                        <span>Page {pageNum} of {totalPages}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* ══════════════════════════════════════════════════
+                    SECTION 2 — FRAME SPECIFICATION
+                    One page per unique Door Material
+                ══════════════════════════════════════════════════ */}
+                {frameTypeGroups.map((group, idx) => {
+                  const rep = group.doors[0];
+                  const colSet = FRAME_TYPE_COLS[group.matType];
+                  const params = colSet
+                    ? buildParamsFromCols(rep, colSet)
+                    : buildSectionParams(rep, ['basic_information', 'frame']);
+                  const elevType = getElevationType(rep, elevationTypes, 'frame');
+                  const elevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
+                  const elevImg = elevType?.imageUrl ?? elevType?.imageData;
+                  const pageNum = doorTypeGroups.length + idx + 1;
+
+                  return (
+                    <div key={`frame-${group.matType}`} className="spage">
+                      <div className="ssec-badge">Section 2 · Frame Specification</div>
+                      <div className="spage-header">
+                        <div>
+                          <h1 className="spage-title">{group.displayName}</h1>
+                          <p className="spage-subtitle">Frame Material Type · Basic Information</p>
+                        </div>
+                        <div className="spage-qty-block">
+                          <div className="spage-qty-label">Total Openings</div>
+                          <div className="spage-qty-value">{group.totalQuantity}</div>
+                        </div>
+                      </div>
+
+                      <div className="spage-body">
+                        {/* Left: frame params */}
+                        <div className="scol-left">
+                          <div className="sparam-section">
+                            <div className="ssection-title">Frame Parameters</div>
+                            {params.map((p, pi) => (
+                              <div key={pi} className="sparam-row">
+                                <span className="sparam-label">{p.label}</span>
+                                <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
+                                  {p.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Right: elevation + tags */}
+                        <div className="scol-right">
+                          <div className="selev-section">
+                            <div className="selev-title">
+                              Frame Elevation{elevCode ? ` · ${elevCode}` : ''}
+                            </div>
+                            <div className="selev-image-wrap" style={{ height: '72mm' }}>
+                              {elevImg ? (
+                                <img src={elevImg} alt={elevCode || 'Frame Elevation'} />
+                              ) : (
+                                <span className="selev-no-elev">No Elevation Linked</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="stags-section">
+                            <div className="ssection-title">
+                              Affected Door Tags ({group.doors.length})
+                            </div>
+                            <div className="stags-wrap">
+                              {group.doors.slice(0, 100).map((d, ti) => (
+                                <span key={ti} className="stag">{d.doorTag}</span>
+                              ))}
+                              {group.doors.length > 100 && (
+                                <span
+                                  className="stag"
+                                  style={{ color: '#94a3b8', background: 'none', border: 'none' }}
+                                >
+                                  +{group.doors.length - 100} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="spage-footer">
+                        <span>Generated by Planckoff Estimating</span>
+                        <span>Page {pageNum} of {totalPages}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* ══════════════════════════════════════════════════
+                    SECTION 3 — PREHUNG SPECIFICATION
+                    Doors where frame.PREHUNG = "prehung", grouped by Door Material
+                    Shows exact columns from spec: Basic Info + selected Door + Frame + HW Set
+                ══════════════════════════════════════════════════ */}
+                {prehungGroups.map((group, idx) => {
+                  const rep = group.doors[0];
+                  const params = buildPrehungParams(rep);
+                  const doorElevType  = getElevationType(rep, elevationTypes, 'door');
+                  const frameElevType = getElevationType(rep, elevationTypes, 'frame');
+                  const doorElevCode  = rep.doorElevationType ?? getDoorParam(rep, 'DOOR ELEVATION TYPE');
+                  const frameElevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
+                  const doorElevImg   = doorElevType?.imageUrl  ?? doorElevType?.imageData;
+                  const frameElevImg  = frameElevType?.imageUrl ?? frameElevType?.imageData;
+                  const pageNum       = doorTypeGroups.length + frameTypeGroups.length + idx + 1;
+
+                  const sectionColorClass: Record<string, string> = {
+                    basic_information: 'ph-basic',
+                    door:              'ph-door',
+                    frame:             'ph-frame',
+                    hardware:          'ph-hw',
+                  };
+
+                  return (
+                    <div key={`prehung-${group.material}`} className="spage">
+                      <div className="ssec-badge">Section 3 · Prehung Specification</div>
+                      <div className="spage-header">
+                        <div>
+                          <h1 className="spage-title">{group.material}</h1>
+                          <p className="spage-subtitle">Prehung Door &amp; Frame · Combined View</p>
+                        </div>
+                        <div className="spage-qty-block">
+                          <div className="spage-qty-label">Total Openings</div>
+                          <div className="spage-qty-value">{group.totalQuantity}</div>
+                        </div>
+                      </div>
+
+                      <div className="spage-body">
+                        {/* Left: prehung params with color-coded sub-section headers */}
+                        <div className="scol-left">
+                          <div className="sparam-section">
+                            {params.map((p, pi) => (
+                              <React.Fragment key={pi}>
+                                {p.sectionHeader && (
+                                  <div className={`prehung-sub-hdr ${sectionColorClass[p.section] ?? 'ph-basic'}`}>
+                                    {p.sectionHeader}
+                                  </div>
+                                )}
+                                <div className="prehung-param-row">
+                                  <span className="sparam-label">{p.label}</span>
+                                  <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
+                                    {p.value}
+                                  </span>
+                                </div>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Right: door + frame elevations + door tags */}
+                        <div className="scol-right">
+                          {(doorElevImg || frameElevImg) && (
+                            <div className="selev-section">
+                              <div className="selev-title">Elevations</div>
+                              {doorElevImg && frameElevImg ? (
+                                <div style={{ display: 'flex', gap: '2mm', marginBottom: '2mm' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div className="selev-col-label" style={{ fontSize: '6pt', fontWeight: 700, color: '#64748b', marginBottom: '1mm', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                                      Door{doorElevCode ? ` · ${doorElevCode}` : ''}
+                                    </div>
+                                    <div className="selev-image-wrap" style={{ height: '52mm' }}>
+                                      <img src={doorElevImg} alt={doorElevCode || 'Door Elevation'} />
+                                    </div>
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <div className="selev-col-label" style={{ fontSize: '6pt', fontWeight: 700, color: '#64748b', marginBottom: '1mm', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                                      Frame{frameElevCode ? ` · ${frameElevCode}` : ''}
+                                    </div>
+                                    <div className="selev-image-wrap" style={{ height: '52mm' }}>
+                                      <img src={frameElevImg} alt={frameElevCode || 'Frame Elevation'} />
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="selev-image-wrap" style={{ height: '52mm', marginBottom: '2mm' }}>
+                                  <img
+                                    src={(doorElevImg ?? frameElevImg)!}
+                                    alt={doorElevCode || frameElevCode || 'Elevation'}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="stags-section">
+                            <div className="ssection-title">
+                              Affected Door Tags ({group.doors.length})
+                            </div>
+                            <div className="stags-wrap">
+                              {group.doors.slice(0, 100).map((d, ti) => (
+                                <span key={ti} className="stag">{d.doorTag}</span>
+                              ))}
+                              {group.doors.length > 100 && (
+                                <span
+                                  className="stag"
+                                  style={{ color: '#94a3b8', background: 'none', border: 'none' }}
+                                >
+                                  +{group.doors.length - 100} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="spage-footer">
+                        <span>Generated by Planckoff Estimating</span>
+                        <span>Page {pageNum} of {totalPages}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* ══════════════════════════════════════════════════
+                    SECTION 3A — HARDWARE SCHEDULE · SET REPORT
+                    Group By Hardware Set
+                    Columns: Item Name, Description, Mfr, Finish, Total, Door Material
+                    Usage: count + all door tags
+                ══════════════════════════════════════════════════ */}
+                {hwSetDisplays.map((set, idx) => {
+                  const pageNum = doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + idx + 1;
+                  return (
+                    <div key={`hwset-${set.setName}-${idx}`} className="spage">
+                      <div className="ssec-badge">Section 4 · Hardware Schedule — Set Report</div>
+                      <div className="spage-header">
+                        <div>
+                          <h1 className="spage-title">{set.setName}</h1>
+                          <p className="spage-subtitle">Hardware Set · Group By Set</p>
+                        </div>
+                        <div className="spage-qty-block">
+                          <div className="spage-qty-label">Total Doors</div>
+                          <div className="spage-qty-value">{set.totalDoorQty}</div>
+                        </div>
+                      </div>
+
+                      <div className="shw-table-wrap">
+                        <table className="shw-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '20%' }}>Item Name</th>
+                              <th style={{ width: '28%' }}>Description</th>
+                              <th style={{ width: '16%' }}>Manufacturer</th>
+                              <th style={{ width: '10%' }}>Finish</th>
+                              <th className="th-r" style={{ width: '8%' }}>Total</th>
+                              <th style={{ width: '18%' }}>Door Material</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {set.items.map((item, ii) => (
+                              <tr key={ii}>
+                                <td className="td-name">{item.itemName}</td>
+                                <td>{item.description}</td>
+                                <td>{item.manufacturer}</td>
+                                <td>{item.finish}</td>
+                                <td className="td-r">{item.totalQty}</td>
+                                <td className="td-muted">{item.doorMaterials.join(', ') || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        <div className="shw-affected">
+                          <div className="shw-affected-title">
+                            Affected Doors ({set.doorTags.length})
+                          </div>
                           <div className="stags-wrap">
-                            {doorTags.slice(0, 80).map((tag, ti) => (
+                            {set.doorTags.slice(0, 100).map((tag, ti) => (
                               <span key={ti} className="stag">{tag}</span>
                             ))}
-                            {doorTags.length > 80 && (
-                              <span className="stag" style={{ color: '#94a3b8', background: 'none', border: 'none' }}>
-                                +{doorTags.length - 80} more
+                            {set.doorTags.length > 100 && (
+                              <span
+                                className="stag"
+                                style={{ color: '#94a3b8', background: 'none', border: 'none' }}
+                              >
+                                +{set.doorTags.length - 100} more
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* ── RIGHT COLUMN ── */}
-                      <div className="scol-right">
-                        {/* Hardware Set header */}
-                        <div className="ssection-title">Hardware Set</div>
-                        <div className="shw-set-name">{setDisplayName}</div>
-
-                        {/* Hardware items */}
-                        {group.items.length === 0 ? (
-                          <p className="shw-invalid">No valid hardware set assigned.</p>
-                        ) : (
-                          <div className="shw-items" style={{ fontSize: `${fs}pt` }}>
-                            {group.items.map((item, ii) => {
-                              const sub = [item.manufacturer, item.finish].filter(Boolean).join(' • ');
-                              return (
-                                <div key={ii} className="shw-item-row">
-                                  <span className="shw-item-qty">{item.qty}</span>
-                                  <div className="shw-item-detail">
-                                    <div className="shw-item-name">{item.item}</div>
-                                    {sub && <div className="shw-item-sub">{sub}</div>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Elevation — door and frame side by side when both exist */}
-                        <div className="selev-section">
-                          <div className="selev-title">Elevation</div>
-                          {hasBothElev ? (
-                            <div className="selev-row">
-                              <div className="selev-col">
-                                <div className="selev-col-label">
-                                  Door{doorElevCode ? ` · ${doorElevCode}` : ''}
-                                </div>
-                                <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
-                                  <img src={doorElevImg!} alt={doorElevCode || 'Door Elevation'} />
-                                </div>
-                              </div>
-                              <div className="selev-col">
-                                <div className="selev-col-label">
-                                  Frame{frameElevCode ? ` · ${frameElevCode}` : ''}
-                                </div>
-                                <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
-                                  <img src={frameElevImg!} alt={frameElevCode || 'Frame Elevation'} />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              {(doorElevImg || frameElevImg) && (
-                                <div className="selev-col-label">
-                                  {doorElevImg
-                                    ? `Door${doorElevCode ? ` · ${doorElevCode}` : ''}`
-                                    : `Frame${frameElevCode ? ` · ${frameElevCode}` : ''}`}
-                                </div>
-                              )}
-                              <div className="selev-image-wrap" style={{ height: `${elevH}mm` }}>
-                                {(doorElevImg || frameElevImg) ? (
-                                  <img
-                                    src={(doorElevImg ?? frameElevImg)!}
-                                    alt={doorElevCode || frameElevCode || 'Elevation'}
-                                  />
-                                ) : (
-                                  <span className="selev-no-elev">No Elevation Linked</span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                      <div className="spage-footer">
+                        <span>Generated by Planckoff Estimating</span>
+                        <span>Page {pageNum} of {totalPages}</span>
                       </div>
                     </div>
+                  );
+                })}
 
-                    {/* ── Footer ── */}
-                    <div className="spage-footer">
-                      <span>Generated by Planckoff Estimating</span>
-                      <span>Page {idx + 1} of {totalPages}</span>
+                {/* ══════════════════════════════════════════════════
+                    SECTION 3B — HARDWARE SCHEDULE · FLAT LIST
+                    Columns: Item Name, Description, Mfr, Finish, Total
+                    Doors column: count
+                    Paginated at FLAT_ROWS_PER_PAGE rows
+                ══════════════════════════════════════════════════ */}
+                {flatListPages.map((pageItems, idx) => {
+                  const pageNum =
+                    doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + hwSetDisplays.length + idx + 1;
+                  const continuationLabel =
+                    flatListPages.length > 1 ? ` (${idx + 1} / ${flatListPages.length})` : '';
+
+                  return (
+                    <div key={`flat-${idx}`} className="spage">
+                      <div className="ssec-badge">
+                        Section 4 · Hardware Schedule — Flat List{continuationLabel}
+                      </div>
+                      <div className="spage-header">
+                        <div>
+                          <h1 className="spage-title">Hardware Flat List</h1>
+                          <p className="spage-subtitle">All items aggregated across hardware sets</p>
+                        </div>
+                        {idx === 0 && (
+                          <div className="spage-qty-block">
+                            <div className="spage-qty-label">Unique Items</div>
+                            <div className="spage-qty-value">{flatListItems.length}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="shw-table-wrap">
+                        <table className="shw-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '22%' }}>Item Name</th>
+                              <th style={{ width: '32%' }}>Description</th>
+                              <th style={{ width: '18%' }}>Manufacturer</th>
+                              <th style={{ width: '12%' }}>Finish</th>
+                              <th className="th-r" style={{ width: '8%' }}>Total</th>
+                              <th className="th-r" style={{ width: '8%' }}>Doors</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pageItems.map((item, ii) => (
+                              <tr key={ii}>
+                                <td className="td-name">{item.itemName}</td>
+                                <td>{item.description}</td>
+                                <td>{item.manufacturer}</td>
+                                <td>{item.finish}</td>
+                                <td className="td-r">{item.totalQty}</td>
+                                <td className="td-r td-muted">{item.doorTags.length}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="spage-footer">
+                        <span>Generated by Planckoff Estimating</span>
+                        <span>Page {pageNum} of {totalPages}</span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+
+              </div>
             </div>
-          </div>
           </div>
         </div>
       )}
