@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PrinterIcon } from '../shared/icons';
 import type { MergedHardwareSet, MergedDoor, HardwareItem } from '@/lib/db/hardware';
 import type { ElevationType } from '@/types';
@@ -407,6 +407,18 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   const adjustZoom = (delta: number) =>
     setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
 
+  const [companySettings, setCompanySettings] = useState<{
+    companyName?: string; logoUrl?: string; websiteUrl?: string;
+    email?: string; phone?: string; address?: string; province?: string; country?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/settings/company', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((json: { data?: typeof companySettings } | null) => { if (json?.data) setCompanySettings(json.data); })
+      .catch(() => {});
+  }, []);
+
   // All doors across all sets
   const allDoors = useMemo(() => finalJson.flatMap(s => s.doors), [finalJson]);
 
@@ -527,7 +539,9 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
     [allDoors],
   );
 
+  const COVER_PAGES = 1;
   const totalPages =
+    COVER_PAGES +
     doorTypeGroups.length +
     frameTypeGroups.length +
     prehungGroups.length +
@@ -995,9 +1009,188 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   padding-top: 1.5mm;
                   flex-shrink: 0;
                 }
+
+                /* ── Cover page ── */
+                .scover-page {
+                  justify-content: space-between;
+                  border: 1.2px solid #1e3a5f;
+                }
+                .scover-inner {
+                  flex: 1;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  gap: 0;
+                }
+                .scover-company {
+                  text-align: center;
+                  padding-bottom: 7mm;
+                  margin-bottom: 7mm;
+                  border-bottom: 1.5px solid #1e3a5f;
+                }
+                .scover-logo {
+                  max-height: 20mm;
+                  max-width: 60mm;
+                  object-fit: contain;
+                  margin-bottom: 4mm;
+                  display: block;
+                  margin-left: auto;
+                  margin-right: auto;
+                }
+                .scover-company-name {
+                  font-size: 22pt;
+                  font-weight: 800;
+                  color: #0f172a;
+                  line-height: 1.1;
+                  margin-bottom: 3mm;
+                }
+                .scover-contact {
+                  font-size: 9.5pt;
+                  color: #475569;
+                  line-height: 1.9;
+                }
+                .scover-contact-sep {
+                  color: #cbd5e1;
+                  margin: 0 5px;
+                }
+                .scover-title-block {
+                  text-align: center;
+                  margin-bottom: 8mm;
+                }
+                .scover-badge {
+                  display: inline-block;
+                  background: #1e3a5f;
+                  color: #fff;
+                  font-size: 7pt;
+                  font-weight: 800;
+                  letter-spacing: 0.18em;
+                  text-transform: uppercase;
+                  padding: 3px 10px;
+                  border-radius: 3px;
+                  margin-bottom: 4mm;
+                }
+                .scover-project {
+                  font-size: 28pt;
+                  font-weight: 900;
+                  color: #0f172a;
+                  line-height: 1.1;
+                  margin-bottom: 3mm;
+                  word-break: break-word;
+                }
+                .scover-date {
+                  font-size: 10pt;
+                  font-weight: 400;
+                  color: #64748b;
+                }
+                .scover-stats {
+                  display: flex;
+                  gap: 0;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 6px;
+                  overflow: hidden;
+                }
+                .scover-stat {
+                  flex: 1;
+                  text-align: center;
+                  padding: 5mm 4mm;
+                  border-right: 1px solid #e2e8f0;
+                }
+                .scover-stat:last-child { border-right: none; }
+                .scover-stat-value {
+                  font-size: 26pt;
+                  font-weight: 900;
+                  color: #1e3a5f;
+                  line-height: 1;
+                }
+                .scover-stat-label {
+                  font-size: 7pt;
+                  font-weight: 600;
+                  letter-spacing: 0.10em;
+                  text-transform: uppercase;
+                  color: #94a3b8;
+                  margin-top: 2px;
+                }
               `}</style>
 
               <div className="submittal-root">
+
+                {/* ══════════════════════════════════════════════════
+                    COVER PAGE — Company + Project Info
+                ══════════════════════════════════════════════════ */}
+                <div className="spage scover-page">
+                  <div className="scover-inner">
+
+                    {/* Company block — only when settings are loaded */}
+                    {companySettings?.companyName && (
+                      <div className="scover-company">
+                        {companySettings.logoUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={companySettings.logoUrl}
+                            alt={companySettings.companyName}
+                            className="scover-logo"
+                            crossOrigin="anonymous"
+                          />
+                        )}
+                        <div className="scover-company-name">{companySettings.companyName}</div>
+                        <div className="scover-contact">
+                          {(companySettings.websiteUrl || companySettings.email) && (
+                            <div>
+                              {companySettings.websiteUrl && <span>{companySettings.websiteUrl}</span>}
+                              {companySettings.websiteUrl && companySettings.email && (
+                                <span className="scover-contact-sep">·</span>
+                              )}
+                              {companySettings.email && <span>{companySettings.email}</span>}
+                            </div>
+                          )}
+                          {companySettings.phone && <div>{companySettings.phone}</div>}
+                          {[companySettings.address, companySettings.province, companySettings.country]
+                            .filter(Boolean).join(', ') && (
+                            <div>
+                              {[companySettings.address, companySettings.province, companySettings.country]
+                                .filter(Boolean).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Submittal title block */}
+                    <div className="scover-title-block">
+                      <div className="scover-badge">Submittal Package</div>
+                      <div className="scover-project">{projectName || 'Untitled Project'}</div>
+                      <div className="scover-date">
+                        {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </div>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="scover-stats">
+                      <div className="scover-stat">
+                        <div className="scover-stat-value">{totalDoorOpenings}</div>
+                        <div className="scover-stat-label">Total Openings</div>
+                      </div>
+                      <div className="scover-stat">
+                        <div className="scover-stat-value">{doorTypeGroups.length + frameTypeGroups.length}</div>
+                        <div className="scover-stat-label">Material Types</div>
+                      </div>
+                      <div className="scover-stat">
+                        <div className="scover-stat-value">{hwSetDisplays.length}</div>
+                        <div className="scover-stat-label">Hardware Sets</div>
+                      </div>
+                      <div className="scover-stat">
+                        <div className="scover-stat-value">{flatListItems.length}</div>
+                        <div className="scover-stat-label">Unique Items</div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div className="spage-footer">
+                    <span>Generated by Planckoff Estimating</span>
+                    <span>Page 1 of {totalPages}</span>
+                  </div>
+                </div>
 
                 {/* ══════════════════════════════════════════════════
                     SECTION 1 — DOOR SPECIFICATION
@@ -1012,7 +1205,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   const elevType = getElevationType(rep, elevationTypes, 'door');
                   const elevCode = rep.doorElevationType ?? getDoorParam(rep, 'DOOR ELEVATION TYPE');
                   const elevImg = elevType?.imageUrl ?? elevType?.imageData;
-                  const pageNum = idx + 1;
+                  const pageNum = COVER_PAGES + idx + 1;
 
                   return (
                     <div key={`door-${group.matType}`} className="spage">
@@ -1100,7 +1293,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   const elevType = getElevationType(rep, elevationTypes, 'frame');
                   const elevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
                   const elevImg = elevType?.imageUrl ?? elevType?.imageData;
-                  const pageNum = doorTypeGroups.length + idx + 1;
+                  const pageNum = COVER_PAGES + doorTypeGroups.length + idx + 1;
 
                   return (
                     <div key={`frame-${group.matType}`} className="spage">
@@ -1189,7 +1382,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   const frameElevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
                   const doorElevImg   = doorElevType?.imageUrl  ?? doorElevType?.imageData;
                   const frameElevImg  = frameElevType?.imageUrl ?? frameElevType?.imageData;
-                  const pageNum       = doorTypeGroups.length + frameTypeGroups.length + idx + 1;
+                  const pageNum       = COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + idx + 1;
 
                   const sectionColorClass: Record<string, string> = {
                     basic_information: 'ph-basic',
@@ -1305,7 +1498,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     Usage: count + all door tags
                 ══════════════════════════════════════════════════ */}
                 {hwSetDisplays.map((set, idx) => {
-                  const pageNum = doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + idx + 1;
+                  const pageNum = COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + idx + 1;
                   return (
                     <div key={`hwset-${set.setName}-${idx}`} className="spage">
                       <div className="ssec-badge">Section 4 · Hardware Schedule — Set Report</div>
@@ -1382,7 +1575,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 ══════════════════════════════════════════════════ */}
                 {flatListPages.map((pageItems, idx) => {
                   const pageNum =
-                    doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + hwSetDisplays.length + idx + 1;
+                    COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + hwSetDisplays.length + idx + 1;
                   const continuationLabel =
                     flatListPages.length > 1 ? ` (${idx + 1} / ${flatListPages.length})` : '';
 
