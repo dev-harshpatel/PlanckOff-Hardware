@@ -44,6 +44,12 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
+
   webpack: (config) => {
     // Required for pdfjs-dist — it tries to use canvas in node context
     config.resolve.alias.canvas = false;

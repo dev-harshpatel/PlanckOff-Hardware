@@ -209,9 +209,30 @@ export async function softDeleteProject(id: string): Promise<DbResult<boolean>> 
   }
 }
 
+/** Delete all files in door-elevations/{projectId}/ (recurses into subfolders). */
+async function deleteProjectElevationStorage(projectId: string): Promise<void> {
+  const db = createSupabaseAdminClient();
+  const BUCKET = 'door-elevations';
+  const SUBFOLDERS = ['door', 'frame'];
+
+  const paths: string[] = [];
+  for (const folder of SUBFOLDERS) {
+    const prefix = `${projectId}/${folder}`;
+    const { data: files } = await db.storage.from(BUCKET).list(prefix, { limit: 1000 });
+    if (files?.length) {
+      paths.push(...files.map(f => `${prefix}/${f.name}`));
+    }
+  }
+
+  if (paths.length > 0) {
+    await db.storage.from(BUCKET).remove(paths);
+  }
+}
+
 export async function hardDeleteProject(id: string): Promise<DbResult<boolean>> {
   try {
     const db = createSupabaseAdminClient();
+    await deleteProjectElevationStorage(id);
     const { error } = await db.from('projects').delete().eq('id', id);
     if (error) return { data: null, error: { message: error.message } };
     return { data: true, error: null };
@@ -256,11 +277,20 @@ export async function cleanupExpiredProjects(): Promise<void> {
   try {
     const db = createSupabaseAdminClient();
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    await db
+
+    const { data: expired } = await db
       .from('projects')
-      .delete()
+      .select('id')
       .not('deleted_at', 'is', null)
       .lt('deleted_at', cutoff);
+
+    if (expired?.length) {
+      await Promise.all(
+        (expired as { id: string }[]).map(p => deleteProjectElevationStorage(p.id)),
+      );
+      const ids = (expired as { id: string }[]).map(p => p.id);
+      await db.from('projects').delete().in('id', ids);
+    }
   } catch {
     // Non-critical — log silently
   }

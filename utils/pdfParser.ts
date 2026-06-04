@@ -1,4 +1,100 @@
 import { ERRORS } from '@/constants/errors';
+import { ELEVATION_EXTRACTION } from '@/constants/elevationExtraction';
+
+/** A single text item from a PDF page, positioned in rendered-image pixel space. */
+export interface PDFPageTextItem {
+    str: string;
+    x: number;   // left edge, image pixels (top-left origin)
+    y: number;   // top edge, image pixels
+    w: number;
+    h: number;
+}
+
+export interface PDFPageImageResult {
+    pageNumber: number;
+    totalPages: number;
+    imageBase64: string;
+    progress: number;
+    textItems: PDFPageTextItem[];
+}
+
+export async function* renderPDFPagesAsImages(
+    file: File,
+    options?: { scale?: number },
+): AsyncGenerator<PDFPageImageResult> {
+    const pdfjsLib = await import('pdfjs-dist');
+    // Main-thread usage — point to the real worker served from /public.
+    // Cannot use workerSrc = '' here (unlike extractTextGenerator which runs
+    // inside a Web Worker where nested workers are forbidden). pdfjs v5 throws
+    // on an empty workerSrc when called from the main thread.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const numPages = pdf.numPages;
+    const scale = options?.scale ?? ELEVATION_EXTRACTION.PDF_RENDER_SCALE;
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+
+        // ── Render page to image ──────────────────────────────────────────
+        // pdfjs-dist v5 requires an HTMLCanvasElement via the `canvas` param.
+        // OffscreenCanvas is not assignable to HTMLCanvasElement, so we use
+        // document.createElement('canvas') which is correct for main-thread usage.
+        const canvas = document.createElement('canvas');
+        canvas.width  = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvas, viewport }).promise;
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.75);
+
+        // ── Extract text with image-space coordinates ─────────────────────
+        // PDF user space: origin bottom-left, y grows upward.
+        // Image space: origin top-left, y grows downward.
+        // viewport.height at the render scale is the image height in pixels.
+        const textItems: PDFPageTextItem[] = [];
+        try {
+            const textContent = await page.getTextContent();
+            const imgH = viewport.height; // image height in px at render scale
+
+            // Cast to the TextItem shape — items array contains TextItem | TextMarkedContent
+            // and pdfjs-dist v5 doesn't narrow after 'str' in item for transform/width/height.
+            type PdfjsTextItem = { str: string; transform: number[]; width: number; height: number };
+            for (const raw of textContent.items) {
+                const item = raw as PdfjsTextItem;
+                if (!item.str?.trim()) continue;
+
+                // transform = [scaleX, skewY, skewX, scaleY, originX, originY]
+                // originX/Y are in PDF user space (bottom-left origin, unscaled).
+                const pdfX = item.transform[4];
+                const pdfY = item.transform[5];
+
+                // Scale to image pixels and flip Y axis.
+                // item.width / item.height are in PDF user space units.
+                const iw = item.width  * scale;
+                const ih = item.height * scale;
+                const ix = pdfX * scale;
+                // pdfY is the text baseline; subtract scaled height to get the top.
+                const iy = imgH - (pdfY * scale) - ih;
+
+                textItems.push({ str: item.str, x: ix, y: iy, w: iw, h: ih });
+            }
+        } catch {
+            // Text extraction is non-critical — image rendering is what matters.
+        }
+
+        page.cleanup();
+        await new Promise(r => setTimeout(r, 5));
+
+        yield {
+            pageNumber: pageNum,
+            totalPages: numPages,
+            imageBase64,
+            textItems,
+            progress: Math.round((pageNum / numPages) * 100),
+        };
+    }
+}
 
 /**
  * Result structure for a batch of pages
@@ -41,7 +137,6 @@ export async function* extractTextGenerator(file: File, batchSize: number = 20):
         const pdf = await loadingTask.promise;
         const numPages = pdf.numPages;
 
-        console.log(`PDF Loaded: ${numPages} pages. Starting generator...`);
 
         // Last page text from the previous batch — prepended as context so the
         // AI can continue hardware sets that straddle a batch boundary.

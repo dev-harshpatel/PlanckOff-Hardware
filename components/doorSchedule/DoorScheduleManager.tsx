@@ -12,7 +12,7 @@ import { DoorTableRow } from '../doors/DoorTableRow';
 import {
     Table2, Search, Upload, AlertTriangle, Plus, Trash2,
     SlidersHorizontal, X, Loader2, Zap, Layers, ClipboardList,
-    CheckCircle2, Filter,
+    CheckCircle2, Filter, FileSearch,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,6 +36,7 @@ interface DoorScheduleManagerProps {
     onProvidedSetChange?: (doorId: string, newSetName: string) => void;
     elevationTypes?: ElevationType[];
     onManageElevations?: () => void;
+    onExtractElevations?: () => void;
     onElevationTypeUpdate?: (updated: ElevationType) => void;
     projectId: string;
     addToast: (toast: Omit<Toast, 'id'>) => void;
@@ -57,6 +58,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
     onProvidedSetChange,
     elevationTypes = [],
     onManageElevations,
+    onExtractElevations,
     onElevationTypeUpdate,
     projectId,
     addToast,
@@ -277,6 +279,21 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                                     className="p-1.5 text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors bg-[var(--bg)]"
                                 >
                                     <Layers className="w-3.5 h-3.5" />
+                                </button>
+                            </Tooltip>
+                        )}
+                        {onExtractElevations && (
+                            <Tooltip content={
+                                doors.length === 0
+                                    ? 'Run the pipeline first before extracting elevations'
+                                    : 'Extract elevation images from PDF'
+                            }>
+                                <button
+                                    onClick={doors.length > 0 ? onExtractElevations : undefined}
+                                    disabled={doors.length === 0}
+                                    className="p-1.5 text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-bg-hover)] border border-[var(--primary-border)] rounded-lg transition-colors bg-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <FileSearch className="w-3.5 h-3.5" />
                                 </button>
                             </Tooltip>
                         )}

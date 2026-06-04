@@ -52,6 +52,12 @@ lerna-debug.log*
 debug-extractions/
 
 # ============================================================
+# pdfjs-dist worker — copied from node_modules at runtime
+# Run: cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/
+# ============================================================
+public/pdf.worker.min.mjs
+
+# ============================================================
 # OS generated files
 # ============================================================
 .DS_Store

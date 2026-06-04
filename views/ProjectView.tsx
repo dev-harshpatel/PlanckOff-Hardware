@@ -187,6 +187,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                 onProvidedSetChange={handleProvidedSetChange}
                 elevationTypes={project.elevationTypes || []}
                 onManageElevations={() => setIsElevationManagerOpen(true)}
+                onExtractElevations={() => {
+                    startNavigation(`/project/${project.id}/elevations/upload`);
+                    router.push(`/project/${project.id}/elevations/upload`);
+                }}
                 onElevationTypeUpdate={handleSingleElevationTypeUpdate}
                 projectId={project.id}
                 addToast={addToast}

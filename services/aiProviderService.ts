@@ -29,17 +29,20 @@ export const generateAIContent = async (
     temperature?: number;
     maxRetries?: number;
     settings?: AppSettings;
+    imageBase64?: string;
+    model?: string;    // override the model from settings
+    provider?: string; // override the provider from settings
   },
-): Promise<{ text: string }> => {
+): Promise<{ text: string; usage?: { promptTokens: number; completionTokens: number; estimatedCostUSD: number } }> => {
   const settings = getAppSettings(options?.settings);
-  const provider = settings?.provider || 'openrouter';
-  const model = settings?.model || 'google/gemini-2.0-flash-001';
+  const provider = options?.provider ?? settings?.provider ?? 'openrouter';
+  const model = options?.model ?? settings?.model ?? 'google/gemini-2.0-flash-001';
   const temperature = options?.temperature ?? 0.1;
 
   const response = await fetch('/api/ai/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, schema, provider, model, temperature }),
+    body: JSON.stringify({ prompt, schema, provider, model, temperature, imageBase64: options?.imageBase64 }),
   });
 
   if (!response.ok) {
