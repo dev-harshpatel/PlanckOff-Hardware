@@ -87,6 +87,15 @@ export function autoCreateVariants(
                           assignedHardwareSet: newVariant,
                           providedHardwareSet: newVariant.name,
                           status: 'complete' as const,
+                          sections: door.sections
+                              ? {
+                                    ...door.sections,
+                                    hardware: {
+                                        ...door.sections.hardware,
+                                        'HARDWARE SET': newVariant.name,
+                                    },
+                                }
+                              : door.sections,
                       }
                     : door,
             );

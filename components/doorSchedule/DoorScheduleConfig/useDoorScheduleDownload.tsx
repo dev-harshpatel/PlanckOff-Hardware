@@ -255,6 +255,23 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
           // ── Build worksheet ────────────────────────────────────────────────
           const ws = XLSX.utils.aoa_to_sheet(allRows);
 
+          // Right-align all data cells so string values (e.g. "10.W") align
+          // consistently with auto-right-aligned numeric cells (e.g. 10).
+          const DATA_START_ROW = 4; // 3 meta rows + 1 header row
+          const wsRef = ws['!ref'];
+          if (wsRef) {
+            const range = XLSX.utils.decode_range(wsRef);
+            for (let r = DATA_START_ROW; r <= range.e.r; r++) {
+              for (let c = range.s.c; c <= range.e.c; c++) {
+                const addr = encodeCell({ r, c });
+                const cell = ws[addr] as Record<string, unknown> | undefined;
+                if (cell) {
+                  cell.s = { ...(cell.s as object || {}), alignment: { horizontal: 'right', vertical: 'center', wrapText: false } };
+                }
+              }
+            }
+          }
+
           // Column widths — ensure col 2 is wide enough for section images
           const colWidths = contentAwareColWidths(headers, rows);
           while (colWidths.length <= IMG_COL) colWidths.push({ wch: 10 });

@@ -55,7 +55,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           setName: {
             type: 'string',
-            description: 'Hardware set identifier, e.g. "AD01b", "SE02a.W", "CA01"',
+            description: 'Hardware set identifier. Named codes: "AD01b", "SE02a.W", "CA01". Simple numbers: "1", "2", "3". NEVER include column header text — output only the identifier value, never "SET DOOR TYPE 1" or "SET 1", just "1".',
           },
           hardwareItems: {
             type: 'array',
@@ -97,6 +97,13 @@ Format A — named set codes (e.g. "AD01b", "SE02a.W", "CA01", "WE01a"):
 Format B — numbered hardware groups (e.g. "Hardware Group No. 001", "HARDWARE GROUP 5"):
   - setName = the group number as a zero-padded string, e.g. "001", "002", "135"
   - These groups typically start with "For use on Door #(s):" listing the doors — skip that line, it is not a hardware item
+
+Format C — table with SET and DOOR TYPE columns (common in simple hardware schedules):
+  - Document has a table where the left column is labeled "SET" and the next column is "DOOR TYPE"
+  - Each row (or merged-cell block) in the SET column holds the hardware set identifier: a simple integer like 1, 2, 3, …
+  - setName = the integer from the SET column ONLY — e.g. "1", "2", "3"
+  - CRITICAL: do NOT include column header text in the setName. Never output "SET 1", "SET DOOR TYPE 1", or any variation — output only the raw value from the SET column, i.e. "1"
+  - The DOOR TYPE column contains a description (e.g. "LOBBY EXTERIOR DOOR") — put it in the notes field, not in setName
 
 COLUMNS — the hardware item table may use different column headers:
   - QTY or Qty → qty (integer, default 1 if blank)
@@ -165,8 +172,12 @@ function normalizeItem(raw: unknown): HardwareItem {
 }
 
 function normalizeSet(raw: Record<string, unknown>): ExtractedHardwareSet {
+  let setName = String(raw.setName ?? '').trim();
+  // Strip column-header prefixes the AI may include when reading "SET | DOOR TYPE" tables.
+  // e.g. "SET DOOR TYPE 1" → "1", "SET 2" → "2"
+  setName = setName.replace(/^SET\s+DOOR\s+TYPE\s+/i, '').replace(/^SET\s+/i, '').trim();
   return {
-    setName: String(raw.setName ?? '').trim(),
+    setName,
     notes: String(raw.notes ?? '').trim(),
     hardwareItems: Array.isArray(raw.hardwareItems)
       ? raw.hardwareItems.map(normalizeItem)

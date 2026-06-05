@@ -408,6 +408,23 @@ export const exportDoorScheduleToExcel = async (
   // ── Build worksheet ────────────────────────────────────────────────────────
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
+  // Right-align all data cells so string values (e.g. "10.W") align
+  // consistently with auto-right-aligned numeric cells (e.g. 10).
+  const DATA_START_ROW = config.includeHeader ? 4 : 1;
+  const wsRef = worksheet['!ref'];
+  if (wsRef) {
+    const range = XLSX.utils.decode_range(wsRef);
+    for (let r = DATA_START_ROW; r <= range.e.r; r++) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = worksheet[addr] as Record<string, unknown> | undefined;
+        if (cell) {
+          cell.s = { ...(cell.s as object || {}), alignment: { horizontal: 'right', vertical: 'center', wrapText: false } };
+        }
+      }
+    }
+  }
+
   // Column widths — ensure col 1 (image column in sections) is wide enough
   const colWidths = contentAwareColWidths(headers, dataRows);
   while (colWidths.length <= IMG_COL) colWidths.push({ wch: 10 });

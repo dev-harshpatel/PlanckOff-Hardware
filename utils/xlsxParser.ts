@@ -2,10 +2,55 @@ import * as XLSX from 'xlsx-js-style';
 import { Door, HardwareSet, HardwareItem, DoorScheduleSections } from '../types';
 import { ERRORS } from '@/constants/errors';
 
+// ---------------------------------------------------------------------------
+// Dimension parsing — converts any real-world Excel cell value to inches.
+// Handles: "3'-0\"" (feet-inches), "915" (mm → inches), "1 3/4" (fraction),
+// and compound pair-door widths like "(3'-0\" + 1'1\")".
+// ---------------------------------------------------------------------------
+function parseFeetInches(val: string): number | null {
+    const clean = val.replace(/^\(\d+\)\s*/, '').replace(/^\d+\s*\*\s*/, '').trim();
+    const match = clean.match(/^(\d+)['′]-(\d+(?:\.\d+)?)["″]?/);
+    if (match) return parseInt(match[1], 10) * 12 + parseFloat(match[2]);
+    return null;
+}
+
+function parseMm(val: string): number | null {
+    const clean = val.replace(/^\d+\s*\*\s*/, '').trim();
+    const n = parseFloat(clean);
+    if (!isNaN(n) && n > 10) return Math.round(n / 25.4);
+    return null;
+}
+
+function parseFraction(val: string): number | null {
+    const match = val.replace(/["″]/, '').trim().match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / parseInt(match[3], 10);
+    const simple = parseFloat(val);
+    if (!isNaN(simple)) return simple;
+    return null;
+}
+
+function parseDimension(val: string | undefined): number {
+    if (!val) return 0;
+    const s = String(val).trim();
+    const fi = parseFeetInches(s);
+    if (fi !== null) return fi;
+    // Compound pair-door width: "(3'-0\" + 1'1\")"
+    const compound = s.match(/^\(([^)]+)\)$/);
+    if (compound) {
+        const total = compound[1].split('+').reduce((sum, p) => sum + parseDimension(p.trim()), 0);
+        if (total > 0) return total;
+    }
+    const mm = parseMm(s);
+    if (mm !== null) return mm;
+    const fr = parseFraction(s);
+    if (fr !== null) return fr < 10 ? fr * 12 : fr;
+    return 0;
+}
+
 /**
  * Parses an Excel file buffer into an array of Door objects.
  * Uses the 'xlsx' npm package.
- * 
+ *
  * @param data The Excel file content as an ArrayBuffer.
  * @returns An array of Door objects.
  * @throws An error if the format is invalid.
@@ -211,9 +256,11 @@ export const parseDoorScheduleXLSX = (data: ArrayBuffer): Door[] => {
             interiorExterior:     opt('interiorExterior'),
             excludeReason:        opt('excludeReason'),
 
-            // Dimensions
-            width:                getNum('width', 0),
-            height:               getNum('height', 0),
+            // Dimensions — use parseDimension so compound formats like "(3'-0\" + 1'1\")" are handled
+            width:                parseDimension(opt('width')),
+            height:               parseDimension(opt('height')),
+            widthDisplay:         opt('width'),
+            heightDisplay:        opt('height'),
             thickness:            getNum('thickness', 1.75),
 
             // Door material & finish

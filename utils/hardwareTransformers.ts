@@ -283,7 +283,10 @@ export function transformFromFinalJson(
       const leafCountNum = parseLeafCountValue(leafCountRaw);
       const rawQuantity = bi?.['QUANTITY'] ?? ds?.['QUANTITY'] ?? door.quantity;
 
-      const providedHardwareSet = door.sections?.hardware?.['HARDWARE SET'] ?? door.hwSet ?? door.matchedSetName;
+      // Use the set name this door is stored under as the authoritative hardware set value.
+      // Raw sections may have the pre-variant name (e.g. "28" instead of "28.W").
+      const resolvedSetName = set.setName !== '__unassigned__' ? set.setName : undefined;
+      const providedHardwareSet = resolvedSetName ?? door.sections?.hardware?.['HARDWARE SET'] ?? door.hwSet ?? door.matchedSetName;
 
       const builtDoor: Door = {
         id: `door-final-${doorCounter++}-${door.doorTag}`,
@@ -343,8 +346,17 @@ export function transformFromFinalJson(
 
         hardwareIncludeExclude: door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE'],
 
-        // Carry raw sections through as-is
-        sections: door.sections as unknown as Door['sections'],
+        // Carry raw sections through, overriding HARDWARE SET with the authoritative set name
+        // so column displays and grouping always reflect variant assignments (e.g. "28.W" not "28").
+        sections: (door.sections && resolvedSetName)
+          ? {
+              ...door.sections,
+              hardware: {
+                ...door.sections.hardware,
+                'HARDWARE SET': resolvedSetName,
+              },
+            } as unknown as Door['sections']
+          : door.sections as unknown as Door['sections'],
 
         providedHardwareSet: providedHardwareSet || undefined,
         assignedHardwareSet: assignedSet,

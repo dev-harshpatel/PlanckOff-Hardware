@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { FileSpreadsheet } from 'lucide-react';
 import type { Door, HardwareSet, ElevationType } from '@/types';
-import { transformDoors, transformHardwareSets } from '@/utils/hardwareTransformers';
+import { transformDoors, transformHardwareSets, transformFromFinalJson } from '@/utils/hardwareTransformers';
 import { filterExcludedDoors } from '@/utils/reportFilters';
+import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
 function totalDoorQuantity(doors: Door[]): number {
@@ -35,32 +36,48 @@ export default function DoorScheduleReportPage() {
 
     async function load() {
       try {
-        const [dsRes, hwRes, projRes] = await Promise.all([
-          fetch(`/api/projects/${id}/door-schedule`),
-          fetch(`/api/projects/${id}/hardware-pdf`),
+        const [mergeRes, projRes] = await Promise.all([
+          fetch(`/api/projects/${id}/hardware-merge`),
           fetch(`/api/projects/${id}`),
         ]);
 
-        const [dsJson, hwJson, projJson] = await Promise.all([
-          dsRes.json(),
-          hwRes.json(),
-          projRes.json(),
+        const [mergeJson, projJson] = await Promise.all([
+          mergeRes.ok ? mergeRes.json() : null,
+          projRes.ok ? projRes.json() : null,
+        ]);
+
+        setProjectName(projJson?.data?.name ?? '');
+        setProjectLocation(projJson?.data?.location ?? '');
+        setProjectProvince(projJson?.data?.province ?? '');
+        setElevationTypes(projJson?.data?.elevationTypes ?? []);
+
+        const finalData: MergedHardwareSet[] | undefined = mergeJson?.data?.finalJson;
+        if (finalData && finalData.length > 0) {
+          const { hardwareSets: sets, doors: loadedDoors } = transformFromFinalJson(finalData);
+          setHardwareSets(sets);
+          setDoors(filterExcludedDoors(loadedDoors));
+          return;
+        }
+
+        // Fallback: raw sources (no finalJson yet — pre-pipeline state)
+        const [dsRes, hwRes] = await Promise.all([
+          fetch(`/api/projects/${id}/door-schedule`),
+          fetch(`/api/projects/${id}/hardware-pdf`),
+        ]);
+        const [dsJson, hwJson] = await Promise.all([
+          dsRes.ok ? dsRes.json() : null,
+          hwRes.ok ? hwRes.json() : null,
         ]);
 
         const sets: HardwareSet[] = hwJson?.data?.extractedJson
           ? transformHardwareSets(hwJson.data.extractedJson)
           : [];
-
-        const loadedDoors: Door[] = dsJson?.data?.scheduleJson
-          ? filterExcludedDoors(transformDoors(dsJson.data.scheduleJson, sets))
-          : [];
-
         setHardwareSets(sets);
-        setDoors(loadedDoors);
-        setProjectName(projJson?.data?.name ?? '');
-        setProjectLocation(projJson?.data?.location ?? '');
-        setProjectProvince(projJson?.data?.province ?? '');
-        setElevationTypes(projJson?.data?.elevationTypes ?? []);
+        setDoors(
+          dsJson?.data?.scheduleJson
+            ? filterExcludedDoors(transformDoors(dsJson.data.scheduleJson, sets))
+            : [],
+        );
       } catch (err) {
         console.error('[DoorScheduleReport] Load failed:', err);
       } finally {
