@@ -21,7 +21,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import type { ExtractedHardwareSet, HardwareItem } from '@/lib/db/hardware';
-import { extractPdfText, batchPages } from '@/lib/ai/pdfTextExtractor';
+import { extractPdfText, batchPages, renderPdfToImages } from '@/lib/ai/pdfTextExtractor';
 import { sanitizeText } from '@/lib/db/masterHardware';
 
 // ---------------------------------------------------------------------------
@@ -87,7 +87,19 @@ const RESPONSE_SCHEMA = {
 
 const SYSTEM_PROMPT = `You are a construction document parser specializing in Division 08 door hardware schedules.
 
+⚠️ ABSOLUTE RULE — READ BEFORE ANYTHING ELSE:
+You are a TRANSCRIPTION tool, not a knowledge tool. Your ONLY job is to copy what is printed in the document into JSON. You must NEVER substitute, infer, or replace any hardware item with what you think "should" be there based on the door type. Hardware schedules routinely specify unexpected combinations — a RESTROOM door may have PUSH/PULL + CLOSER instead of a privacy lockset; a STORAGE door may have a passage latch instead of a keyed lock. Whatever is printed is correct. If PUSH/PULL is printed, output PUSH/PULL. If CLOSER is printed, output CLOSER. Do NOT replace them with PRIVACY LOCKSET LEVER or any other item. This is a zero-tolerance rule — any substitution is a critical error.
+
 Your job is to extract every hardware set (hardware group) from the uploaded PDF and return them as structured JSON.
+
+MULTI-COLUMN TABLES — hardware schedules often print two or more complete, independent hardware set tables side by side on the same page:
+  - Each column table has its OWN "SET" column on its left edge with its own set numbers.
+  - The left table and the right table are COMPLETELY INDEPENDENT — they share no content.
+  - The SET number for a set comes ONLY from the "SET" cell in that set's own table column — NEVER from the other column's SET cells.
+  - Even when a left-column set and a right-column set appear at the same vertical height on the page, they are SEPARATE sets. Do NOT pair a SET number from one table with content from the other table.
+  - Read the ENTIRE left-column table top-to-bottom first, extracting all its sets. Only after fully completing the left table do you start reading the right-column table.
+  - Do NOT mix items from one column's set into another column's set.
+  - Treat each column table as if it were a completely separate document that happens to appear side by side on the same page.
 
 DOCUMENT FORMATS — this document may follow one of several formats:
 
@@ -105,6 +117,23 @@ Format C — table with SET and DOOR TYPE columns (common in simple hardware sch
   - CRITICAL: do NOT include column header text in the setName. Never output "SET 1", "SET DOOR TYPE 1", or any variation — output only the raw value from the SET column, i.e. "1"
   - The DOOR TYPE column contains a description (e.g. "LOBBY EXTERIOR DOOR") — put it in the notes field, not in setName
 
+Format D — per-door hardware schedule (e.g. "Door No. P200 – Elevator Lobby", "Door No. 101 – Main Entry"):
+  - Each door entry is its own hardware set. The door number is the set identifier.
+  - setName = the door number/code exactly as written (e.g. "P200", "101", "A-05")
+  - The header line "Door No. X – Location" marks the start of a new set. Put the location in the notes field.
+  - SKIP the lines immediately following the header that describe the door opening itself: door size (e.g. "3'-0" x 7'-0" x 1 3/4""), door material (e.g. "Hollow Core Metal"), frame type (e.g. "Welded Pressed Steel Frame"), and fire rating (e.g. "Fire rated 45 min"). These are NOT hardware items.
+  - All remaining lines until the next "Door No." header are hardware items — extract them all.
+
+Format E — merged-cell set table (simple hardware schedule, often on architectural drawing sheets):
+  - A table where a set number (e.g. "2") appears in a large merged cell spanning multiple rows on the LEFT side
+  - A door type label (e.g. "RESTROOM INTERIOR DOOR", "EXTERIOR ENTRY") spans the top row as a header
+  - Below the header: columns labeled QUANTITY (or QTY) and DESCRIPTION — there may be NO manufacturer, catalog, or finish columns
+  - Each subsequent row is one hardware item with a quantity and description
+  - setName = the number in the merged cell on the left (e.g. "2")
+  - notes = the door type label from the header row (e.g. "RESTROOM INTERIOR DOOR")
+  - Extract EVERY row in the item list — PUSH / PULL, CLOSER, WALL STOP, HINGES, etc. are all valid items
+  - IMPORTANT: the quantity "1" may be printed as the letter "I" in some architectural fonts — treat "I" in the quantity column as the integer 1
+
 COLUMNS — the hardware item table may use different column headers:
   - QTY or Qty → qty (integer, default 1 if blank)
   - DESCRIPTION or Item → item (hardware category name, e.g. "HINGE", "MORTISE LOCK", "SURFACE CLOSER")
@@ -114,15 +143,29 @@ COLUMNS — the hardware item table may use different column headers:
 
 RULES:
 - Extract ALL hardware sets/groups — do not skip any.
-- qty must be an integer. Use 1 if not stated.
+- qty must be an integer. Use 1 if not stated. The letter "I" in a quantity cell means 1.
 - Preserve catalog numbers and finish codes exactly as written.
 - If a note or special instruction applies to a set, put it in the notes field.
 - Items marked "By Others" — include them, set description to "By Others".
 - Skip any door-index or door-to-set mapping tables at the start of the document — only extract the set/group definitions.
 - Return results in the JSON format defined by the response schema.
-- When a [CONTEXT] block appears at the top of the text: those pages were already processed. Use them only to identify which set was being listed when that section ended — then continue extracting items for that set from the pages that follow [END CONTEXT]. Do NOT emit set entries for items that appear exclusively inside the [CONTEXT] block.`;
+- When a [CONTEXT] block appears at the top of the text: those pages were already processed. Use them only to identify which set was being listed when that section ended — then continue extracting items for that set from the pages that follow [END CONTEXT]. Do NOT emit set entries for items that appear exclusively inside the [CONTEXT] block.
+- CRITICAL — never drop items: every row in the hardware table is a separate item. PUSH / PULL, CLOSER, WALL STOP, KICK PLATE, DOOR STOP are all valid standalone items — extract every one of them.
+- CRITICAL — never substitute items: if the printed description is "PUSH / PULL", output item="PUSH / PULL" exactly. Never replace it with LOCKSET, PRIVACY SET, STORAGE LOCKSET LEVER, or any other item. If the printed text says "CLOSER", output item="CLOSER" — do not drop it or merge it with another row. Substitution is a critical error regardless of what door type the set is for.`;
 
-const USER_PROMPT = 'Extract all hardware sets from this document. Return every set and every item within each set.';
+const USER_PROMPT = `Extract all hardware sets from this document.
+
+STEP 1 — before writing any JSON, count every visible row in every set's item table. Include ALL rows: hinges, push/pull, closer, wall stop, threshold, weatherstripping, transition strip — every single row.
+
+STEP 2 — output the JSON. Every row counted in Step 1 must appear as a hardwareItem. If you counted 4 rows for a set, the hardwareItems array must have 4 entries.
+
+⚠️ FINAL REMINDER — these substitutions are FORBIDDEN regardless of door type:
+• "PUSH / PULL" must NEVER become "LOCKSET", "STORAGE LOCKSET LEVER", "PRIVACY SET", or anything else. A restroom door with PUSH/PULL bars is normal and correct.
+• "CLOSER" must NEVER be dropped or merged with another item.
+• "ENTRY LOCKSET SET" is NOT the same as "ENTRY LOCKSET LEVER" — transcribe whichever exact words are printed.
+• "TRANSITION STRIP" must NEVER become "WALL STOP".
+• "OFFICE LOCKSET LEVER" must NEVER become "KEYED LOCK".
+If the door type label suggests one thing but the printed items say another — trust the printed items, always.`;
 
 // ---------------------------------------------------------------------------
 // Debug file writer (DEV only)
@@ -281,7 +324,7 @@ async function callOpenRouterForSets(
 ): Promise<string> {
   const response = await client.chat.completions.create({
     model: MODEL,
-    temperature: 0.1,
+    temperature: 0,
     response_format: {
       type: 'json_schema',
       json_schema: {
@@ -353,28 +396,35 @@ async function tier1Extract(
   buffer: Buffer,
   signal?: AbortSignal,
 ): Promise<{ raw: string; sets: ExtractedHardwareSet[]; warnings: string[] }> {
-  const base64Pdf = buffer.toString('base64');
   const warnings: string[] = [];
 
-  console.log(`[hardwarePdf:t1] Sending full PDF (${(buffer.length / 1024).toFixed(0)} KB base64) to ${MODEL}…`);
+  // Render PDF pages to PNG images using pdfjs's glyph renderer.
+  // This bypasses broken font ToUnicode mappings entirely — the model receives
+  // the exact same visual output a user sees in a PDF viewer, so garbled font
+  // encoding cannot affect what the model reads or hallucinates about.
+  console.log(`[hardwarePdf:visual] Rendering PDF pages to images…`);
+  const pageImages = await renderPdfToImages(buffer);
+  console.log(`[hardwarePdf:visual] Rendered ${pageImages.length} page(s) — sending to ${MODEL}…`);
+
+  const imageContent = pageImages.map(b64 => ({
+    type: 'image_url' as const,
+    image_url: { url: `data:image/png;base64,${b64}` },
+  }));
 
   const raw = await callOpenRouterForSets(client, [
     { role: 'system', content: SYSTEM_PROMPT },
     {
       role: 'user',
       content: [
-        {
-          type: 'image_url',
-          image_url: { url: `data:application/pdf;base64,${base64Pdf}` },
-        },
+        ...imageContent,
         { type: 'text', text: USER_PROMPT },
       ],
     },
   ], signal);
 
-  console.log(`[hardwarePdf:t1] Response received — ${raw.length} chars`);
+  console.log(`[hardwarePdf:visual] Response received — ${raw.length} chars`);
 
-  const { sets, parseWarning } = parseResponse(raw, ':t1');
+  const { sets, parseWarning } = parseResponse(raw, ':visual');
   if (parseWarning) warnings.push(parseWarning);
 
   return { raw, sets, warnings };
@@ -384,14 +434,39 @@ async function tier1Extract(
 // Tier 2 — server-side text extraction + parallel AI batches
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Garbled-text detector
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the extracted text looks like a real hardware schedule.
+ * Requires at least 2 hardware-specific words to match — prevents false
+ * positives from architectural drawings that happen to contain "DOOR" or
+ * "SET" as part of garbled general notes.
+ */
+function isTextReadable(pages: Array<{ text: string }>): boolean {
+  const combined = pages.map(p => p.text).join(' ').toUpperCase();
+  if (combined.trim().length < 100) return false;
+  // These words only appear in hardware schedules, not in garbled
+  // architectural drawing notes (glazing, storefront, window types, etc.)
+  const indicators = [
+    'HINGE', 'LOCKSET', 'LOCK SET', 'CLOSER', 'DEADBOLT',
+    'WEATHERSTRIP', 'KICK PLATE', 'DOOR STOP', 'WALL STOP',
+    'PUSH/PULL', 'PUSH / PULL', 'HARDWARE SET', 'HARDWARE GROUP',
+    'QUANTITY', 'MANUFACTURER', 'CATALOG',
+  ];
+  const matchCount = indicators.filter(word => combined.includes(word)).length;
+  return matchCount >= 2;
+}
+
 async function tier2Extract(
   client: OpenAI,
   buffer: Buffer,
   projectId: string,
   warnings: string[],
   signal?: AbortSignal,
-): Promise<{ sets: ExtractedHardwareSet[]; warnings: string[] }> {
-  console.warn('[hardwarePdf] Tier 1 failed or file too large — using Tier 2 (server-side text extraction).');
+): Promise<{ sets: ExtractedHardwareSet[]; textReadable: boolean; warnings: string[] }> {
+  console.log('[hardwarePdf:t2] Starting pdfjs text extraction…');
 
   // Extract text server-side with position-aware row reconstruction
   console.log('[hardwarePdf:t2] Starting pdfjs text extraction…');
@@ -403,10 +478,13 @@ async function tier2Extract(
   const totalTextChars = pages.reduce((sum, p) => sum + p.text.length, 0);
 
   if (totalTextChars < 100) {
-    throw new Error(
-      'PDF appears to be a scanned image with no extractable text. ' +
-      'Tier 2 cannot process fully scanned PDFs. Try a text-based PDF.',
-    );
+    return { sets: [], textReadable: false, warnings };
+  }
+
+  const textReadable = isTextReadable(pages);
+  if (!textReadable) {
+    console.warn('[hardwarePdf:t2] Extracted text appears garbled (broken font encoding) — skipping AI batches.');
+    return { sets: [], textReadable: false, warnings };
   }
 
   const batches = batchPages(pages, TIER2_BATCH_SIZE);
@@ -464,7 +542,7 @@ async function tier2Extract(
   });
 
   const sets = mergeBatchSets(batchSets);
-  return { sets, warnings };
+  return { sets, textReadable: true, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -474,13 +552,13 @@ async function tier2Extract(
 /**
  * Extract hardware sets from a raw PDF buffer.
  *
- * Tier 1 (primary): sends full PDF as base64 inline to OpenRouter.
- *   - Gemini reads the actual PDF layout natively.
- *   - Used when file ≤ 15 MB.
+ * Tier 1 (primary): server-side pdfjs text extraction + parallel AI batches.
+ *   - Fast, deterministic, cheap — works for all properly-encoded PDFs.
+ *   - Skipped automatically if extracted text is garbled (broken font encoding).
  *
- * Tier 2 (fallback): server-side pdfjs text extraction + parallel AI batches.
- *   - Used when Tier 1 fails or file > 15 MB.
- *   - Position-aware row reconstruction preserves table structure.
+ * Tier 2 (fallback): sends full PDF as base64 inline to OpenRouter (visual).
+ *   - Gemini reads the actual PDF layout natively as an image.
+ *   - Used when Tier 1 text is garbled, when Tier 1 finds 0 sets, or file > 15 MB.
  *
  * @param buffer     Raw PDF bytes
  * @param fileName   Original filename (for metadata and debug output)
@@ -506,35 +584,57 @@ export async function extractHardwareSetsFromPdf(
 
   const client = makeOpenRouterClient(apiKey);
   const fileSizeMb = buffer.length / 1024 / 1024;
-  const useTier1 = buffer.length <= TIER1_SIZE_LIMIT;
 
   let sets: ExtractedHardwareSet[] = [];
   let tier: 1 | 2 = 1;
   let rawTier1 = '';
 
-  if (useTier1) {
-    // ── Tier 1 attempt ────────────────────────────────────────────────────
-    try {
-      const result = await tier1Extract(client, buffer, signal);
-      rawTier1 = result.raw;
-      sets = result.sets;
-      warnings.push(...result.warnings);
+  // ── Tier 1: text extraction ───────────────────────────────────────────────
+  // Try pdfjs text extraction first. If the text is garbled (broken font
+  // encoding) the helper returns textReadable=false and we skip straight to
+  // the visual fallback.
+  try {
+    const t1Result = await tier2Extract(client, buffer, projectId, warnings, signal);
+    warnings.push(...t1Result.warnings);
+    if (t1Result.textReadable) {
+      sets = t1Result.sets;
       tier = 1;
-    } catch (tier1Err) {
-      if (tier1Err instanceof Error && tier1Err.name === 'AbortError') throw tier1Err;
-      const t1Msg = tier1Err instanceof Error ? tier1Err.message : String(tier1Err);
-      warnings.push(`Tier 1 failed: ${t1Msg}`);
-      console.warn(`[hardwarePdf] Tier 1 failed: ${t1Msg} — falling back to Tier 2`);
+      if (sets.length > 0) {
+        console.log(`[hardwarePdf] Tier 1 (text) succeeded — ${sets.length} sets extracted.`);
+      } else {
+        console.warn('[hardwarePdf] Tier 1 (text) produced 0 sets — falling back to visual.');
+      }
+    } else {
+      console.warn('[hardwarePdf] Tier 1 (text) skipped — garbled font encoding detected.');
     }
-  } else {
-    console.warn(`[hardwarePdf] File is ${fileSizeMb.toFixed(1)} MB — exceeds 15 MB Tier 1 limit, using Tier 2 directly.`);
+  } catch (t1Err) {
+    if (t1Err instanceof Error && t1Err.name === 'AbortError') throw t1Err;
+    const msg = t1Err instanceof Error ? t1Err.message : String(t1Err);
+    warnings.push(`Tier 1 (text) failed: ${msg}`);
+    console.warn(`[hardwarePdf] Tier 1 failed: ${msg} — falling back to visual.`);
   }
 
-  // ── Tier 2 fallback (if Tier 1 didn't run, failed, or returned nothing) ──
+  // ── Tier 2: visual fallback ───────────────────────────────────────────────
+  // Used when: text is garbled, text extraction got 0 sets, or file > 15 MB.
+  const canUseVisual = buffer.length <= TIER1_SIZE_LIMIT;
   if (sets.length === 0) {
-    const t2Result = await tier2Extract(client, buffer, projectId, warnings, signal);
-    sets = t2Result.sets;
-    tier = 2;
+    if (!canUseVisual) {
+      console.warn(`[hardwarePdf] File is ${fileSizeMb.toFixed(1)} MB — too large for visual fallback (limit 15 MB).`);
+    } else {
+      try {
+        console.log('[hardwarePdf] Tier 2 (visual) — sending full PDF to Gemini…');
+        const t2Result = await tier1Extract(client, buffer, signal);
+        rawTier1 = t2Result.raw;
+        sets = t2Result.sets;
+        warnings.push(...t2Result.warnings);
+        tier = 2;
+      } catch (t2Err) {
+        if (t2Err instanceof Error && t2Err.name === 'AbortError') throw t2Err;
+        const msg = t2Err instanceof Error ? t2Err.message : String(t2Err);
+        warnings.push(`Tier 2 (visual) failed: ${msg}`);
+        console.warn(`[hardwarePdf] Tier 2 failed: ${msg}`);
+      }
+    }
   }
 
   // ── Surface API-level errors (e.g. 402 insufficient credits) ─────────────

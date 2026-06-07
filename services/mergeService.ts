@@ -332,11 +332,13 @@ export function mergeHardwareData(
     // Whole value didn't match — split comma/and-separated codes and assign the door
     // to every matched set individually, e.g. "P106, P109, P111" → three sets.
     const codes = parseHwSetCodes(hwSetRaw);
+    let anyCodeMatched = false;
     for (const hwSet of codes) {
       const match = matchSetName(hwSet, setIndex, prefixIndex, tokenIndex);
       if (match) {
         doorsBySet.get(match.setName)!.push(toMergedDoor(row, match.setName, scheduleOrder));
         matchedDoorCount++;
+        anyCodeMatched = true;
         if (match.warning) {
           warnings.push(`Door ${row.doorTag}: ${match.warning}`);
         } else if (match.matchType === 'prefix') {
@@ -345,6 +347,11 @@ export function mergeHardwareData(
       } else {
         unmatchedDoorCodes.add(hwSet);
       }
+    }
+    // No PDF set matched at all — preserve the door as unassigned so it still
+    // appears in the output (e.g. hwSet "MFR" for manufacturer-supplied hardware).
+    if (!anyCodeMatched) {
+      unassignedDoors.push(toMergedDoor(row, hwSetRaw, scheduleOrder));
     }
   }
 

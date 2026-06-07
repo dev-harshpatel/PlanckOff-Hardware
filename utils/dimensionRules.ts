@@ -47,6 +47,9 @@ function normalize(name: string): string {
     .replace(/-/g, ' ')            // Weather-Strip → weather strip
     .replace(/\s+/g, ' ')
     .trim()
+    // strip common per-leaf/per-door quantifier suffixes before alias lookup
+    .replace(/[,\s]+(each\s+leaf\s*set|each\s+leafset|each\s+leaf|per\s+leaf|per\s+door|each\s+door|each\s+opening)[^]*$/i, '')
+    .trim()
     .replace(/[.,;:]+$/, '');
 }
 
@@ -68,13 +71,15 @@ const ALIAS_MAP: Record<string, string> = {
   'full surface hinge': 'continuous_hinge',
 
   // Kick Plate / Armor Plate / Mop Plate
-  'kick plate':         'kick_plate',
-  'kick plates':        'kick_plate',
-  'kickplate':          'kick_plate',
-  'kickplates':         'kick_plate',
-  'armor plate':        'kick_plate',
-  'armour plate':       'kick_plate',
-  'mop plate':          'kick_plate',
+  'kick plate':              'kick_plate',
+  'kick plates':             'kick_plate',
+  'kickplate':               'kick_plate',
+  'kickplates':              'kick_plate',
+  'kick plate, each leaf':   'kick_plate',
+  'kick plate each leaf':    'kick_plate',
+  'armor plate':             'kick_plate',
+  'armour plate':            'kick_plate',
+  'mop plate':               'kick_plate',
 
   // Sweep
   'sweep':              'sweep',

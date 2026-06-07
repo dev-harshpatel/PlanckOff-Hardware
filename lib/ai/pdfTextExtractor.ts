@@ -159,6 +159,123 @@ export async function extractPdfText(
   return { pages, pageCount };
 }
 
+// ---------------------------------------------------------------------------
+// PDF → PNG image renderer
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders each page of a PDF to a PNG image using pdfjs's actual rendering
+ * engine (glyph-based, not character-encoding-based). This bypasses broken
+ * font ToUnicode mappings — the output image is what the user sees in a PDF
+ * viewer, regardless of how the font's text extraction is broken.
+ *
+ * Returns an array of base64-encoded PNG strings, one per page.
+ */
+export async function renderPdfToImages(
+  buffer: Buffer,
+  scale = 2.0,
+): Promise<string[]> {
+  const { createCanvas, Path2D } = await import('@napi-rs/canvas');
+
+  // pdfjs calls ctx.clip(path) where path = new Path2D().
+  // In Node.js, global Path2D is undefined, so pdfjs creates a plain object
+  // that @napi-rs/canvas's clip() rejects with "Value is none of these types".
+  // Setting the global to @napi-rs/canvas's Path2D makes pdfjs create the
+  // right type so clip() accepts it.
+  (globalThis as Record<string, unknown>).Path2D = Path2D;
+
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as string);
+
+  const WORKER_SUBPATH = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
+  let workerSrc: string;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (import.meta as any).resolve === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      workerSrc = (import.meta as any).resolve(WORKER_SUBPATH);
+    } else {
+      throw new Error('import.meta.resolve unavailable');
+    }
+  } catch {
+    const { pathToFileURL } = await import('url');
+    const { resolve } = await import('path');
+    workerSrc = pathToFileURL(resolve(process.cwd(), 'node_modules', ...WORKER_SUBPATH.split('/'))).href;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc;
+
+  const uint8 = new Uint8Array(buffer);
+  const pdf = await pdfjsLib.getDocument({
+    data: uint8,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    disableAutoFetch: true,
+  }).promise;
+
+  const images: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const rawViewport = page.getViewport({ scale: 1 });
+    const pdfW = rawViewport.width;
+    const pdfH = rawViewport.height;
+
+    // For large-format architectural sheets (landscape, wider than 1400 pts)
+    // the hardware schedule is a small table in the right portion of the page.
+    // Rendering the full sheet makes that table tiny and hard to read.
+    // Instead: render the right 60% × bottom 65% region at 3× scale so the
+    // table text is legible. For normal-size PDFs, render the full page as usual.
+    const isLargeSheet = pdfW > 1400 && pdfW > pdfH; // landscape A1/A0/custom
+    const renderImages: string[] = [];
+
+    if (isLargeSheet) {
+      // Hardware schedule is in the bottom ~45% of large architectural sheets.
+      // Crop to that region and render at 3× scale so quantities like "2" vs "1"
+      // are clearly readable rather than tiny specks on a full-sheet image.
+      const regionX = 0;
+      const regionW = pdfW * 0.92;   // exclude title block on right edge
+      // PDF y=0 is bottom — bottom 45% means y from 0 to pdfH*0.45
+      const regionH = pdfH * 0.45;
+      const regionY = 0;             // starts at bottom of page (y=0 in PDF coords)
+      const zoomScale = 3.0;
+
+      // offsetY in pdfjs viewport: positive moves content down (shifts page up)
+      // To render only the bottom regionH points: no vertical offset needed —
+      // we clip the canvas to regionH height so only the bottom portion is drawn.
+      const vp = page.getViewport({ scale: zoomScale });
+      const canvasW = Math.round(regionW * zoomScale);
+      const canvasH = Math.round(regionH * zoomScale);
+      const fullH = Math.round(pdfH * zoomScale);
+
+      // Render full page into a tall canvas, then slice the bottom portion
+      const fullCanvas = createCanvas(canvasW, fullH);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fullCtx = fullCanvas.getContext('2d') as any;
+      await page.render({ canvasContext: fullCtx, viewport: vp }).promise;
+
+      // Crop the bottom regionH*scale pixels from the rendered full page
+      const cropCanvas = createCanvas(canvasW, canvasH);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cropCtx = cropCanvas.getContext('2d') as any;
+      cropCtx.drawImage(fullCanvas, 0, fullH - canvasH, canvasW, canvasH, 0, 0, canvasW, canvasH);
+
+      renderImages.push(cropCanvas.toBuffer('image/png').toString('base64'));
+    } else {
+      const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ctx = canvas.getContext('2d') as any;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      renderImages.push(canvas.toBuffer('image/png').toString('base64'));
+    }
+
+    images.push(...renderImages);
+    page.cleanup();
+  }
+
+  return images;
+}
+
 /**
  * Batch extracted pages into groups for AI processing.
  *
