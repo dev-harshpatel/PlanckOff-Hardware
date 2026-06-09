@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { ErrorDisplay } from "@/components/shared/ErrorDisplay";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 function LoginForm() {
   const router = useRouter();
@@ -96,14 +97,12 @@ function LoginForm() {
               >
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="••••••••"
               />
             </div>
