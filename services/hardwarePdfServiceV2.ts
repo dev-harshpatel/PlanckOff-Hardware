@@ -133,6 +133,7 @@ Format E — merged-cell set table (simple hardware schedule, often on architect
   - notes = the door type label from the header row (e.g. "RESTROOM INTERIOR DOOR")
   - Extract EVERY row in the item list — PUSH / PULL, CLOSER, WALL STOP, HINGES, etc. are all valid items
   - IMPORTANT: the quantity "1" may be printed as the letter "I" in some architectural fonts — treat "I" in the quantity column as the integer 1
+  - CRITICAL — TWO-COLUMN DISAMBIGUATION: the merged SET cell on the far left and the QUANTITY column are completely separate columns. The number in the merged SET cell (e.g. "2") is the set identifier only — it is NEVER a quantity. The quantity for each item comes exclusively from the QUANTITY column to the right of the SET cell. If a set is numbered "2" and one of its items also has a quantity of "2", both "2"s are real and independent — do NOT confuse them or drop the item quantity.
 
 COLUMNS — the hardware item table may use different column headers:
   - QTY or Qty → qty (integer, default 1 if blank)
@@ -141,9 +142,15 @@ COLUMNS — the hardware item table may use different column headers:
   - MFR or Manufacturer → manufacturer (abbreviation or full name, e.g. "IVE", "SCH", "LCN", "VON")
   - FINISH or Finish Code → finish (exact code, e.g. "626", "630", "652", "US26D")
 
+FINISH CODE IDENTIFICATION — finish codes are always short 1–5 character uppercase codes: SN, SS, US26D, US32D, US10B, 626, 630, 652, 665, 689, 605, 606, BRZ, OIL, etc.
+  - These short codes ALWAYS go in the \`finish\` field — never in \`description\` or any other field.
+  - If you see "SN" or "SS" appearing in what looks like the DESCRIPTION column, that column IS actually the FINISH column — you have misidentified the column. Correct it.
+  - REMARKS text (long phrases: "FLOOR MOUNTED WHERE NO WALL", "COMMERCIAL GRADE", "BOTH SIDES") is never a finish code — never put remarks text in the \`finish\` field.
+  - When column headers are not visible in the image, identify the FINISH column by its content: short codes only.
+
 RULES:
 - Extract ALL hardware sets/groups — do not skip any.
-- qty must be an integer. Use 1 if not stated. The letter "I" in a quantity cell means 1.
+- qty must be an integer. Use 1 if not stated. The letter "I" in a quantity cell means 1. Any other digit ("2", "3", etc.) in the QUANTITY column is that exact integer — do NOT treat it as the set identifier even if the set has the same number.
 - Preserve catalog numbers and finish codes exactly as written.
 - If a note or special instruction applies to a set, put it in the notes field.
 - Items marked "By Others" — include them, set description to "By Others".
@@ -325,6 +332,7 @@ async function callOpenRouterForSets(
   const response = await client.chat.completions.create({
     model: MODEL,
     temperature: 0,
+    max_tokens: 65536,
     response_format: {
       type: 'json_schema',
       json_schema: {
@@ -447,6 +455,21 @@ async function tier1Extract(
 function isTextReadable(pages: Array<{ text: string }>): boolean {
   const combined = pages.map(p => p.text).join(' ').toUpperCase();
   if (combined.trim().length < 100) return false;
+
+  // Horizontal column-per-group layout: when groups are TABLE COLUMNS (not rows),
+  // pdfjs row reconstruction produces lines like "GROUP #12 GROUP #11 ... GROUP #1"
+  // with all items for every group interleaved on the same lines. The AI cannot
+  // resolve column assignments from this text — force visual fallback instead.
+  const allLines = pages.flatMap(p => p.text.split('\n'));
+  const horizontalGroupLayout = allLines.some(line => {
+    const matches = line.match(/GROUP\s*#?\s*\d+/gi);
+    return matches !== null && matches.length >= 3;
+  });
+  if (horizontalGroupLayout) {
+    console.warn('[hardwarePdf:t2] Horizontal column-per-group layout detected — skipping text extraction, using visual fallback.');
+    return false;
+  }
+
   // These words only appear in hardware schedules, not in garbled
   // architectural drawing notes (glazing, storefront, window types, etc.)
   const indicators = [

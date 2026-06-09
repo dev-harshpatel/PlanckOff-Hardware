@@ -229,37 +229,19 @@ export async function renderPdfToImages(
     const renderImages: string[] = [];
 
     if (isLargeSheet) {
-      // Hardware schedule is in the bottom ~45% of large architectural sheets.
-      // Crop to that region and render at 3× scale so quantities like "2" vs "1"
-      // are clearly readable rather than tiny specks on a full-sheet image.
-      const regionX = 0;
-      const regionW = pdfW * 0.92;   // exclude title block on right edge
-      // PDF y=0 is bottom — bottom 45% means y from 0 to pdfH*0.45
-      const regionH = pdfH * 0.45;
-      const regionY = 0;             // starts at bottom of page (y=0 in PDF coords)
-      const zoomScale = 3.0;
-
-      // offsetY in pdfjs viewport: positive moves content down (shifts page up)
-      // To render only the bottom regionH points: no vertical offset needed —
-      // we clip the canvas to regionH height so only the bottom portion is drawn.
+      // Render the full page at 1.5× scale, excluding the title block column on
+      // the right edge. This gives Gemini a complete view of all hardware groups
+      // with their correct column headers — splitting into tiles caused set-number
+      // collisions and column-mapping errors when tiles lacked header rows.
+      const zoomScale = 1.5;
       const vp = page.getViewport({ scale: zoomScale });
-      const canvasW = Math.round(regionW * zoomScale);
-      const canvasH = Math.round(regionH * zoomScale);
-      const fullH = Math.round(pdfH * zoomScale);
-
-      // Render full page into a tall canvas, then slice the bottom portion
-      const fullCanvas = createCanvas(canvasW, fullH);
+      const canvasW = Math.round(pdfW * 0.92 * zoomScale); // exclude right-edge title block
+      const canvasH = Math.round(pdfH * zoomScale);
+      const canvas = createCanvas(canvasW, canvasH);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fullCtx = fullCanvas.getContext('2d') as any;
-      await page.render({ canvasContext: fullCtx, viewport: vp }).promise;
-
-      // Crop the bottom regionH*scale pixels from the rendered full page
-      const cropCanvas = createCanvas(canvasW, canvasH);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cropCtx = cropCanvas.getContext('2d') as any;
-      cropCtx.drawImage(fullCanvas, 0, fullH - canvasH, canvasW, canvasH, 0, 0, canvasW, canvasH);
-
-      renderImages.push(cropCanvas.toBuffer('image/png').toString('base64'));
+      const ctx = canvas.getContext('2d') as any;
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      renderImages.push(canvas.toBuffer('image/png').toString('base64'));
     } else {
       const viewport = page.getViewport({ scale });
       const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));

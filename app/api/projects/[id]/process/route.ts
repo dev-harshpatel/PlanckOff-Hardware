@@ -149,8 +149,11 @@ export const POST = withProjectAuth(
     }
 
     if (pdfResult.setCount === 0) {
+      const diagInfo = pdfResult.warnings.length > 0
+        ? ` Diagnostics: ${pdfResult.warnings.join(' | ')}`
+        : '';
       return NextResponse.json(
-        { error: 'No hardware sets were found in the PDF. Check that this is a Division 08 hardware schedule PDF.' },
+        { error: `No hardware sets were found in the PDF. Check that this is a Division 08 hardware schedule PDF.${diagInfo}` },
         { status: 422 },
       );
     }

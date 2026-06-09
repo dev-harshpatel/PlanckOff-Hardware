@@ -52,4 +52,9 @@ export const AUTH_ERRORS = {
     message: 'Passwords do not match.',
     action: 'Please re-enter your passwords.',
   },
+  CHANGE_PASSWORD_FAILED: {
+    code: 'AUTH_CHANGE_PASSWORD_FAILED',
+    message: 'Failed to change the password.',
+    action: 'Please try again.',
+  },
 } as const satisfies Record<string, AppError>;

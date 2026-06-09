@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { InviteTeamMemberModal } from '@/components/team/InviteTeamMemberModal';
+import { ChangePasswordModal } from '@/components/team/ChangePasswordModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { RoleName } from '@/types/auth';
@@ -21,6 +22,7 @@ import {
   Check,
   Clock,
   AlertCircle,
+  KeyRound,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -141,12 +143,15 @@ interface ResendFeedback {
 
 export default function TeamPage() {
   const { user } = useAuth();
-  const { canManageTeam } = useRBAC();
+  const { canManageTeam, isAdmin } = useRBAC();
 
   const [members, setMembers] = useState<UnifiedMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDefaultRole, setModalDefaultRole] = useState<RoleName | undefined>();
+
+  // Change password modal state
+  const [changePasswordMember, setChangePasswordMember] = useState<UnifiedMember | null>(null);
 
   // Per-member resend state
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -344,11 +349,12 @@ export default function TeamPage() {
                       ) : (
                         <ul className="divide-y divide-[var(--border-subtle)]">
                           {groupMembers.map(member => {
-                            const isCurrentUser = member.email === user?.email;
-                            const isResending   = resendingId === member.id;
-                            const feedback      = resendFeedback[member.id];
-                            const isCopied      = copiedId === member.id;
-                            const showResend    = canManageTeam && member.status === 'Invited' && member.source === 'team_member';
+                            const isCurrentUser      = member.email === user?.email;
+                            const isResending        = resendingId === member.id;
+                            const feedback           = resendFeedback[member.id];
+                            const isCopied           = copiedId === member.id;
+                            const showResend         = canManageTeam && member.status === 'Invited' && member.source === 'team_member';
+                            const showChangePassword = isAdmin && member.status === 'Active';
 
                             return (
                               <li key={member.id} className="px-5 py-3.5 hover:bg-[var(--bg-subtle)] transition-colors">
@@ -384,6 +390,17 @@ export default function TeamPage() {
                                           : <RotateCcw className="w-3 h-3" />
                                         }
                                         {isResending ? 'Sending…' : 'Resend'}
+                                      </button>
+                                    )}
+
+                                    {showChangePassword && (
+                                      <button
+                                        onClick={() => setChangePasswordMember(member)}
+                                        title="Change password"
+                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                                      >
+                                        <KeyRound className="w-3 h-3" />
+                                        Password
                                       </button>
                                     )}
                                   </div>
@@ -444,6 +461,12 @@ export default function TeamPage() {
         onClose={() => setModalOpen(false)}
         defaultRole={modalDefaultRole}
         onSuccess={fetchMembers}
+      />
+
+      <ChangePasswordModal
+        isOpen={changePasswordMember !== null}
+        member={changePasswordMember}
+        onClose={() => setChangePasswordMember(null)}
       />
     </div>
   );

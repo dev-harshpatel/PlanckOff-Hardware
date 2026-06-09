@@ -203,6 +203,25 @@ export async function updateSessionExpiry(input: {
   }
 }
 
+/**
+ * Delete all active sessions for a user — forces them offline immediately.
+ * Pass source='admin' for admins table users, 'team_member' for team_members.
+ */
+export async function deleteAllSessionsForUser(
+  userId: string,
+  source: 'admin' | 'team_member',
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const column = source === 'admin' ? 'admin_id' : 'team_member_id';
+    const { error } = await db.from('auth_sessions').delete().eq(column, userId);
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
 /** Clean up all expired sessions (called opportunistically on each validateSession). */
 export async function cleanupExpiredSessions(): Promise<void> {
   try {

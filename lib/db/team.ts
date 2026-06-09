@@ -281,6 +281,57 @@ export async function getAllAdmins(): Promise<DbResult<UnifiedMember[]>> {
   }
 }
 
+export interface AdminBasic {
+  id: string;
+  email: string;
+  name: string;
+  role: RoleName;
+  initials: string;
+}
+
+/** Fetch a single admin by id. */
+export async function getAdminById(id: string): Promise<DbResult<AdminBasic>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('admins')
+      .select('id, email, name, role, initials')
+      .eq('id', id)
+      .single();
+
+    if (error) return { data: null, error: { message: error.message } };
+    const row = data as unknown as AdminRow;
+    return {
+      data: {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role as RoleName,
+        initials: row.initials ?? row.name.slice(0, 2).toUpperCase(),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+/** Update password_hash for an admin. */
+export async function updateAdminPasswordHash(id: string, passwordHash: string): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db
+      .from('admins')
+      .update({ password_hash: passwordHash })
+      .eq('id', id);
+
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
 /** Find the role id for a given role name. */
 export async function getRoleIdByName(roleName: string): Promise<DbResult<string>> {
   try {
