@@ -134,10 +134,12 @@ export function useProjectUploads({
     const [pipelineStep, setPipelineStep] = useState(-1);
     const logsEndRef = useRef<HTMLDivElement>(null);
     const logsRef = useRef<ProcessingLogEntry[]>([]);
+    const [combinedActiveDetail, setCombinedActiveDetail] = useState('');
     const [isCombinedOverwriteOpen, setIsCombinedOverwriteOpen] = useState(false);
     const [isCombinedOverwriteChecking, setIsCombinedOverwriteChecking] = useState(false);
     const cancelControllerRef = useRef<AbortController | null>(null);
     const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const stepAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Legacy upload errors
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -151,6 +153,7 @@ export function useProjectUploads({
         setCombinedLogs([]);
         setCombinedProgress(0);
         setCombinedCurrentStep('');
+        setCombinedActiveDetail('');
         setPipelineStep(-1);
         clearWidget();
     };
@@ -544,21 +547,32 @@ export function useProjectUploads({
             form.append('excel', excelFile);
             form.append('pdf', pdfFile);
 
-            let simulatedProgress = 15;
+            // Advance to the AI extraction step after a short delay — door schedule
+            // parsing is fast (~1-2s), so this fires right as AI work begins.
+            stepAdvanceTimerRef.current = setTimeout(() => {
+                stepAdvanceTimerRef.current = null;
+                setPipelineStep(2);
+                const aiMsg = 'AI reading hardware PDF…';
+                setCombinedCurrentStep(aiMsg);
+                addLog('info', 'Door schedule parsed. Sending PDF to AI for hardware extraction…');
+                setWidget({ step: aiMsg });
+            }, 3000);
+
+            // Honest 1-second heartbeat: progress crawls 0.4%/s (15→68% ceiling ≈ 132s max)
+            // so the bar always moves and never freezes at an arbitrary stop point.
+            let elapsedSeconds = 0;
+            let crawlProgress = 15;
             progressTimerRef.current = setInterval(() => {
-                if (simulatedProgress >= 70) { clearInterval(progressTimerRef.current!); return; }
-                simulatedProgress = Math.min(simulatedProgress + 3, 70);
-                setCombinedProgress(simulatedProgress);
-                setWidget({ progress: simulatedProgress });
-                if (simulatedProgress === 21) { addLog('info', 'Parsing door schedule columns and rows…'); setCombinedCurrentStep('Parsing door schedule…'); }
-                if (simulatedProgress === 30) { addLog('success', 'Door schedule processed.'); addLog('info', 'Sending hardware PDF for AI analysis…'); setCombinedCurrentStep('AI reading hardware PDF…'); setPipelineStep(2); }
-                if (simulatedProgress === 36) { addLog('info', 'AI scanning page layouts and tables…'); }
-                if (simulatedProgress === 42) { addLog('info', 'Identifying hardware set boundaries…'); }
-                if (simulatedProgress === 48) { addLog('info', 'AI extracting hardware sets and line items…'); }
-                if (simulatedProgress === 54) { addLog('info', 'Cross-referencing product codes and quantities…'); }
-                if (simulatedProgress === 60) { addLog('info', 'Resolving item descriptions and specifications…'); }
-                if (simulatedProgress === 66) { addLog('info', 'Finalizing hardware data structure…'); }
-            }, 800);
+                elapsedSeconds++;
+                crawlProgress = Math.min(crawlProgress + 0.4, 68);
+                setCombinedProgress(Math.round(crawlProgress));
+                setWidget({ progress: Math.round(crawlProgress) });
+                setCombinedActiveDetail(`Working… ${elapsedSeconds}s`);
+                if (elapsedSeconds === 15) addLog('info', 'AI scanning PDF layouts and table structures…');
+                if (elapsedSeconds === 35) addLog('info', 'Identifying hardware sets and line items…');
+                if (elapsedSeconds === 60) addLog('warn', 'Complex PDF — this can take up to 2 minutes…');
+                if (elapsedSeconds === 90) addLog('warn', 'Almost there — finalising extraction…');
+            }, 1000);
 
             const res = await fetch(`/api/projects/${projectId}/process`, {
                 method: 'POST',
@@ -568,6 +582,8 @@ export function useProjectUploads({
             });
 
             if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+            if (stepAdvanceTimerRef.current) { clearTimeout(stepAdvanceTimerRef.current); stepAdvanceTimerRef.current = null; }
+            setCombinedActiveDetail('');
 
             let json: {
                 data?: {
@@ -698,6 +714,9 @@ export function useProjectUploads({
                 addToast({ type: 'error', message: ERRORS.HARDWARE.PROCESSING_FAILED.message, details: ERRORS.HARDWARE.PROCESSING_FAILED.action });
             }
         } finally {
+            if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+            if (stepAdvanceTimerRef.current) { clearTimeout(stepAdvanceTimerRef.current); stepAdvanceTimerRef.current = null; }
+            setCombinedActiveDetail('');
             setIsCombinedProcessing(false);
             cancelControllerRef.current = null;
             sessionStorage.removeItem(`planckoff_proc_${projectId}`);
@@ -818,6 +837,7 @@ export function useProjectUploads({
         isCombinedProcessing,
         combinedProgress,
         combinedCurrentStep,
+        combinedActiveDetail,
         combinedLogs,
         pipelineStep,
         logsEndRef,

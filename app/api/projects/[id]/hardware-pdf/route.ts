@@ -16,10 +16,10 @@ export const GET = withProjectAuth(
   },
 );
 
-// Gemini native PDF processing can take time for large files
-export const maxDuration = 120;
+// Large PDFs can take up to 5 minutes through Tier 2 text extraction
+export const maxDuration = 300;
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 export const POST = withProjectAuth(
   async (req: NextRequest, ctx: AuthContext, params?: RouteParams) => {
@@ -45,7 +45,7 @@ export const POST = withProjectAuth(
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 20 MB.' },
+        { error: 'File too large. Maximum size is 50 MB.' },
         { status: 413 },
       );
     }

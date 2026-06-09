@@ -72,7 +72,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         doorUploadFile, isDoorUploadModalOpen, setIsDoorUploadModalOpen, setDoorUploadFile,
         isCombinedUploadOpen, isCombinedMinimized, setIsCombinedUploadOpen,
         combinedExcelFile, combinedPdfFile, setCombinedExcelFile, setCombinedPdfFile,
-        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedLogs, logsEndRef, pipelineStep,
+        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedActiveDetail, combinedLogs, logsEndRef, pipelineStep,
         isCombinedOverwriteOpen, setIsCombinedOverwriteOpen, isCombinedOverwriteChecking,
         uploadErrors, isErrorModalOpen, setIsErrorModalOpen,
         validationReport, isValidationModalOpen, setIsValidationModalOpen, validationReportTitle,
@@ -497,7 +497,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                         )}
 
                         {/* Pipeline step loader */}
-                        <PipelineLoader currentStep={pipelineStep} />
+                        <PipelineLoader currentStep={pipelineStep} activeDetail={combinedActiveDetail} />
 
                         {/* Logs panel (shown once processing starts or logs exist) */}
                         {combinedLogs.length > 0 && (

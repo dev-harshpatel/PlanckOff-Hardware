@@ -29,8 +29,8 @@ import { sanitizeText } from '@/lib/db/masterHardware';
 // ---------------------------------------------------------------------------
 
 const MODEL = 'google/gemini-2.5-flash';
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;   // 20 MB hard cap
-const TIER1_SIZE_LIMIT = 15 * 1024 * 1024;       // 15 MB — above this, skip Tier 1
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;   // 50 MB hard cap
+const TIER1_SIZE_LIMIT = 20 * 1024 * 1024;       // 20 MB — above this, skip Tier 1 (raw PDF → Gemini)
 const TIER2_BATCH_SIZE = 10;                      // pages per AI batch in Tier 2
 const TIER2_MAX_CONCURRENT = 4;                   // parallel AI calls in Tier 2
 

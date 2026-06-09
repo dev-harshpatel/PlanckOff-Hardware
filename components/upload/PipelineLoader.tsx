@@ -17,9 +17,11 @@ const MAX_VISIBLE = 4;
 interface PipelineLoaderProps {
   /** 0–5 = active step index, 6 = complete, −1 = hidden */
   currentStep: number;
+  /** Optional live sub-label shown on the currently active step (e.g. "Working… 45s") */
+  activeDetail?: string;
 }
 
-export function PipelineLoader({ currentStep }: PipelineLoaderProps) {
+export function PipelineLoader({ currentStep, activeDetail }: PipelineLoaderProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const isHidden   = currentStep < 0;
@@ -105,7 +107,7 @@ export function PipelineLoader({ currentStep }: PipelineLoaderProps) {
                   {step.label}
                 </p>
                 <p className="text-[11px] text-[var(--text-faint)] mt-0.5 leading-snug">
-                  {step.detail}
+                  {isActive && activeDetail ? activeDetail : step.detail}
                 </p>
               </div>
             </div>

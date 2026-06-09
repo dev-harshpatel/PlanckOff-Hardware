@@ -24,8 +24,8 @@ import type { DoorScheduleResult } from './doorScheduleService';
 // ---------------------------------------------------------------------------
 
 const MODEL = 'google/gemini-2.5-flash';
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-const TIER1_SIZE_LIMIT = 15 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const TIER1_SIZE_LIMIT = 20 * 1024 * 1024;
 const TIER2_BATCH_SIZE = 8; // smaller than hardware PDF — door tables are wide
 const TIER2_MAX_CONCURRENT = 3;
 

@@ -33,10 +33,11 @@ import { invalidateDoorSchedule } from '@/lib/cache/doorSchedule';
 import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
+import { acquireProcessingLock, releaseProcessingLock } from '@/lib/db/processingLock';
 
 export const maxDuration = 300;
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function saveExcelDebugFiles(projectId: string, filename: string, result: DoorScheduleResult): void {
   if (process.env.NODE_ENV !== 'development') return;
@@ -91,12 +92,27 @@ export const POST = withProjectAuth(
     }
 
     if (scheduleField.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Door schedule file too large. Maximum size is 20 MB.' }, { status: 413 });
+      return NextResponse.json({ error: 'Door schedule file too large. Maximum size is 50 MB.' }, { status: 413 });
     }
     if (pdfField.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Hardware PDF too large. Maximum size is 20 MB.' }, { status: 413 });
+      return NextResponse.json({ error: 'Hardware PDF too large. Maximum size is 50 MB.' }, { status: 413 });
     }
 
+    // ── Processing lock ────────────────────────────────────────────────────
+    // Prevents two simultaneous jobs for the same project (e.g. two tabs, page
+    // refresh mid-upload). The lock is always released in the finally block below,
+    // so cancel and error paths never leave a project permanently blocked.
+    const lockId = crypto.randomUUID();
+    const lockResult = await acquireProcessingLock(projectId, lockId);
+    if (lockResult.acquired === false) {
+      const wait = lockResult.ageSeconds > 0 ? ` (started ${lockResult.ageSeconds}s ago)` : '';
+      return NextResponse.json(
+        { error: `This project is already being processed${wait}. Please wait for it to finish or cancel the in-progress job.` },
+        { status: 429 },
+      );
+    }
+
+    try {
     // ── Phase 1: Parse & AI — NO database writes yet ──────────────────────
     // All DB writes are deferred until after all AI work succeeds.
     // This ensures a user cancel during AI leaves the project in its prior state.
@@ -272,5 +288,10 @@ export const POST = withProjectAuth(
         itemCount: pdfResult.itemCount,
       },
     });
+    } finally {
+      // Runs on every exit path: success, validation error, AI error, and user cancel.
+      // This guarantees the project is never permanently locked.
+      await releaseProcessingLock(projectId, lockId);
+    }
   },
 );
