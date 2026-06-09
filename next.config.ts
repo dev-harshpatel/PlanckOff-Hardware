@@ -48,6 +48,14 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '20mb',
     },
+    // pdfjs-dist dynamically loads its worker at runtime via GlobalWorkerOptions.workerSrc.
+    // Vercel's static output file tracing misses it — this forces inclusion in the Lambda bundle.
+    outputFileTracingIncludes: {
+      '/api/**': [
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.js',
+      ],
+    },
   },
 
   webpack: (config) => {
