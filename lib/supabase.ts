@@ -1,7 +1,8 @@
-// Legacy single client — still used by existing services during migration.
+import { createClient } from '@supabase/supabase-js';
+
+// Legacy singleton — used by services that run in both browser and server contexts.
 // New code should use lib/supabase/client.ts (browser) or lib/supabase/server.ts (server).
-// In browser contexts this re-exports the singleton from client.ts to avoid multiple GoTrueClient instances.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-import { createSupabaseBrowserClient } from './supabase/client';
-
-export const supabase = createSupabaseBrowserClient();
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
