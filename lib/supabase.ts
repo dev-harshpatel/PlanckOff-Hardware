@@ -1,15 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-
 // Legacy single client — still used by existing services during migration.
 // New code should use lib/supabase/client.ts (browser) or lib/supabase/server.ts (server).
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// In browser contexts this re-exports the singleton from client.ts to avoid multiple GoTrueClient instances.
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or Key is missing. Check your .env.local setup.');
-}
+import { createSupabaseBrowserClient } from './supabase/client';
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder',
-);
+export const supabase = createSupabaseBrowserClient();

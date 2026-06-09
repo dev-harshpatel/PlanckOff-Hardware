@@ -99,7 +99,14 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
       initialData = {
         name: setToEdit.name, description: setToEdit.description,
         doorTags: setToEdit.doorTags || '', division: setToEdit.division,
-        items: JSON.parse(JSON.stringify(setToEdit.items)),
+        items: (JSON.parse(JSON.stringify(setToEdit.items)) as HardwareItem[]).map((item) => ({
+          ...item,
+          // The modal edits the base description field. Inline edits (DescriptionCell) write
+          // to userDescription instead. Merge userDescription into description here so the
+          // modal shows the value the user actually sees, and saving it persists correctly.
+          description: item.userDescription ?? item.description,
+          userDescription: undefined,
+        })),
         extractionWarnings: setToEdit.extractionWarnings || [],
         isAvailable: setToEdit.isAvailable !== false,
         isManualEntry: setToEdit.isManualEntry === true,
@@ -323,110 +330,124 @@ const HardwareSetModal: React.FC<HardwareSetModalProps> = ({
               </button>
             </div>
 
-            <div ref={itemsContainerRef} className="space-y-2">
-              {formData.items.map((item, index) => {
-                const hasQtyError = itemErrors[item.id]?.quantity;
-                return (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-12 gap-2 items-start rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3"
-                  >
-                    {/* Qty */}
-                    <div className="col-span-2 md:col-span-1">
-                      <input
-                        type="number" placeholder="Qty"
-                        value={item.quantity > 0 ? item.quantity : ''}
-                        onChange={e => handleItemChange(index, 'quantity', e.target.value)}
-                        className={`${inputCls} ${hasQtyError ? 'border-red-500 focus:ring-red-500' : ''}`}
-                      />
-                      {hasQtyError && <p className="mt-0.5 text-[10px] text-red-500">{itemErrors[item.id].quantity}</p>}
-                    </div>
+            <div className="rounded-lg border border-[var(--border)] overflow-visible">
+              {/* Column headers */}
+              <div className="grid gap-2 items-center px-3 py-2 bg-[var(--bg-subtle)] border-b border-[var(--border)] rounded-t-lg" style={{ gridTemplateColumns: '56px 1fr 1fr 140px 130px 36px' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Qty</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Item Name</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Description</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Manufacturer</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">Finish</span>
+                <span />
+              </div>
 
-                    {/* Name */}
-                    <div className="col-span-10 md:col-span-3 relative">
-                      <input
-                        type="text" placeholder="Item Name"
-                        value={item.name}
-                        onChange={e => handleItemChange(index, 'name', e.target.value)}
-                        onFocus={() => setActiveSuggestionBox(`name-${index}`)}
-                        onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        autoComplete="off"
-                        className={inputCls}
-                      />
-                      {activeSuggestionBox === `name-${index}` && item.name && (
-                        <SuggestionBox
-                          direction="up"
-                          suggestions={commonHardwareItems.filter(h => h.toLowerCase().includes(item.name.toLowerCase()) && h.toLowerCase() !== item.name.toLowerCase())}
-                          onSelect={s => { handleItemChange(index, 'name', s); setActiveSuggestionBox(null); }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Description */}
-                    <input
-                      type="text" placeholder="Description"
-                      value={item.description}
-                      onChange={e => handleItemChange(index, 'description', e.target.value)}
-                      className={`${inputCls} col-span-12 md:col-span-3`}
-                    />
-
-                    {/* Manufacturer */}
-                    <div className="col-span-6 md:col-span-2 relative">
-                      <input
-                        type="text" placeholder="Manufacturer"
-                        value={item.manufacturer}
-                        onChange={e => handleItemChange(index, 'manufacturer', e.target.value)}
-                        onFocus={() => setActiveSuggestionBox(`mfr-${index}`)}
-                        onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        autoComplete="off"
-                        className={inputCls}
-                      />
-                      {activeSuggestionBox === `mfr-${index}` && item.manufacturer && (
-                        <SuggestionBox
-                          direction="up"
-                          suggestions={allManufacturers.filter(m => m.toLowerCase().includes(item.manufacturer.toLowerCase()) && m.toLowerCase() !== item.manufacturer.toLowerCase())}
-                          onSelect={s => { handleItemChange(index, 'manufacturer', s); setActiveSuggestionBox(null); }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Finish */}
-                    <div className="col-span-6 md:col-span-2 relative">
-                      <input
-                        type="text" placeholder="Finish"
-                        value={item.finish}
-                        onChange={e => handleItemChange(index, 'finish', e.target.value)}
-                        onFocus={() => setActiveSuggestionBox(`finish-${index}`)}
-                        onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
-                        autoComplete="off"
-                        className={inputCls}
-                      />
-                      {activeSuggestionBox === `finish-${index}` && item.finish && (
-                        <SuggestionBox
-                          direction="up"
-                          suggestions={allFinishes.filter(f => f.toLowerCase().includes(item.finish.toLowerCase()) && f.toLowerCase() !== item.finish.toLowerCase())}
-                          onSelect={s => { handleItemChange(index, 'finish', s); setActiveSuggestionBox(null); }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Delete */}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(index)}
-                      className="col-span-12 md:col-span-1 flex h-9 items-center justify-center rounded-lg text-[var(--text-faint)] hover:bg-[var(--bg)] hover:text-red-500 transition-colors"
+              {/* Item rows */}
+              <div ref={itemsContainerRef}>
+                {formData.items.map((item, index) => {
+                  const hasQtyError = itemErrors[item.id]?.quantity;
+                  return (
+                    <div
+                      key={item.id}
+                      className="grid gap-2 items-start px-3 py-2.5 border-b border-[var(--border)] last:border-0 bg-[var(--bg)] hover:bg-[var(--bg-subtle)] transition-colors"
+                      style={{ gridTemplateColumns: '56px 1fr 1fr 140px 130px 36px' }}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
+                      {/* Qty */}
+                      <div>
+                        <input
+                          type="number" placeholder="Qty"
+                          value={item.quantity > 0 ? item.quantity : ''}
+                          onChange={e => handleItemChange(index, 'quantity', e.target.value)}
+                          className={`${inputCls} ${hasQtyError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                        />
+                        {hasQtyError && <p className="mt-0.5 text-[10px] text-red-500">{itemErrors[item.id].quantity}</p>}
+                      </div>
 
-              {formData.items.length === 0 && (
-                <div className="flex flex-col items-center gap-2 py-8 border border-dashed border-[var(--border)] rounded-lg bg-[var(--bg-subtle)]">
-                  <p className="text-sm text-[var(--text-faint)]">No items yet. Add one to get started.</p>
-                </div>
-              )}
+                      {/* Item Name */}
+                      <div className="relative">
+                        <input
+                          type="text" placeholder="Item Name"
+                          value={item.name}
+                          onChange={e => handleItemChange(index, 'name', e.target.value)}
+                          onFocus={() => setActiveSuggestionBox(`name-${index}`)}
+                          onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
+                          autoComplete="off"
+                          className={inputCls}
+                        />
+                        {activeSuggestionBox === `name-${index}` && item.name && (
+                          <SuggestionBox
+                            direction="up"
+                            suggestions={commonHardwareItems.filter(h => h.toLowerCase().includes(item.name.toLowerCase()) && h.toLowerCase() !== item.name.toLowerCase())}
+                            onSelect={s => { handleItemChange(index, 'name', s); setActiveSuggestionBox(null); }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      <input
+                        type="text" placeholder="Description"
+                        value={item.description}
+                        onChange={e => handleItemChange(index, 'description', e.target.value)}
+                        className={inputCls}
+                      />
+
+                      {/* Manufacturer */}
+                      <div className="relative">
+                        <input
+                          type="text" placeholder="Manufacturer"
+                          value={item.manufacturer}
+                          onChange={e => handleItemChange(index, 'manufacturer', e.target.value)}
+                          onFocus={() => setActiveSuggestionBox(`mfr-${index}`)}
+                          onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
+                          autoComplete="off"
+                          className={inputCls}
+                        />
+                        {activeSuggestionBox === `mfr-${index}` && item.manufacturer && (
+                          <SuggestionBox
+                            direction="up"
+                            suggestions={allManufacturers.filter(m => m.toLowerCase().includes(item.manufacturer.toLowerCase()) && m.toLowerCase() !== item.manufacturer.toLowerCase())}
+                            onSelect={s => { handleItemChange(index, 'manufacturer', s); setActiveSuggestionBox(null); }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Finish */}
+                      <div className="relative">
+                        <input
+                          type="text" placeholder="Finish"
+                          value={item.finish}
+                          onChange={e => handleItemChange(index, 'finish', e.target.value)}
+                          onFocus={() => setActiveSuggestionBox(`finish-${index}`)}
+                          onBlur={() => setTimeout(() => setActiveSuggestionBox(null), 150)}
+                          autoComplete="off"
+                          className={inputCls}
+                        />
+                        {activeSuggestionBox === `finish-${index}` && item.finish && (
+                          <SuggestionBox
+                            direction="up"
+                            suggestions={allFinishes.filter(f => f.toLowerCase().includes(item.finish.toLowerCase()) && f.toLowerCase() !== item.finish.toLowerCase())}
+                            onSelect={s => { handleItemChange(index, 'finish', s); setActiveSuggestionBox(null); }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Delete */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-faint)] hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {formData.items.length === 0 && (
+                  <div className="flex flex-col items-center gap-2 py-8 bg-[var(--bg)] rounded-b-lg">
+                    <p className="text-sm text-[var(--text-faint)]">No items yet. Add one to get started.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
