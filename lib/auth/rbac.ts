@@ -40,7 +40,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Authenticated — all roles
   { path: '/',               minRole: 'Client',    description: 'Dashboard (Client read-only access)' },
   { path: '/project',        minRole: 'Client',    description: 'Project workspace (Client read-only access)' },
-  { path: '/database',       minRole: 'Client',    description: 'Hardware database (Client read-only)' },
+  { path: '/database',       allowedRoles: ['Administrator', 'Team Lead'], description: 'Hardware database (Administrator / Team Lead only)' },
   { path: '/api/auth/me',    minRole: 'Client',    description: 'Current user info (all authenticated users)' },
   { path: '/api/ai',         minRole: 'Estimator', description: 'AI generation routes' },
   { path: '/api/export',     minRole: 'Client',    description: 'Export routes' },
@@ -50,6 +50,10 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // from accessing it even though /api/projects matches as a shorter prefix.
   { path: '/api/projects',       minRole: 'Client',                            description: 'Projects list and workspace (scoped in handler for Client)' },
   { path: '/api/projects/trash', allowedRoles: ['Administrator', 'Team Lead'], description: 'Project trash (Admin/Team Lead only)' },
+
+  // Master hardware catalogue — GET open to all authenticated; mutations restricted
+  { path: '/api/master-hardware/pending/review', allowedRoles: ['Administrator', 'Team Lead'], description: 'Approve/reject pending hardware (Admin/Team Lead only)' },
+  { path: '/api/master-hardware',                allowedRoles: ['Administrator', 'Team Lead'], description: 'Master hardware API (Administrator / Team Lead only)' },
 
   // Team management — Administrator + Team Lead
   { path: '/team',              allowedRoles: ['Administrator', 'Team Lead'], description: 'Team management page' },
