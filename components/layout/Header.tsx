@@ -47,6 +47,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
   const { theme, setTheme } = useTheme();
   const canManageTeam = TEAM_ROLES.includes(user.role);
   const isClient = user.role === 'Client';
+  const canAccessDatabase = user.role === 'Administrator' || user.role === 'Team Lead';
 
   return (
     <header className="bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-40 flex-shrink-0">
@@ -82,7 +83,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
           >
             Dashboard
           </NavLink>
-          {!isClient && (
+          {canAccessDatabase && (
             <NavLink
               isActive={currentPage === 'database'}
               onClick={() => onNavigate('database')}

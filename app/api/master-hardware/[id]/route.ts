@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext, RouteParams } from '@/lib/auth/api-helpers';
 import {
   updateMasterHardwareItem,
@@ -7,8 +7,8 @@ import {
 } from '@/lib/db/masterHardware';
 import { invalidateMasterHardware } from '@/lib/cache/masterHardware';
 
-// PUT /api/master-hardware/[id] — update an item
-export const PUT = withAuth(async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+// PUT /api/master-hardware/[id] — update an item (Administrator / Team Lead only)
+export const PUT = withRoleAuth(['Administrator', 'Team Lead'], async (req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
   const id = params?.id as string;
 
   let body: unknown;
@@ -37,8 +37,8 @@ export const PUT = withAuth(async (req: NextRequest, _ctx: AuthContext, params?:
   return NextResponse.json({ data });
 });
 
-// DELETE /api/master-hardware/[id] — remove an item
-export const DELETE = withAuth(async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+// DELETE /api/master-hardware/[id] — remove an item (Administrator / Team Lead only)
+export const DELETE = withRoleAuth(['Administrator', 'Team Lead'], async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
   const id = params?.id as string;
   const { error } = await deleteMasterHardwareItem(id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

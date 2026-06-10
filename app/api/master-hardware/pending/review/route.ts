@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
 import { reviewPendingBatch } from '@/lib/db/masterHardware';
 import { invalidateMasterHardware } from '@/lib/cache/masterHardware';
 
-// POST /api/master-hardware/pending/review
+// POST /api/master-hardware/pending/review (Administrator / Team Lead only)
 // Body: { ids: string[]; action: 'approve' | 'reject' }
-export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+export const POST = withRoleAuth(['Administrator', 'Team Lead'], async (req: NextRequest, ctx: AuthContext) => {
   let body: unknown;
   try {
     body = await req.json();

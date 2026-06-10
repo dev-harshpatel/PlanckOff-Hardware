@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-helpers';
+import { withAuth, withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
 import {
   getMasterHardwareItemsPaginated,
@@ -43,8 +43,8 @@ export const GET = withAuth(async (req: NextRequest, _ctx: AuthContext) => {
   return NextResponse.json({ data: data?.items ?? [], total: data?.total ?? 0 });
 });
 
-// POST /api/master-hardware — manually create an item
-export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+// POST /api/master-hardware — manually create an item (Administrator / Team Lead only)
+export const POST = withRoleAuth(['Administrator', 'Team Lead'], async (req: NextRequest, ctx: AuthContext) => {
   let body: unknown;
   try {
     body = await req.json();
