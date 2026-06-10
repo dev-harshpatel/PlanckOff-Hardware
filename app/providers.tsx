@@ -16,7 +16,7 @@ interface ProvidersProps {
 /** Wraps the entire app in all global context providers. */
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
       <ToastProvider>
         <AuthProvider>
           <ProjectProvider>

@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { ErrorDisplay } from '@/components/shared/ErrorDisplay';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AUTH_ERRORS, GENERAL_ERRORS } from '@/constants/errors';
 
 interface InviteInfo {
@@ -146,14 +147,12 @@ function SetPasswordForm() {
               <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="Min 8 chars, uppercase, lowercase, number"
               />
             </div>
@@ -162,14 +161,12 @@ function SetPasswordForm() {
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Confirm password
               </label>
-              <input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="block w-full rounded-md border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-faint)] focus:border-[var(--primary-ring)] focus:outline-none focus:ring-1 focus:ring-[var(--primary-ring)]"
                 placeholder="••••••••"
               />
             </div>
