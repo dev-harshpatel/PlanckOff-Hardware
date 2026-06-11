@@ -58,6 +58,13 @@ export const PATCH = withRoleAuth(
       );
     }
 
+    if (member.role === 'Administrator') {
+      return NextResponse.json(
+        { error: 'Administrator accounts cannot be deactivated.' },
+        { status: 403 },
+      );
+    }
+
     const { data, error } = await updateTeamMember(id, { status: nextStatus });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

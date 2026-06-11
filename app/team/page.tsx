@@ -20,6 +20,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Shield,
   Star,
   Users,
@@ -36,6 +42,7 @@ import {
   UserX,
   UserCheck,
   Trash2,
+  ChevronDown,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -259,8 +266,8 @@ export default function TeamPage() {
     }
   };
 
-  const handleToggleStatus = async (member: UnifiedMember) => {
-    const nextStatus = member.status === 'Active' ? 'Inactive' : 'Active';
+  const handleChangeStatus = async (member: UnifiedMember, nextStatus: 'Active' | 'Inactive') => {
+    if (member.status === nextStatus) return;
     setTogglingId(member.id);
     setActionError(prev => {
       const next = { ...prev };
@@ -437,7 +444,7 @@ export default function TeamPage() {
                             const showResend         = canManageTeam && member.status === 'Invited' && member.source === 'team_member';
                             const showChangePassword = isAdmin && member.status === 'Active';
                             const canModerate        = isAdmin && member.source === 'team_member' && !isCurrentUser;
-                            const showStatusToggle   = canModerate && member.status !== 'Invited';
+                            const showStatusDropdown = canModerate && member.status !== 'Invited' && member.role !== 'Administrator';
                             const isToggling         = togglingId === member.id;
                             const memberActionError  = actionError[member.id];
 
@@ -489,25 +496,40 @@ export default function TeamPage() {
                                       </button>
                                     )}
 
-                                    {showStatusToggle && (
-                                      <button
-                                        onClick={() => handleToggleStatus(member)}
-                                        disabled={isToggling}
-                                        title={member.status === 'Active' ? 'Deactivate — blocks login' : 'Activate — restores login'}
-                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-50 disabled:pointer-events-none transition-colors ${
-                                          member.status === 'Active'
-                                            ? 'hover:text-[var(--warning-text)] hover:border-[var(--warning-border)] hover:bg-[var(--warning-bg)]'
-                                            : 'hover:text-[var(--success-text)] hover:border-[var(--success-border)] hover:bg-[var(--success-bg)]'
-                                        }`}
-                                      >
-                                        {isToggling
-                                          ? <Loader2 className="w-3 h-3 animate-spin" />
-                                          : member.status === 'Active'
-                                            ? <UserX className="w-3 h-3" />
-                                            : <UserCheck className="w-3 h-3" />
-                                        }
-                                        {isToggling ? 'Saving…' : member.status === 'Active' ? 'Deactivate' : 'Activate'}
-                                      </button>
+                                    {showStatusDropdown && (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                          disabled={isToggling}
+                                          title="Change status"
+                                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:border-[var(--primary-border)] hover:bg-[var(--primary-bg-hover)] disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                                        >
+                                          {isToggling
+                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                            : <ChevronDown className="w-3 h-3" />
+                                          }
+                                          {isToggling ? 'Saving…' : 'Status'}
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="min-w-[140px]">
+                                          <DropdownMenuItem
+                                            disabled={member.status === 'Active'}
+                                            onClick={() => handleChangeStatus(member, 'Active')}
+                                            className="gap-2 text-xs"
+                                          >
+                                            <UserCheck className="w-3.5 h-3.5 text-[var(--success-text)]" />
+                                            Active
+                                            {member.status === 'Active' && <Check className="w-3 h-3 ml-auto" />}
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            disabled={member.status === 'Inactive'}
+                                            onClick={() => handleChangeStatus(member, 'Inactive')}
+                                            className="gap-2 text-xs"
+                                          >
+                                            <UserX className="w-3.5 h-3.5 text-[var(--warning-text)]" />
+                                            Inactive
+                                            {member.status === 'Inactive' && <Check className="w-3 h-3 ml-auto" />}
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                     )}
 
                                     {canModerate && (

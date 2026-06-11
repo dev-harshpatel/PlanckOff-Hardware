@@ -220,7 +220,7 @@ export function InviteTeamMemberModal({
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. John Doe"
+                placeholder="e.g. James Walker"
                 className="h-11 rounded-lg"
                 disabled={isSubmitting}
               />
@@ -240,7 +240,7 @@ export function InviteTeamMemberModal({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="john@example.com"
+                placeholder="james.walker@company.com"
                 className="h-11 rounded-lg"
                 disabled={isSubmitting}
               />

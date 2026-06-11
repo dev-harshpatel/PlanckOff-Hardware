@@ -270,6 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                                 const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
                                                 const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
+                                                const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 return (
                                                     <tr
                                                         key={project.id}
@@ -301,8 +302,10 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                                                     </span>
                                                                     {assignedMember.name}
                                                                 </span>
-                                                            ) : (
+                                                            ) : canAssign ? (
                                                                 <span className="text-[var(--text-faint)] italic">Unassigned</span>
+                                                            ) : (
+                                                                <span className="text-[var(--text-faint)]">—</span>
                                                             )}
                                                         </td>
                                                         <td className="px-4 py-3">

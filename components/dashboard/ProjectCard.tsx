@@ -184,9 +184,9 @@ export function ProjectCard({
                                 </div>
                                 <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
                             </div>
-                        ) : (
+                        ) : canAssign ? (
                             <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
-                        )}
+                        ) : null}
                         {canAssign && (
                             <div className="relative">
                                 <button
