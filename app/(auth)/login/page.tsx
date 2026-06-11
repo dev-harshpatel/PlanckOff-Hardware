@@ -233,7 +233,14 @@ function LoginForm() {
           <p className="mt-6 text-center text-xs text-[var(--text-faint)]">
             Access is by invitation only.{" "}
             <span className="text-[var(--text-muted)]">
-              Contact your administrator to get started.
+              Contact your administrator at{" "}
+              <a
+                href="mailto:tech@planckoff.com"
+                className="font-medium text-blue-600 hover:underline"
+              >
+                tech@planckoff.com
+              </a>{" "}
+              to get access to the platform.
             </span>
           </p>
         </div>

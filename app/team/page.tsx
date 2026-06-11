@@ -10,6 +10,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { RoleName } from '@/types/auth';
 import type { UnifiedMember } from '@/lib/db/team';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Shield,
   Star,
   Users,
@@ -23,6 +33,9 @@ import {
   Clock,
   AlertCircle,
   KeyRound,
+  UserX,
+  UserCheck,
+  Trash2,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -97,12 +110,21 @@ function Avatar({ initials, role }: { initials: string; role: RoleName }) {
 // Status badge
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status, expiresAt }: { status: 'Active' | 'Invited'; expiresAt: string | null }) {
+function StatusBadge({ status, expiresAt }: { status: 'Active' | 'Invited' | 'Inactive'; expiresAt: string | null }) {
   if (status === 'Active') {
     return (
       <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--success-text)] uppercase tracking-wide bg-[var(--success-bg)] border border-[var(--success-border)] px-2 py-0.5 rounded">
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--success-bg)]0 flex-shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--success-dot)] flex-shrink-0" />
         Active
+      </span>
+    );
+  }
+
+  if (status === 'Inactive') {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide bg-[var(--bg-muted)] border border-[var(--border)] px-2 py-0.5 rounded">
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] flex-shrink-0" />
+        Inactive
       </span>
     );
   }
@@ -157,6 +179,12 @@ export default function TeamPage() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendFeedback, setResendFeedback] = useState<Record<string, ResendFeedback>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Admin-only moderation state (activate/deactivate + delete)
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<UnifiedMember | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionError, setActionError] = useState<Record<string, string>>({});
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -228,6 +256,59 @@ export default function TeamPage() {
       }));
     } finally {
       setResendingId(null);
+    }
+  };
+
+  const handleToggleStatus = async (member: UnifiedMember) => {
+    const nextStatus = member.status === 'Active' ? 'Inactive' : 'Active';
+    setTogglingId(member.id);
+    setActionError(prev => {
+      const next = { ...prev };
+      delete next[member.id];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/team/members/${member.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to update status.');
+      await fetchMembers();
+    } catch (err) {
+      setActionError(prev => ({
+        ...prev,
+        [member.id]: err instanceof Error ? err.message : 'Failed to update status.',
+      }));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
+    const member = memberToDelete;
+    setIsDeleting(true);
+
+    try {
+      const res = await fetch(`/api/team/members/${member.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to remove member.');
+      await fetchMembers();
+    } catch (err) {
+      setActionError(prev => ({
+        ...prev,
+        [member.id]: err instanceof Error ? err.message : 'Failed to remove member.',
+      }));
+    } finally {
+      setIsDeleting(false);
+      setMemberToDelete(null);
     }
   };
 
@@ -355,6 +436,10 @@ export default function TeamPage() {
                             const isCopied           = copiedId === member.id;
                             const showResend         = canManageTeam && member.status === 'Invited' && member.source === 'team_member';
                             const showChangePassword = isAdmin && member.status === 'Active';
+                            const canModerate        = isAdmin && member.source === 'team_member' && !isCurrentUser;
+                            const showStatusToggle   = canModerate && member.status !== 'Invited';
+                            const isToggling         = togglingId === member.id;
+                            const memberActionError  = actionError[member.id];
 
                             return (
                               <li key={member.id} className="px-5 py-3.5 hover:bg-[var(--bg-subtle)] transition-colors">
@@ -403,8 +488,49 @@ export default function TeamPage() {
                                         Password
                                       </button>
                                     )}
+
+                                    {showStatusToggle && (
+                                      <button
+                                        onClick={() => handleToggleStatus(member)}
+                                        disabled={isToggling}
+                                        title={member.status === 'Active' ? 'Deactivate — blocks login' : 'Activate — restores login'}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] disabled:opacity-50 disabled:pointer-events-none transition-colors ${
+                                          member.status === 'Active'
+                                            ? 'hover:text-[var(--warning-text)] hover:border-[var(--warning-border)] hover:bg-[var(--warning-bg)]'
+                                            : 'hover:text-[var(--success-text)] hover:border-[var(--success-border)] hover:bg-[var(--success-bg)]'
+                                        }`}
+                                      >
+                                        {isToggling
+                                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                                          : member.status === 'Active'
+                                            ? <UserX className="w-3 h-3" />
+                                            : <UserCheck className="w-3 h-3" />
+                                        }
+                                        {isToggling ? 'Saving…' : member.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                      </button>
+                                    )}
+
+                                    {canModerate && (
+                                      <button
+                                        onClick={() => setMemberToDelete(member)}
+                                        title="Remove this member from the platform"
+                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--error-text)] hover:border-[var(--error-border)] hover:bg-[var(--error-bg)] transition-colors"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        Delete
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
+
+                                {memberActionError && (
+                                  <div className="mt-2 ml-[52px]">
+                                    <p className="text-xs text-[var(--error-text)] flex items-center gap-1">
+                                      <AlertCircle className="w-3 h-3" />
+                                      {memberActionError}
+                                    </p>
+                                  </div>
+                                )}
 
                                 {/* Feedback row — shown below the member row */}
                                 {feedback && (
@@ -468,6 +594,43 @@ export default function TeamPage() {
         member={changePasswordMember}
         onClose={() => setChangePasswordMember(null)}
       />
+
+      <AlertDialog
+        open={memberToDelete !== null}
+        onOpenChange={(open) => { if (!open && !isDeleting) setMemberToDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove team member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove{' '}
+              <span className="font-semibold text-[var(--text)]">
+                {memberToDelete?.name}
+              </span>{' '}
+              ({memberToDelete?.email}) from the platform and sign them out
+              immediately. This cannot be undone. If you only want to block
+              their access temporarily, use Deactivate instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDeleteMember(); }}
+              disabled={isDeleting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Removing…
+                </span>
+              ) : (
+                'Remove Member'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
