@@ -40,6 +40,33 @@ export interface SendInviteEmailInput {
  * @returns `{ error: null }` on success or `{ error: string }` on failure.
  *   Callers should check `error` rather than catching — this function never throws.
  */
+type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+function isEmailExistsError(error: { code?: string; message: string }): boolean {
+  return (
+    error.code === 'email_exists' ||
+    /already.*registered/i.test(error.message)
+  );
+}
+
+/**
+ * Find a Supabase Auth user id by email. The admin API has no direct
+ * email lookup, so we paginate listUsers — team sizes here are small,
+ * so this normally resolves on the first page.
+ */
+async function findAuthUserIdByEmail(db: AdminClient, email: string): Promise<string | null> {
+  const target = email.toLowerCase();
+  const perPage = 1000;
+  for (let page = 1; ; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage });
+    if (error) return null;
+    const users: Array<{ id: string; email?: string | null }> = data.users;
+    const match = users.find((u) => u.email?.toLowerCase() === target);
+    if (match) return match.id;
+    if (users.length < perPage) return null;
+  }
+}
+
 export async function sendInviteEmail(
   input: SendInviteEmailInput,
 ): Promise<{ error: string | null }> {
@@ -48,12 +75,32 @@ export async function sendInviteEmail(
 
   try {
     const db = createSupabaseAdminClient();
-    const { error } = await db.auth.admin.inviteUserByEmail(toEmail, {
+    const inviteOptions = {
       redirectTo,
       data: { name: toName, role, inviterName: inviterName ?? '' },
-    });
-    if (error) return { error: error.message };
-    return { error: null };
+    };
+
+    const { error } = await db.auth.admin.inviteUserByEmail(toEmail, inviteOptions);
+    if (!error) return { error: null };
+
+    // Resend case: the first invite already created this user in Supabase
+    // Auth, and inviteUserByEmail refuses emails that already exist there.
+    // The auth user is only an email-delivery vehicle (login uses our own
+    // team_members table), so delete it and invite again to send a fresh
+    // copy of the same invitation email.
+    if (isEmailExistsError(error)) {
+      const existingId = await findAuthUserIdByEmail(db, toEmail);
+      if (!existingId) return { error: error.message };
+
+      const { error: deleteError } = await db.auth.admin.deleteUser(existingId);
+      if (deleteError) return { error: deleteError.message };
+
+      const { error: retryError } = await db.auth.admin.inviteUserByEmail(toEmail, inviteOptions);
+      if (retryError) return { error: retryError.message };
+      return { error: null };
+    }
+
+    return { error: error.message };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }

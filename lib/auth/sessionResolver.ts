@@ -42,6 +42,15 @@ export async function resolveSessionFromToken(
 
   const { session, user, teamMember } = data;
 
+  // A team member who is no longer Active (e.g. deactivated by an admin)
+  // must not keep a working session, even if the row wasn't cleaned up.
+  if (teamMember && teamMember.status !== 'Active') {
+    if (cleanupExpired) {
+      await deleteSessionById(session.id);
+    }
+    return null;
+  }
+
   // Check expiry
   if (isSessionExpired(session.expires_at)) {
     if (cleanupExpired) {

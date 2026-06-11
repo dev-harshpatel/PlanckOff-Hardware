@@ -63,7 +63,7 @@ function toTeamMemberWithRole(row: TeamMemberRow): TeamMemberWithRole {
     name: row.name,
     roleId: row.role_id,
     role: (row.roles?.name ?? 'Estimator') as RoleName,
-    status: row.status as 'Active' | 'Invited',
+    status: row.status as 'Active' | 'Invited' | 'Inactive',
     initials: row.initials ?? '',
     invitedBy: row.invited_by,
     inviteToken: row.invite_token,

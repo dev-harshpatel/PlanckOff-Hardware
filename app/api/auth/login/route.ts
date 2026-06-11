@@ -55,6 +55,12 @@ export async function POST(request: NextRequest) {
   const { data: member } = await getTeamMemberByEmail(email);
 
   if (member) {
+    if (member.status === 'Inactive') {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Contact your administrator.' },
+        { status: 403 },
+      );
+    }
     if (member.status !== 'Active') {
       return NextResponse.json(
         { error: 'Invalid email or password.' },

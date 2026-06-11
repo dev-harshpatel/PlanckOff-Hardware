@@ -7,7 +7,7 @@ export interface TeamMember {
   email: string;
   name: string;
   roleId: string;
-  status: 'Active' | 'Invited';
+  status: 'Active' | 'Invited' | 'Inactive';
   initials: string;
   invitedBy: string | null;
   inviteToken: string | null;

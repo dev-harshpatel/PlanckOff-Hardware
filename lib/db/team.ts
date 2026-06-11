@@ -31,7 +31,7 @@ function toTeamMember(row: TeamMemberRow): TeamMember {
     email: row.email,
     name: row.name,
     roleId: row.role_id,
-    status: row.status as 'Active' | 'Invited',
+    status: row.status as 'Active' | 'Invited' | 'Inactive',
     initials: row.initials ?? '',
     invitedBy: row.invited_by,
     inviteToken: row.invite_token,
@@ -240,7 +240,7 @@ export interface UnifiedMember {
   name: string;
   initials: string;
   role: RoleName;
-  status: 'Active' | 'Invited';
+  status: 'Active' | 'Invited' | 'Inactive';
   source: 'admin' | 'team_member';
   inviteExpiresAt: string | null;
 }

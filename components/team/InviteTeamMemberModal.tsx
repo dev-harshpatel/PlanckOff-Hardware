@@ -4,7 +4,17 @@ import { useState, useEffect, useMemo } from "react";
 import { useRBAC } from "@/hooks/useRBAC";
 import { getInvitableRoles } from "@/constants/roles";
 import type { RoleName } from "@/types/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { ERRORS } from "@/constants/errors";
 import { ErrorDisplay } from "@/components/shared/ErrorDisplay";
-import { Search } from "lucide-react";
+import { Search, Send } from "lucide-react";
 
 interface ProjectOption {
   id: string;
@@ -120,8 +130,6 @@ export function InviteTeamMemberModal({
     );
   };
 
-  if (!isOpen) return null;
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -182,187 +190,186 @@ export function InviteTeamMemberModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !isSubmitting) onClose();
+      }}
     >
-      <div className="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 pt-8 pb-6 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">
-            Invite Team Member
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
-            aria-label="Close"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+      <DialogContent className="max-w-lg overflow-hidden p-0">
+        <form onSubmit={handleSubmit} className="flex max-h-[90vh] flex-col">
+          <DialogHeader className="border-b border-[var(--border-subtle)] px-6 py-5">
+            <DialogTitle className="text-xl">Invite Team Member</DialogTitle>
+            <DialogDescription>
+              Send an invitation email with a link to set their password.
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Scrollable body */}
-        <form
-          onSubmit={handleSubmit}
-          className="px-8 pb-8 space-y-5 overflow-y-auto flex-1"
-        >
-          {/* Full Name */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Full Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. John Doe"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-green-500 transition"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Email Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="john@example.com"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-green-500 transition"
-            />
-          </div>
-
-          {/* Role */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Role
-            </label>
-            <Select value={role} onValueChange={(v) => setRole(v as RoleName)}>
-              <SelectTrigger className="w-full h-12 rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {invitableRoles.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Project assignment — only shown for Client role */}
-          {role === "Client" && (
+          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            {/* Full Name */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Assign Projects <span className="text-red-500">*</span>
-              </label>
+              <Label
+                htmlFor="invite-name"
+                className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]"
+              >
+                Full Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="text"
+                id="invite-name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. John Doe"
+                className="h-11 rounded-lg"
+                disabled={isSubmitting}
+              />
+            </div>
 
-              {/* Search */}
-              <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={projectSearch}
-                  onChange={(e) => setProjectSearch(e.target.value)}
-                  placeholder="Search projects…"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-green-500 transition"
-                />
-              </div>
+            {/* Email */}
+            <div>
+              <Label
+                htmlFor="invite-email"
+                className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]"
+              >
+                Email Address <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="email"
+                id="invite-email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="h-11 rounded-lg"
+                disabled={isSubmitting}
+              />
+            </div>
 
-              {/* Project list */}
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                {isLoadingProjects ? (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400">
-                    Loading projects…
+            {/* Role */}
+            <div>
+              <Label
+                htmlFor="invite-role"
+                className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]"
+              >
+                Role
+              </Label>
+              <Select
+                value={role}
+                onValueChange={(v) => setRole(v as RoleName)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger id="invite-role" className="h-11 w-full rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {invitableRoles.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Project assignment — only shown for Client role */}
+            {role === "Client" && (
+              <div>
+                <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                  Assign Projects <span className="text-red-500">*</span>
+                </Label>
+
+                {/* Search */}
+                <div className="relative mb-2">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <Search className="h-4 w-4 text-[var(--text-faint)]" />
                   </div>
-                ) : filteredProjects.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400">
-                    {projects.length === 0
-                      ? "No projects found."
-                      : "No matches for your search."}
-                  </div>
-                ) : (
-                  <ul className="max-h-48 overflow-y-auto divide-y divide-gray-100">
-                    {filteredProjects.map((project) => {
-                      const checked = selectedProjectIds.includes(project.id);
-                      return (
-                        <li key={project.id}>
-                          <label className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleProject(project.id)}
-                              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 focus:ring-offset-0 cursor-pointer flex-shrink-0"
-                            />
-                            <span className="flex-1 min-w-0">
-                              <span className="block text-sm font-medium text-gray-900 truncate">
-                                {project.name}
-                              </span>
-                              {project.location && (
-                                <span className="block text-xs text-gray-400 truncate">
-                                  {project.location}
+                  <Input
+                    type="text"
+                    value={projectSearch}
+                    onChange={(e) => setProjectSearch(e.target.value)}
+                    placeholder="Search projects…"
+                    className="rounded-lg pl-9"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* Project list */}
+                <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+                  {isLoadingProjects ? (
+                    <div className="px-4 py-6 text-center text-sm text-[var(--text-faint)]">
+                      Loading projects…
+                    </div>
+                  ) : filteredProjects.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-[var(--text-faint)]">
+                      {projects.length === 0
+                        ? "No projects found."
+                        : "No matches for your search."}
+                    </div>
+                  ) : (
+                    <ul className="max-h-48 divide-y divide-[var(--border-subtle)] overflow-y-auto">
+                      {filteredProjects.map((project) => {
+                        const checked = selectedProjectIds.includes(project.id);
+                        return (
+                          <li key={project.id}>
+                            <label className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--bg-subtle)]">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleProject(project.id)}
+                                className="h-4 w-4 flex-shrink-0 cursor-pointer rounded border-[var(--border-strong)] accent-[var(--primary-action)] focus:ring-[var(--primary-ring)] focus:ring-offset-0"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-[var(--text)]">
+                                  {project.name}
                                 </span>
-                              )}
-                            </span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                                {project.location && (
+                                  <span className="block truncate text-xs text-[var(--text-faint)]">
+                                    {project.location}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Selection count */}
+                {selectedProjectIds.length > 0 && (
+                  <p className="mt-1.5 text-xs font-medium text-[var(--primary-text)]">
+                    {selectedProjectIds.length} project
+                    {selectedProjectIds.length !== 1 ? "s" : ""} selected
+                  </p>
                 )}
               </div>
+            )}
 
-              {/* Selection count */}
-              {selectedProjectIds.length > 0 && (
-                <p className="mt-1.5 text-xs text-green-700 font-medium">
-                  {selectedProjectIds.length} project
-                  {selectedProjectIds.length !== 1 ? "s" : ""} selected
+            <p className="text-sm leading-relaxed text-[var(--text-muted)]">
+              If this email already has a pending invitation, sending again
+              will resend it and refresh the expiry.
+            </p>
+
+            {error && <ErrorDisplay error={error} />}
+
+            {successMsg && (
+              <div className="rounded-lg border border-[var(--success-border)] bg-[var(--success-bg)] px-4 py-3">
+                <p className="whitespace-pre-line text-sm text-[var(--success-text)]">
+                  {successMsg}
                 </p>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
-          <p className="text-sm text-gray-500 leading-relaxed">
-            An invitation email will be sent to this address with a link to set
-            their password.
-            <br />
-            If this email already has a pending invitation, sending again will
-            resend it and refresh the expiry.
-          </p>
-
-          {error && <ErrorDisplay error={error} />}
-
-          {successMsg && (
-            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
-              <p className="text-sm text-green-700 whitespace-pre-line">
-                {successMsg}
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-2">
+          <DialogFooter className="border-t border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-6 py-4 sm:justify-between">
             <Button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               variant="outline"
-              className="flex-1 rounded-xl border-gray-200"
+              className="min-w-[112px]"
             >
               Cancel
             </Button>
@@ -371,26 +378,14 @@ export function InviteTeamMemberModal({
               disabled={isSubmitting}
               loading={isSubmitting}
               loadingText="Sending Invitation..."
-              className="flex-1 rounded-xl bg-green-700 hover:bg-green-800"
+              className="min-w-[160px]"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
+              <Send className="h-4 w-4" />
               Send / Resend Invitation
             </Button>
-          </div>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
