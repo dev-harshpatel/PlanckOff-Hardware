@@ -461,10 +461,11 @@ export interface Project {
   hardwareSets?: HardwareSet[];
   doors?: Door[];
   assignedTo?: string; // Team Member ID
+  clientIds?: string[]; // IDs of clients who have access to this project
   deletedAt?: string;  // ISO string — present only for trashed projects
 }
 
-export type ProjectStatus = 'Active' | 'Under Review' | 'Submitted' | 'On Hold' | 'Complete' | 'Archived';
+export type ProjectStatus = 'Active' | 'Under Review' | 'Submitted' | 'Client' | 'On Hold' | 'Complete' | 'Archived';
 
 export type NoteTab = 'hardware' | 'door' | 'frame';
 

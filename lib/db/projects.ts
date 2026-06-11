@@ -23,6 +23,7 @@ interface ProjectRow {
   created_at: string;
   updated_at: string;
   elevation_types: ElevationType[] | null;
+  client_project_assignments?: { client_id: string }[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,7 @@ function toProject(row: ProjectRow): Project {
     status: (row.status as Project['status']) ?? 'Active',
     dueDate: row.due_date ?? undefined,
     assignedTo: row.assigned_to ?? undefined,
+    clientIds: (row.client_project_assignments ?? []).map((a) => a.client_id),
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     lastModified: row.updated_at,
@@ -58,7 +60,8 @@ type DbResult<T> = { data: T | null; error: { message: string } | null };
 
 const BASE_SELECT = `
   id, name, client, location, country, province, description, project_number, status,
-  due_date, assigned_to, deleted_at, created_by, created_at, updated_at, elevation_types
+  due_date, assigned_to, deleted_at, created_by, created_at, updated_at, elevation_types,
+  client_project_assignments(client_id)
 `;
 
 export async function getProjectsForClient(clientId: string): Promise<DbResult<Project[]>> {

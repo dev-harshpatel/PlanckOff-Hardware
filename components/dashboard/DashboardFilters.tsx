@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import SelectDropdown from '@/components/ui/select-dropdown';
+import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Search, Filter, LayoutGrid, List } from 'lucide-react';
 
 export interface DashboardFiltersProps {
@@ -9,7 +9,7 @@ export interface DashboardFiltersProps {
     onSearchChange: (q: string) => void;
     selectedMemberFilter: string;
     onMemberFilterChange: (value: string) => void;
-    memberFilterOptions: Array<{ value: string; label: string }>;
+    memberFilterOptions: SearchableSelectOption[];
     isLoadingTeamMembers: boolean;
     viewMode: 'grid' | 'list';
     onViewModeChange: (mode: 'grid' | 'list') => void;
@@ -40,16 +40,19 @@ export function DashboardFilters({
                 />
             </div>
             {showMemberFilter && (
-                <div className="relative min-w-[200px]">
-                    <Filter className="absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)] pointer-events-none" />
-                    <SelectDropdown
+                <div className="relative min-w-[220px]">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
+                        <Filter className="h-3.5 w-3.5 text-[var(--text-faint)]" />
+                    </div>
+                    <SearchableSelect
                         value={selectedMemberFilter}
                         onChange={onMemberFilterChange}
                         options={memberFilterOptions}
+                        placeholder="All Members"
+                        searchPlaceholder="Search members…"
+                        header="Filter by Member"
                         disabled={isLoadingTeamMembers}
-                        className="w-full"
-                        triggerClassName="border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 hover:bg-[var(--bg-subtle)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        contentClassName="mt-1"
+                        className="pl-9"
                     />
                 </div>
             )}

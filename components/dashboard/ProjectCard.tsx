@@ -29,6 +29,7 @@ const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     Active:         { text: 'text-[var(--success-text)]', bg: 'bg-[var(--success-bg)]', dot: 'bg-[var(--success-dot)]' },
     'Under Review': { text: 'text-[var(--warning-text)]', bg: 'bg-[var(--warning-bg)]', dot: 'bg-[var(--warning-dot)]' },
     Submitted:      { text: 'text-[var(--primary-text)]', bg: 'bg-[var(--primary-bg)]', dot: 'bg-[var(--primary-action)]' },
+    Client:         { text: 'text-teal-700',               bg: 'bg-teal-50',              dot: 'bg-teal-400' },
     'On Hold':      { text: 'text-[var(--text-muted)]',   bg: 'bg-[var(--bg-muted)]',   dot: 'bg-[var(--text-faint)]' },
     Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
 };
@@ -40,6 +41,7 @@ export interface ProjectCardProps {
     onEdit: (project: Project) => void;
     onDelete: (id: string) => void;
     onAssignClient?: (clientId: string) => Promise<void>;
+    onUnassignClient?: (clientId: string) => Promise<void>;
     userRole: RoleName;
     teamMembers: TeamMember[];
     draggable?: boolean;
@@ -55,6 +57,7 @@ export function ProjectCard({
     onEdit,
     onDelete,
     onAssignClient,
+    onUnassignClient,
     userRole,
     teamMembers,
     draggable = false,
@@ -81,6 +84,10 @@ export function ProjectCard({
     // Separate staff (estimator-assignable) from client members
     const staffMembers = teamMembers.filter(m => (m.role as string) !== 'Client');
     const clientMembers = teamMembers.filter(m => (m.role as string) === 'Client');
+    // Clients who have access to this project
+    const assignedClients = project.clientIds?.length
+        ? teamMembers.filter(m => project.clientIds!.includes(m.id))
+        : [];
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
@@ -103,11 +110,29 @@ export function ProjectCard({
         }
     };
 
-    const handleAssignClient = async (clientId: string) => {
-        if (!onAssignClient) return;
+    const handleUnassignEstimator = async () => {
+        try {
+            setIsAssigning(true);
+            const hasClient = (project.clientIds?.length ?? 0) > 0;
+            // Pass assignedTo: '' so the db layer converts it to null (undefined is skipped)
+            await onSave({
+                ...project,
+                assignedTo: '',
+                status: hasClient ? project.status : 'Active',
+            });
+            setShowAssignMenu(false);
+        } finally {
+            setIsAssigning(false);
+        }
+    };
+
+    const handleClientToggle = async (clientId: string) => {
+        const isAssigned = project.clientIds?.includes(clientId) ?? false;
+        const callback = isAssigned ? onUnassignClient : onAssignClient;
+        if (!callback) return;
         try {
             setIsAssigningClient(true);
-            await onAssignClient(clientId);
+            await callback(clientId);
             setShowClientMenu(false);
         } finally {
             setIsAssigningClient(false);
@@ -154,6 +179,12 @@ export function ProjectCard({
                     onDragEnd?.();
                 }}
             >
+                {/* Status dot — top-right corner, fades on hover to reveal action buttons */}
+                <div
+                    className={`absolute top-3 right-3 w-2 h-2 rounded-full transition-opacity group-hover:opacity-0 ${statusStyle.dot}`}
+                    title={project.status || 'Active'}
+                />
+
                 {/* Card header */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
@@ -196,75 +227,87 @@ export function ProjectCard({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2 min-w-0" ref={assignMenuRef}>
-                        {userRole !== 'Client' && (<>
-                        {assignedMember ? (
-                            <div className="flex items-center gap-1.5 min-w-0">
-                                <div className="w-5 h-5 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                    {assignedMember.name.charAt(0)}
-                                </div>
-                                <span className="text-xs text-[var(--text-muted)] truncate max-w-[100px]">{assignedMember.name}</span>
-                            </div>
-                        ) : canAssign ? (
-                            <span className="text-xs text-[var(--text-faint)] italic">Unassigned</span>
-                        ) : null}
-                        {canAssign && (
-                            <div className="relative">
-                                <button
-                                    ref={assignBtnRef}
-                                    onClick={(e) => { e.stopPropagation(); setShowClientMenu(false); setShowAssignMenu(!showAssignMenu); }}
-                                    disabled={isAssigning}
-                                    title="Assign estimator"
-                                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
-                                >
-                                    <UserPlus className="w-3 h-3" />
-                                    Assign
-                                </button>
-                                {showAssignMenu && (
-                                    <AssignDropdown
-                                        triggerRef={assignBtnRef}
-                                        members={staffMembers}
-                                        selectedId={project.assignedTo}
-                                        onSelect={(id) => handleAssign(id)}
-                                        onUnassign={() => handleAssign('')}
-                                        isLoading={isAssigning}
-                                        header="Assign To"
-                                        searchPlaceholder="Search team members…"
-                                    />
+                <div className="flex items-center gap-2 pt-2 border-t border-[var(--border-subtle)]" ref={assignMenuRef}>
+                    {userRole !== 'Client' && (<>
+                    {canAssign && (
+                        <div className="relative">
+                            <button
+                                ref={assignBtnRef}
+                                onClick={(e) => { e.stopPropagation(); setShowClientMenu(false); setShowAssignMenu(!showAssignMenu); }}
+                                disabled={isAssigning}
+                                title="Assign estimator"
+                                className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
+                            >
+                                {assignedMember ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full bg-[var(--primary-bg-hover)] text-[var(--primary-text)] flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+                                            {assignedMember.name.charAt(0)}
+                                        </div>
+                                        <span className="truncate max-w-[64px]">{assignedMember.name}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <UserPlus className="w-3 h-3" />
+                                        Assign
+                                    </>
                                 )}
-                            </div>
-                        )}
-                        {canAssign && onAssignClient && clientMembers.length > 0 && (
-                            <div className="relative">
-                                <button
-                                    ref={clientBtnRef}
-                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(false); setShowClientMenu(!showClientMenu); }}
-                                    disabled={isAssigningClient}
-                                    title="Assign client access"
-                                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] transition-colors disabled:opacity-50"
-                                >
-                                    <Users className="w-3 h-3" />
-                                    Clients
-                                </button>
-                                {showClientMenu && (
-                                    <AssignDropdown
-                                        triggerRef={clientBtnRef}
-                                        members={clientMembers}
-                                        onSelect={(id) => handleAssignClient(id)}
-                                        isLoading={isAssigningClient}
-                                        header="Add Client Access"
-                                        searchPlaceholder="Search clients…"
-                                    />
+                            </button>
+                            {showAssignMenu && (
+                                <AssignDropdown
+                                    triggerRef={assignBtnRef}
+                                    members={staffMembers}
+                                    selectedId={project.assignedTo}
+                                    onSelect={(id) => handleAssign(id)}
+                                    onUnassign={project.assignedTo ? handleUnassignEstimator : undefined}
+                                    isLoading={isAssigning}
+                                    header="Assign To"
+                                    searchPlaceholder="Search team members…"
+                                />
+                            )}
+                        </div>
+                    )}
+                    {canAssign && onAssignClient && clientMembers.length > 0 && (
+                        <div className="relative">
+                            <button
+                                ref={clientBtnRef}
+                                onClick={(e) => { e.stopPropagation(); setShowAssignMenu(false); setShowClientMenu(!showClientMenu); }}
+                                disabled={isAssigningClient}
+                                title="Manage client access"
+                                className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${assignedClients.length > 0 ? 'text-blue-600 hover:bg-blue-50' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
+                            >
+                                {assignedClients.length > 0 ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+                                            {assignedClients[0].name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="truncate max-w-[64px]">{assignedClients[0].name}</span>
+                                        {assignedClients.length > 1 && (
+                                            <span className="flex-shrink-0 text-[9px] font-bold bg-blue-100 text-blue-600 rounded-full px-1">
+                                                +{assignedClients.length - 1}
+                                            </span>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Users className="w-3 h-3" />
+                                        Clients
+                                    </>
                                 )}
-                            </div>
-                        )}
+                            </button>
+                            {showClientMenu && (
+                                <AssignDropdown
+                                    triggerRef={clientBtnRef}
+                                    members={clientMembers}
+                                    selectedIds={project.clientIds ?? []}
+                                    onSelect={handleClientToggle}
+                                    isLoading={isAssigningClient}
+                                    header="Client Access"
+                                    searchPlaceholder="Search clients…"
+                                />
+                            )}
+                        </div>
+                    )}
                     </>)}
-                    </div>
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
-                        {project.status || 'Active'}
-                    </span>
                 </div>
             </div>
 

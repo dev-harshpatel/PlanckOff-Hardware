@@ -19,13 +19,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ERRORS } from '@/constants/errors';
+
+const ROLE_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  Administrator:   { label: 'Admin',    bg: 'bg-purple-100',                    text: 'text-purple-700' },
+  'Team Lead':     { label: 'Lead',     bg: 'bg-[var(--primary-bg-hover)]',     text: 'text-[var(--primary-text)]' },
+  Estimator:       { label: 'Est.',     bg: 'bg-[var(--success-bg)]',           text: 'text-[var(--success-text)]' },
+  Client:          { label: 'Client',   bg: 'bg-blue-100',                      text: 'text-blue-700' },
+  SeniorEstimator: { label: 'Sr. Est.', bg: 'bg-[var(--success-bg)]',           text: 'text-[var(--success-text)]' },
+  Viewer:          { label: 'Viewer',   bg: 'bg-[var(--bg-muted)]',             text: 'text-[var(--text-muted)]' },
+};
 
 const statusOptions: { id: ProjectStatus; label: string }[] = [
   { id: 'Active', label: 'In Progress' },
   { id: 'Under Review', label: 'Review' },
   { id: 'Submitted', label: 'Submitted' },
+  { id: 'Client', label: 'Client' },
   { id: 'On Hold', label: 'Hold' },
   { id: 'Archived', label: 'Archive' }
 ];
@@ -137,6 +147,23 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     label: province.name,
   }));
 
+  const teamMemberOptions = teamMembers.map((m) => {
+    const badge = ROLE_BADGE[m.role as string] ?? {
+      label: m.role as string,
+      bg: 'bg-[var(--bg-muted)]',
+      text: 'text-[var(--text-muted)]',
+    };
+    return {
+      value: m.id,
+      label: m.name,
+      sublabel: m.email,
+      initial: m.name.charAt(0).toUpperCase(),
+      badgeLabel: badge.label,
+      badgeBg: badge.bg,
+      badgeText: badge.text,
+    };
+  });
+
   const handleSave = () => {
     if (!projectData.name.trim()) {
       addToast({ type: 'error', message: ERRORS.GENERAL.REQUIRED_FIELD.message });
@@ -226,18 +253,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
                   <MapPinIcon className="h-4 w-4 text-gray-400" />
                 </div>
-                <Select value={projectData.country ?? ''} onValueChange={handleCountryChange} disabled={isLoading}>
-                  <SelectTrigger id="country" className="h-11 rounded-lg pl-9">
-                    <SelectValue placeholder="Select country..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countryOptions.map((country) => (
-                      <SelectItem key={country.value} value={country.value}>
-                        {country.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="country"
+                  value={projectData.country ?? ''}
+                  onChange={handleCountryChange}
+                  options={countryOptions}
+                  placeholder="Select country..."
+                  searchPlaceholder="Search country…"
+                  header="Country"
+                  disabled={isLoading}
+                  className="pl-9"
+                />
               </div>
             </div>
 
@@ -249,18 +275,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
                   <MapPinIcon className="h-4 w-4 text-gray-400" />
                 </div>
-                <Select value={projectData.province ?? ''} onValueChange={handleProvinceChange} disabled={isLoading || !projectData.country}>
-                  <SelectTrigger id="province" className="h-11 rounded-lg pl-9">
-                    <SelectValue placeholder={projectData.country ? 'Select province...' : 'Select country first'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {provinceOptions.map((province) => (
-                      <SelectItem key={province.value} value={province.value}>
-                        {province.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="province"
+                  value={projectData.province ?? ''}
+                  onChange={handleProvinceChange}
+                  options={provinceOptions}
+                  placeholder={projectData.country ? 'Select province...' : 'Select country first'}
+                  searchPlaceholder="Search province…"
+                  header="Province / State"
+                  disabled={isLoading || !projectData.country}
+                  className="pl-9"
+                />
               </div>
             </div>
           </div>
@@ -275,18 +300,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                   <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
                     <UserIcon className="h-4 w-4 text-gray-400" />
                   </div>
-                  <Select value={projectData.assignedTo} onValueChange={(value) => setProjectData(prev => ({ ...prev, assignedTo: value }))} disabled={isLoading}>
-                    <SelectTrigger id="assignedTo" className="h-11 rounded-lg pl-9">
-                      <SelectValue placeholder="Select team member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.name} ({member.role})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    id="assignedTo"
+                    value={projectData.assignedTo}
+                    onChange={(value) => setProjectData(prev => ({ ...prev, assignedTo: value }))}
+                    options={teamMemberOptions}
+                    placeholder="Select team member"
+                    searchPlaceholder="Search by name or role…"
+                    header="Team Member"
+                    disabled={isLoading}
+                    className="pl-9"
+                  />
                 </div>
               </div>
             )}

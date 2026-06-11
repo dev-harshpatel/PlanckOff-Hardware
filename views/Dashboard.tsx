@@ -23,6 +23,16 @@ import { KanbanColumn } from '../components/dashboard/KanbanColumn';
 import {
     KANBAN_COLUMNS, buildProjectStats, filterProjectsByDashboardState,
 } from '../utils/dashboardUtils';
+import type { SearchableSelectOption } from '@/components/ui/searchable-select';
+
+const ROLE_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+    Administrator:   { label: 'Admin',    bg: 'bg-purple-100',                    text: 'text-purple-700' },
+    'Team Lead':     { label: 'Lead',     bg: 'bg-[var(--primary-bg-hover)]',     text: 'text-[var(--primary-text)]' },
+    Estimator:       { label: 'Est.',     bg: 'bg-[var(--success-bg)]',           text: 'text-[var(--success-text)]' },
+    Client:          { label: 'Client',   bg: 'bg-blue-100',                      text: 'text-blue-700' },
+    SeniorEstimator: { label: 'Sr. Est.', bg: 'bg-[var(--success-bg)]',           text: 'text-[var(--success-text)]' },
+    Viewer:          { label: 'Viewer',   bg: 'bg-[var(--bg-muted)]',             text: 'text-[var(--text-muted)]' },
+};
 
 interface DashboardProps {
     projects: Project[];
@@ -67,6 +77,7 @@ const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     Active:         { text: 'text-[var(--success-text)]', bg: 'bg-[var(--success-bg)]', dot: 'bg-[var(--success-dot)]' },
     'Under Review': { text: 'text-[var(--warning-text)]', bg: 'bg-[var(--warning-bg)]', dot: 'bg-[var(--warning-dot)]' },
     Submitted:      { text: 'text-[var(--primary-text)]', bg: 'bg-[var(--primary-bg)]', dot: 'bg-[var(--primary-action)]' },
+    Client:         { text: 'text-teal-700',               bg: 'bg-teal-50',              dot: 'bg-teal-400' },
     'On Hold':      { text: 'text-[var(--text-muted)]',   bg: 'bg-[var(--bg-muted)]',   dot: 'bg-[var(--text-faint)]' },
     Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
 };
@@ -112,9 +123,23 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
         ? 'Current status across all projects'
         : `Showing all ${selectedStatusFilter.toLowerCase()} projects in a single view`;
 
-    const memberFilterOptions = useMemo(() => [
+    const memberFilterOptions = useMemo<SearchableSelectOption[]>(() => [
         { value: 'All Members', label: 'All Members' },
-        ...teamMembers.map(m => ({ value: m.id, label: m.name })),
+        ...teamMembers.map(m => {
+            const badge = ROLE_BADGE[m.role as string] ?? {
+                label: m.role as string,
+                bg: 'bg-[var(--bg-muted)]',
+                text: 'text-[var(--text-muted)]',
+            };
+            return {
+                value: m.id,
+                label: m.name,
+                initial: m.name.charAt(0).toUpperCase(),
+                badgeLabel: badge.label,
+                badgeBg: badge.bg,
+                badgeText: badge.text,
+            };
+        }),
     ], [teamMembers]);
 
     const handleSaveProject = async (projectData: NewProjectData, doorScheduleFile?: File, hardwareSetFile?: File) => {
@@ -157,9 +182,50 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
             });
             const json = await res.json() as { error?: string };
             if (!res.ok) throw new Error(json.error ?? 'Failed to assign client.');
+
+            // Update local state: move to Client column, add clientId.
+            // Only clear assignedTo if the current assignee is an Estimator;
+            // Admin and Team Lead stay assigned even when a client is added.
+            const project = projects.find(p => p.id === projectId);
+            if (project) {
+                const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
+                const isEstimator = assignedMember?.role === 'Estimator';
+                await onProjectUpdate({
+                    ...project,
+                    status: 'Client',
+                    assignedTo: isEstimator ? '' : project.assignedTo,
+                    clientIds: [...(project.clientIds ?? []), ...(project.clientIds?.includes(clientId) ? [] : [clientId])],
+                });
+            }
+
             addToast({ type: 'success', message: 'Client access granted to project.' });
         } catch (err) {
             addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to assign client.' });
+        }
+    };
+
+    const handleUnassignClientFromProject = async (projectId: string, clientId: string) => {
+        try {
+            const res = await fetch(`/api/projects/${projectId}/assign-client`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ clientId }),
+            });
+            const json = await res.json() as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? 'Failed to remove client.');
+            const project = projects.find(p => p.id === projectId);
+            if (project) {
+                const remainingClientIds = (project.clientIds ?? []).filter(id => id !== clientId);
+                await onProjectUpdate({
+                    ...project,
+                    clientIds: remainingClientIds,
+                    status: remainingClientIds.length === 0 ? 'Active' : project.status,
+                });
+            }
+            addToast({ type: 'success', message: 'Client access removed from project.' });
+        } catch (err) {
+            addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to remove client.' });
         }
     };
 
@@ -361,7 +427,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                         </div>
                     ) : selectedStatusFilter === 'All' ? (
                         /* ── Kanban view (All statuses) ── */
-                        <div className="flex gap-4 h-full min-w-[1200px]">
+                        <div className="flex gap-4 h-full min-w-[1900px]">
                             {KANBAN_COLUMNS.map(col => (
                                 <KanbanColumn
                                     key={col.id}
@@ -383,6 +449,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                     userRole={userRole}
                                     teamMembers={teamMembers}
                                     onAssignClientToProject={handleAssignClientToProject}
+                                    onUnassignClientFromProject={handleUnassignClientFromProject}
                                 />
                             ))}
                         </div>
@@ -416,6 +483,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                             onEdit={handleOpenEdit}
                                             onDelete={onDeleteProject}
                                             onAssignClient={(clientId) => handleAssignClientToProject(project.id, clientId)}
+                                            onUnassignClient={(clientId) => handleUnassignClientFromProject(project.id, clientId)}
                                             userRole={userRole}
                                             teamMembers={teamMembers}
                                         />

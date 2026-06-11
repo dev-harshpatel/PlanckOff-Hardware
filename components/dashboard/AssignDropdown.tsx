@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import { TeamMember } from '../../types';
 
 const ROLE_BADGE: Record<string, { label: string; bg: string; text: string }> = {
@@ -18,10 +18,12 @@ export interface AssignDropdownProps {
   /** Ref of the trigger button — used to anchor the portal-rendered dropdown. */
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   members: TeamMember[];
-  /** Highlighted member (current assignment). */
+  /** Highlighted member (single-select mode). */
   selectedId?: string;
+  /** Highlighted members (multi-select / toggle mode — e.g. clients). */
+  selectedIds?: string[];
   onSelect: (memberId: string) => void;
-  /** If provided, renders an "Unassign" footer action. */
+  /** If provided, renders an "Unassign" footer action (single-select mode). */
   onUnassign?: () => void;
   isLoading?: boolean;
   header: string;
@@ -32,6 +34,7 @@ export function AssignDropdown({
   triggerRef,
   members,
   selectedId,
+  selectedIds,
   onSelect,
   onUnassign,
   isLoading = false,
@@ -95,7 +98,7 @@ export function AssignDropdown({
     <div
       style={{ position: 'fixed', top: pos.top, left: pos.left, width: '288px', maxHeight: '340px', zIndex: 9999 }}
       className="bg-[var(--bg)] rounded-lg shadow-xl border border-[var(--border)] overflow-hidden flex flex-col"
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
@@ -142,26 +145,44 @@ export function AssignDropdown({
               bg: 'bg-[var(--bg-muted)]',
               text: 'text-[var(--text-muted)]',
             };
-            const isSelected = selectedId === m.id;
+            const isMulti = selectedIds !== undefined;
+            const isSelected = isMulti ? selectedIds.includes(m.id) : selectedId === m.id;
             return (
               <button
                 key={m.id}
                 type="button"
                 onClick={() => onSelect(m.id)}
                 disabled={isLoading}
-                className={`flex items-center gap-2.5 w-full text-left px-3 py-2 hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${
-                  isSelected ? 'bg-[var(--primary-bg)] text-[var(--primary-text)]' : 'text-[var(--text-secondary)]'
+                title={isMulti && isSelected ? `Remove ${m.name}` : m.name}
+                className={`flex items-center gap-2.5 w-full text-left px-3 py-2 disabled:opacity-50 transition-colors ${
+                  isMulti && isSelected
+                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    : isSelected
+                    ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] hover:bg-[var(--primary-bg)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
                 }`}
               >
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                  isSelected ? 'bg-[var(--primary-bg-hover)] text-[var(--primary-text)]' : 'bg-[var(--bg-muted)] text-[var(--text-muted)]'
+                  isMulti && isSelected
+                    ? 'bg-blue-100 text-blue-700'
+                    : isSelected
+                    ? 'bg-[var(--primary-bg-hover)] text-[var(--primary-text)]'
+                    : 'bg-[var(--bg-muted)] text-[var(--text-muted)]'
                 }`}>
                   {m.name.charAt(0).toUpperCase()}
                 </div>
                 <span className="flex-1 truncate text-xs font-medium">{m.name}</span>
-                <span className={`flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${badge.bg} ${badge.text}`}>
-                  {badge.label}
-                </span>
+                {isMulti && isSelected ? (
+                  <X className="flex-shrink-0 w-3 h-3 text-blue-500" />
+                ) : (
+                  isSelected ? (
+                    <Check className="flex-shrink-0 w-3 h-3 text-[var(--primary-text)]" />
+                  ) : (
+                    <span className={`flex-shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${badge.bg} ${badge.text}`}>
+                      {badge.label}
+                    </span>
+                  )
+                )}
               </button>
             );
           })
