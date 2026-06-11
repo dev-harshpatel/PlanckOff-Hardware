@@ -1,6 +1,6 @@
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 const RESEND_API_KEY = process.env.RESEND_API;
-const FROM_EMAIL = 'invites@planckoff.ai';
+const FROM_EMAIL = 'noreply@planckoff.ai';
 const FROM_NAME = 'PlanckOff';
 
 export interface SendInviteEmailInput {

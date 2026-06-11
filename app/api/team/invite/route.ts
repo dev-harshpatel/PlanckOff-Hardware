@@ -8,6 +8,8 @@ import {
   getRoleIdByName,
 } from '@/lib/db/team';
 import { assignProjectsToClient } from '@/lib/db/clientProjectAssignments';
+import { updateProject } from '@/lib/db/projects';
+import { invalidateProjects } from '@/lib/cache/projects';
 import { sendInviteEmail } from '@/services/emailService';
 import { canInviteRole, isRoleName } from '@/constants/roles';
 import type { RoleName } from '@/types/auth';
@@ -16,7 +18,7 @@ interface InviteBody {
   name: string;
   email: string;
   role: string;
-  /** Required when role is 'Client' — one or more project IDs to assign. */
+  /** Required when role is 'Client' or 'Estimator' — one or more project IDs to assign. */
   projectIds?: string[];
 }
 
@@ -55,10 +57,10 @@ export const POST = withRoleAuth(
       );
     }
 
-    if (role === 'Client') {
+    if (role === 'Client' || role === 'Estimator') {
       if (!projectIds || projectIds.length === 0) {
         return NextResponse.json(
-          { error: 'At least one project must be assigned when inviting a Client.' },
+          { error: `At least one project must be assigned when inviting a ${role}.` },
           { status: 400 },
         );
       }
@@ -104,6 +106,17 @@ export const POST = withRoleAuth(
           return NextResponse.json({ error: assignErr.message }, { status: 500 });
         }
       }
+
+      // Re-assign projects for re-invited Estimators
+      if (role === 'Estimator' && projectIds?.length) {
+        for (const projectId of projectIds) {
+          const { error: assignErr } = await updateProject(projectId, { assignedTo: memberId });
+          if (assignErr) {
+            return NextResponse.json({ error: assignErr.message }, { status: 500 });
+          }
+        }
+        await invalidateProjects();
+      }
     } else {
       // Create new member
       const { data: roleId, error: roleErr } = await getRoleIdByName(role);
@@ -140,6 +153,17 @@ export const POST = withRoleAuth(
         if (assignErr) {
           return NextResponse.json({ error: assignErr.message }, { status: 500 });
         }
+      }
+
+      // Assign projects for new Estimator invites
+      if (role === 'Estimator' && projectIds?.length) {
+        for (const projectId of projectIds) {
+          const { error: assignErr } = await updateProject(projectId, { assignedTo: memberId });
+          if (assignErr) {
+            return NextResponse.json({ error: assignErr.message }, { status: 500 });
+          }
+        }
+        await invalidateProjects();
       }
     }
 

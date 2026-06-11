@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Pencil, Trash2, UserPlus, Calendar, Hash } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, Calendar, Hash, Users } from 'lucide-react';
+import { AssignDropdown } from './AssignDropdown';
 
 const formatDate = (isoDate?: string): string => {
     if (!isoDate) return 'N/A';
@@ -38,6 +39,7 @@ export interface ProjectCardProps {
     onSave: (p: Project) => Promise<void> | void;
     onEdit: (project: Project) => void;
     onDelete: (id: string) => void;
+    onAssignClient?: (clientId: string) => Promise<void>;
     userRole: RoleName;
     teamMembers: TeamMember[];
     draggable?: boolean;
@@ -52,6 +54,7 @@ export function ProjectCard({
     onSave,
     onEdit,
     onDelete,
+    onAssignClient,
     userRole,
     teamMembers,
     draggable = false,
@@ -60,10 +63,14 @@ export function ProjectCard({
     onDragEnd,
 }: ProjectCardProps) {
     const [showAssignMenu, setShowAssignMenu] = useState(false);
+    const [showClientMenu, setShowClientMenu] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState('');
     const [isAssigning, setIsAssigning] = useState(false);
+    const [isAssigningClient, setIsAssigningClient] = useState(false);
     const assignMenuRef = useRef<HTMLDivElement | null>(null);
+    const assignBtnRef = useRef<HTMLButtonElement>(null);
+    const clientBtnRef = useRef<HTMLButtonElement>(null);
     const suppressClickRef = useRef(false);
 
     const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
@@ -71,11 +78,15 @@ export function ProjectCard({
     const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
+    // Separate staff (estimator-assignable) from client members
+    const staffMembers = teamMembers.filter(m => (m.role as string) !== 'Client');
+    const clientMembers = teamMembers.filter(m => (m.role as string) === 'Client');
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
             if (!assignMenuRef.current?.contains(event.target as Node)) {
                 setShowAssignMenu(false);
+                setShowClientMenu(false);
             }
         };
         document.addEventListener('mousedown', handlePointerDown);
@@ -89,6 +100,17 @@ export function ProjectCard({
             setShowAssignMenu(false);
         } finally {
             setIsAssigning(false);
+        }
+    };
+
+    const handleAssignClient = async (clientId: string) => {
+        if (!onAssignClient) return;
+        try {
+            setIsAssigningClient(true);
+            await onAssignClient(clientId);
+            setShowClientMenu(false);
+        } finally {
+            setIsAssigningClient(false);
         }
     };
 
@@ -190,35 +212,50 @@ export function ProjectCard({
                         {canAssign && (
                             <div className="relative">
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(!showAssignMenu); }}
+                                    ref={assignBtnRef}
+                                    onClick={(e) => { e.stopPropagation(); setShowClientMenu(false); setShowAssignMenu(!showAssignMenu); }}
                                     disabled={isAssigning}
-                                    title="Assign"
+                                    title="Assign estimator"
                                     className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:opacity-50 ${project.assignedTo ? 'text-[var(--primary-text-muted)] hover:bg-[var(--primary-bg)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)]'}`}
                                 >
                                     <UserPlus className="w-3 h-3" />
                                     Assign
                                 </button>
                                 {showAssignMenu && (
-                                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[var(--bg)] rounded-md shadow-lg z-50 border border-[var(--border)] py-1" onClick={(e) => e.stopPropagation()}>
-                                        <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)]">Assign To</div>
-                                        {teamMembers.map(m => (
-                                            <button
-                                                key={m.id}
-                                                onClick={() => handleAssign(m.id)}
-                                                disabled={isAssigning}
-                                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-subtle)] disabled:opacity-50 transition-colors ${project.assignedTo === m.id ? 'bg-[var(--primary-bg)] text-[var(--primary-text)] font-medium' : 'text-[var(--text-secondary)]'}`}
-                                            >
-                                                {m.name}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => handleAssign('')}
-                                            disabled={isAssigning}
-                                            className="block w-full text-left px-3 py-2 text-sm text-[var(--error-text)] hover:bg-[var(--error-bg)] border-t border-[var(--border-subtle)] disabled:opacity-50 transition-colors"
-                                        >
-                                            Unassign
-                                        </button>
-                                    </div>
+                                    <AssignDropdown
+                                        triggerRef={assignBtnRef}
+                                        members={staffMembers}
+                                        selectedId={project.assignedTo}
+                                        onSelect={(id) => handleAssign(id)}
+                                        onUnassign={() => handleAssign('')}
+                                        isLoading={isAssigning}
+                                        header="Assign To"
+                                        searchPlaceholder="Search team members…"
+                                    />
+                                )}
+                            </div>
+                        )}
+                        {canAssign && onAssignClient && clientMembers.length > 0 && (
+                            <div className="relative">
+                                <button
+                                    ref={clientBtnRef}
+                                    onClick={(e) => { e.stopPropagation(); setShowAssignMenu(false); setShowClientMenu(!showClientMenu); }}
+                                    disabled={isAssigningClient}
+                                    title="Assign client access"
+                                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-[var(--text-faint)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-muted)] transition-colors disabled:opacity-50"
+                                >
+                                    <Users className="w-3 h-3" />
+                                    Clients
+                                </button>
+                                {showClientMenu && (
+                                    <AssignDropdown
+                                        triggerRef={clientBtnRef}
+                                        members={clientMembers}
+                                        onSelect={(id) => handleAssignClient(id)}
+                                        isLoading={isAssigningClient}
+                                        header="Add Client Access"
+                                        searchPlaceholder="Search clients…"
+                                    />
                                 )}
                             </div>
                         )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, withRoleAuth } from '@/lib/auth/api-helpers';
 import type { AuthContext } from '@/lib/auth/api-helpers';
-import { createProject, getProjectsForClient } from '@/lib/db/projects';
+import { createProject, getProjectsForClient, getProjectsForEstimator } from '@/lib/db/projects';
 import { getCachedProjects, invalidateProjects } from '@/lib/cache/projects';
 import type { NewProjectData } from '@/types';
 
@@ -10,6 +10,13 @@ export const GET = withAuth(async (_req: NextRequest, { user }: AuthContext) => 
     // Client users see only their assigned projects — bypass the global cache
     // since the result set is per-user.
     const { data, error } = await getProjectsForClient(user.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  }
+
+  if (user.role === 'Estimator') {
+    // Estimators see only projects where assigned_to = their ID — bypass cache.
+    const { data, error } = await getProjectsForEstimator(user.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ data });
   }

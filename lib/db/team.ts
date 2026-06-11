@@ -243,6 +243,7 @@ export interface UnifiedMember {
   status: 'Active' | 'Invited' | 'Inactive';
   source: 'admin' | 'team_member';
   inviteExpiresAt: string | null;
+  createdAt: string | null;
 }
 
 interface AdminRow {
@@ -251,6 +252,7 @@ interface AdminRow {
   name: string;
   role: string;
   initials: string | null;
+  created_at?: string | null;
 }
 
 /** Fetch all admins and return them in unified shape. */
@@ -259,7 +261,7 @@ export async function getAllAdmins(): Promise<DbResult<UnifiedMember[]>> {
     const db = createSupabaseAdminClient();
     const { data, error } = await db
       .from('admins')
-      .select('id, email, name, role, initials')
+      .select('id, email, name, role, initials, created_at')
       .order('created_at', { ascending: true });
 
     if (error) return { data: null, error: { message: error.message } };
@@ -273,6 +275,7 @@ export async function getAllAdmins(): Promise<DbResult<UnifiedMember[]>> {
       status: 'Active' as const,
       source: 'admin' as const,
       inviteExpiresAt: null,
+      createdAt: row.created_at ?? null,
     }));
 
     return { data: admins, error: null };

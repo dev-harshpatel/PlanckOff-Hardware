@@ -147,6 +147,22 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
         }
     };
 
+    const handleAssignClientToProject = async (projectId: string, clientId: string) => {
+        try {
+            const res = await fetch(`/api/projects/${projectId}/assign-client`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ clientId }),
+            });
+            const json = await res.json() as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? 'Failed to assign client.');
+            addToast({ type: 'success', message: 'Client access granted to project.' });
+        } catch (err) {
+            addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to assign client.' });
+        }
+    };
+
     const handleOpenCreate = () => {
         openProjectModal();
     };
@@ -366,6 +382,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                     onDragEnd={() => { setDraggedProjectId(null); setDropTargetStatus(null); }}
                                     userRole={userRole}
                                     teamMembers={teamMembers}
+                                    onAssignClientToProject={handleAssignClientToProject}
                                 />
                             ))}
                         </div>
@@ -398,6 +415,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                             onSave={onProjectUpdate}
                                             onEdit={handleOpenEdit}
                                             onDelete={onDeleteProject}
+                                            onAssignClient={(clientId) => handleAssignClientToProject(project.id, clientId)}
                                             userRole={userRole}
                                             teamMembers={teamMembers}
                                         />

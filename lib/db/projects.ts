@@ -93,6 +93,42 @@ export async function getProjectsForClient(clientId: string): Promise<DbResult<P
   }
 }
 
+export async function getProjectsForEstimator(estimatorId: string): Promise<DbResult<Project[]>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('projects')
+      .select(BASE_SELECT)
+      .eq('assigned_to', estimatorId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data as unknown as ProjectRow[]).map(toProject), error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function isEstimatorAssignedToProject(
+  estimatorId: string,
+  projectId: string,
+): Promise<boolean> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data } = await db
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .eq('assigned_to', estimatorId)
+      .is('deleted_at', null)
+      .single();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 export async function getAllProjects(): Promise<DbResult<Project[]>> {
   try {
     const db = createSupabaseAdminClient();

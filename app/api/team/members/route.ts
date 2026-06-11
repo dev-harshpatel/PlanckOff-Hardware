@@ -33,6 +33,7 @@ export const GET = withAuth(
       status: m.status,
       source: 'team_member' as const,
       inviteExpiresAt: m.inviteExpiresAt ?? null,
+      createdAt: m.createdAt ?? null,
     }));
 
     return NextResponse.json({ data: [...admins, ...members] });

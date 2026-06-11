@@ -60,7 +60,7 @@ export function InviteTeamMemberModal({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Project picker state (Client role only)
+  // Project picker state (Client and Estimator roles)
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -79,18 +79,18 @@ export function InviteTeamMemberModal({
     }
   }, [isOpen, defaultRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear project selections when role changes away from Client
+  // Clear project selections when role changes away from Client or Estimator
   useEffect(() => {
-    if (role !== "Client") {
+    if (role !== "Client" && role !== "Estimator") {
       setSelectedProjectIds([]);
       setProjectSearch("");
       setProjects([]);
     }
   }, [role]);
 
-  // Fetch available projects when Client role is selected
+  // Fetch available projects when Client or Estimator role is selected
   useEffect(() => {
-    if (role !== "Client" || !isOpen) return;
+    if ((role !== "Client" && role !== "Estimator") || !isOpen) return;
 
     setIsLoadingProjects(true);
     fetch("/api/projects", { credentials: "include" })
@@ -135,8 +135,8 @@ export function InviteTeamMemberModal({
     setError(null);
     setSuccessMsg(null);
 
-    if (role === "Client" && selectedProjectIds.length === 0) {
-      setError("Please assign at least one project to this Client.");
+    if ((role === "Client" || role === "Estimator") && selectedProjectIds.length === 0) {
+      setError(`Please assign at least one project to this ${role}.`);
       return;
     }
 
@@ -148,7 +148,7 @@ export function InviteTeamMemberModal({
         email: email.trim().toLowerCase(),
         role,
       };
-      if (role === "Client") {
+      if (role === "Client" || role === "Estimator") {
         body.projectIds = selectedProjectIds;
       }
 
@@ -272,8 +272,8 @@ export function InviteTeamMemberModal({
               </Select>
             </div>
 
-            {/* Project assignment — only shown for Client role */}
-            {role === "Client" && (
+            {/* Project assignment — shown for Client and Estimator roles */}
+            {(role === "Client" || role === "Estimator") && (
               <div>
                 <Label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
                   Assign Projects <span className="text-red-500">*</span>

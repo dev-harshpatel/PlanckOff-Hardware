@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { InviteTeamMemberModal } from '@/components/team/InviteTeamMemberModal';
 import { ChangePasswordModal } from '@/components/team/ChangePasswordModal';
+import { MemberDetailsModal } from '@/components/team/MemberDetailsModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { RoleName } from '@/types/auth';
@@ -43,6 +44,7 @@ import {
   UserCheck,
   Trash2,
   ChevronDown,
+  Info,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -181,6 +183,9 @@ export default function TeamPage() {
 
   // Change password modal state
   const [changePasswordMember, setChangePasswordMember] = useState<UnifiedMember | null>(null);
+
+  // Member details modal state
+  const [detailsMember, setDetailsMember] = useState<UnifiedMember | null>(null);
 
   // Per-member resend state
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -470,6 +475,18 @@ export default function TeamPage() {
                                   <div className="flex items-center gap-2 flex-shrink-0">
                                     <StatusBadge status={member.status} expiresAt={member.inviteExpiresAt} />
 
+                                    {/* Details button — admin only, not for self */}
+                                    {isAdmin && !isCurrentUser && (
+                                      <button
+                                        onClick={() => setDetailsMember(member)}
+                                        title="View member details"
+                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary-text)] hover:border-[var(--primary-border)] hover:bg-[var(--primary-bg-hover)] transition-colors"
+                                      >
+                                        <Info className="w-3 h-3" />
+                                        Details
+                                      </button>
+                                    )}
+
                                     {showResend && (
                                       <button
                                         onClick={() => handleResendInvite(member)}
@@ -615,6 +632,12 @@ export default function TeamPage() {
         isOpen={changePasswordMember !== null}
         member={changePasswordMember}
         onClose={() => setChangePasswordMember(null)}
+      />
+
+      <MemberDetailsModal
+        isOpen={detailsMember !== null}
+        member={detailsMember}
+        onClose={() => setDetailsMember(null)}
       />
 
       <AlertDialog

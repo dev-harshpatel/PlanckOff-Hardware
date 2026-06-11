@@ -39,6 +39,47 @@ export async function assignProjectsToClient(
 }
 
 /**
+ * Add a single project to a client's assignments without touching existing ones.
+ * Safe to call multiple times — duplicate rows are silently ignored.
+ */
+export async function addProjectToClient(
+  clientId: string,
+  projectId: string,
+  assignedById: string | null,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db.from('client_project_assignments').upsert(
+      { client_id: clientId, project_id: projectId, assigned_by: assignedById },
+      { onConflict: 'client_id,project_id', ignoreDuplicates: true },
+    );
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+/** Remove a single project from a client's assignments. */
+export async function removeProjectFromClient(
+  clientId: string,
+  projectId: string,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db
+      .from('client_project_assignments')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('project_id', projectId);
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+/**
  * Returns true when the Client has an assignment row for the given project.
  * Returns false on any error — callers treat this as "not found".
  */

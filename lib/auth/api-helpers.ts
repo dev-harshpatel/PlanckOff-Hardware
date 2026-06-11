@@ -3,6 +3,7 @@ import { validateSession } from '@/lib/auth/session';
 import { hasRoleAccess } from '@/lib/auth/rbac';
 import { AUTH_CONFIG, COOKIE_CONFIG } from '@/constants/auth';
 import { isClientAssignedToProject } from '@/lib/db/clientProjectAssignments';
+import { isEstimatorAssignedToProject } from '@/lib/db/projects';
 import type { AuthUser } from '@/types/auth';
 import type { TeamMemberWithRole } from '@/types/team';
 import type { RoleName } from '@/types/auth';
@@ -151,6 +152,17 @@ export function withProjectAuth(handler: AuthenticatedHandler) {
         return NextResponse.json({ error: 'Not found.' }, { status: 404 });
       }
       const allowed = await isClientAssignedToProject(user.id, projectId);
+      if (!allowed) {
+        return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+      }
+    }
+
+    // Scope Estimator access to projects they are assigned to (same 404 pattern)
+    if (user.role === 'Estimator') {
+      if (!projectId) {
+        return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+      }
+      const allowed = await isEstimatorAssignedToProject(user.id, projectId);
       if (!allowed) {
         return NextResponse.json({ error: 'Not found.' }, { status: 404 });
       }

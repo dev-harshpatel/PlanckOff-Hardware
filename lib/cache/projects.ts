@@ -18,11 +18,16 @@ import type { Project } from '@/types';
  */
 type DbResult<T> = { data: T | null; error: { message: string } | null };
 
-export const getCachedProjects = unstable_cache(
-  async (): Promise<DbResult<Project[]>> => getAllProjects(),
-  ['projects-all'],
-  { tags: ['projects'], revalidate: 1800 }
-);
+// In dev, bypass unstable_cache entirely so switching .env.local credentials
+// takes effect immediately without needing to delete .next/cache.
+export const getCachedProjects: () => Promise<DbResult<Project[]>> =
+  process.env.NODE_ENV === 'development'
+    ? getAllProjects
+    : unstable_cache(
+        async (): Promise<DbResult<Project[]>> => getAllProjects(),
+        ['projects-all'],
+        { tags: ['projects'], revalidate: 1800 },
+      );
 
 /**
  * Invalidates the projects-list cache. Called after successful project

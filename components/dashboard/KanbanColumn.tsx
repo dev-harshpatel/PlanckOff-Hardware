@@ -32,6 +32,7 @@ export interface KanbanColumnProps {
     onDragEnd: () => void;
     userRole: RoleName;
     teamMembers: TeamMember[];
+    onAssignClientToProject?: (projectId: string, clientId: string) => Promise<void>;
 }
 
 export function KanbanColumn({
@@ -52,6 +53,7 @@ export function KanbanColumn({
     onDragEnd,
     userRole,
     teamMembers,
+    onAssignClientToProject,
 }: KanbanColumnProps) {
     return (
         <div className="flex-1 min-w-[240px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
@@ -97,6 +99,7 @@ export function KanbanColumn({
                             onSave={onProjectUpdate}
                             onEdit={onEditProject}
                             onDelete={onDeleteProject}
+                            onAssignClient={onAssignClientToProject ? (clientId) => onAssignClientToProject(project.id, clientId) : undefined}
                             userRole={userRole}
                             teamMembers={teamMembers}
                             draggable={canDragProjects && !updatingProjectIds.has(project.id)}

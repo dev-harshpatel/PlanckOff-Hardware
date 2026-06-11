@@ -146,7 +146,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
               <DropdownMenuLabel>
                 <div className="flex items-center gap-2">
                   <UserCircle2 className="h-4 w-4" />
-                  <span>{user.email}</span>
+                  <span>{user.name}</span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuItem className="cursor-default">
