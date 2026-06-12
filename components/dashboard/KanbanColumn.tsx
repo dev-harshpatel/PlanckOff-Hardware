@@ -58,7 +58,7 @@ export function KanbanColumn({
     onUnassignClientFromProject,
 }: KanbanColumnProps) {
     return (
-        <div className="flex-1 min-w-[300px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
+        <div className="flex-1 min-w-[220px] flex flex-col h-full rounded-md overflow-hidden border border-[var(--border)]">
             <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-4 py-2.5 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${col.dot} flex-shrink-0`} />

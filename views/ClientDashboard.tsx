@@ -1,33 +1,13 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Project } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-    MapPin, Calendar, Search, FolderOpen, Clock,
-    CheckCircle2, PauseCircle, ArchiveIcon, ArrowUpRight,
-    Layers, FileText,
-} from 'lucide-react';
+import { MapPin, Calendar, Search, FolderOpen, ArrowUpRight, Layers } from 'lucide-react';
 
 interface ClientDashboardProps {
     projects: Project[];
     onSelectProject: (projectId: string) => void;
-}
-
-const STATUS_META: Record<string, { label: string; color: string; bg: string; ring: string; dot: string; Icon: React.ElementType }> = {
-    'Active':       { label: 'Active',       color: 'text-emerald-700', bg: 'bg-emerald-50',  ring: 'ring-emerald-200', dot: 'bg-emerald-500', Icon: CheckCircle2 },
-    'Under Review': { label: 'Under Review', color: 'text-amber-700',   bg: 'bg-amber-50',    ring: 'ring-amber-200',   dot: 'bg-amber-500',   Icon: Clock },
-    'Submitted':    { label: 'Submitted',    color: 'text-blue-700',    bg: 'bg-blue-50',     ring: 'ring-blue-200',    dot: 'bg-blue-500',    Icon: FileText },
-    'On Hold':      { label: 'On Hold',      color: 'text-slate-600',   bg: 'bg-slate-100',   ring: 'ring-slate-200',   dot: 'bg-slate-400',   Icon: PauseCircle },
-    'Complete':     { label: 'Complete',     color: 'text-emerald-700', bg: 'bg-emerald-50',  ring: 'ring-emerald-200', dot: 'bg-emerald-500', Icon: CheckCircle2 },
-    'Archived':     { label: 'Archived',     color: 'text-purple-700',  bg: 'bg-purple-50',   ring: 'ring-purple-200',  dot: 'bg-purple-500',  Icon: ArchiveIcon },
-    'Client':       { label: 'In Review',    color: 'text-teal-700',    bg: 'bg-teal-50',     ring: 'ring-teal-200',    dot: 'bg-teal-500',    Icon: Clock },
-};
-
-const DEFAULT_STATUS = STATUS_META['Active'];
-
-function getStatusMeta(status?: string) {
-    return STATUS_META[status ?? 'Active'] ?? DEFAULT_STATUS;
 }
 
 function formatDate(iso?: string) {
@@ -49,8 +29,6 @@ interface ProjectCardProps {
 }
 
 function ProjectCard({ project, onClick }: ProjectCardProps) {
-    const meta = getStatusMeta(project.status);
-    const { Icon } = meta;
     const due = formatDate(project.dueDate);
 
     return (
@@ -61,8 +39,8 @@ function ProjectCard({ project, onClick }: ProjectCardProps) {
             {/* Header row */}
             <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg} ring-1 ${meta.ring}`}>
-                        <FolderOpen className={`w-4 h-4 ${meta.color}`} />
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-[var(--primary-bg)] ring-1 ring-[var(--primary-border)]">
+                        <FolderOpen className="w-4 h-4 text-[var(--primary-text-muted)]" />
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-semibold text-[var(--text)] truncate leading-tight">{project.name}</p>
@@ -73,12 +51,6 @@ function ProjectCard({ project, onClick }: ProjectCardProps) {
                 </div>
                 <ArrowUpRight className="w-4 h-4 text-[var(--text-faint)] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5" />
             </div>
-
-            {/* Status badge */}
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${meta.bg} ${meta.color} ring-1 ${meta.ring}`}>
-                <Icon className="w-3 h-3" />
-                {meta.label}
-            </span>
 
             {/* Divider */}
             <div className="border-t border-[var(--border-subtle)] my-4" />

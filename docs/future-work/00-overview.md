@@ -32,6 +32,7 @@ These aren't hypothetical. They are the specific gaps that will hurt at 50+ conc
 | [07-scalability.md](./07-scalability.md) | Caching, connection pooling, job queues, realtime | Medium |
 | [08-security.md](./08-security.md) | Account lockout, rate limiting, CSP hardening | Medium |
 | [09-frontend-state.md](./09-frontend-state.md) | Context sprawl, state management, performance | Low |
+| [10-matrix-pdf-hardening.md](./10-matrix-pdf-hardening.md) | Format F matrix/checkbox pipeline: known gaps, fixes per gap, test fixtures | Medium |
 
 ---
 
