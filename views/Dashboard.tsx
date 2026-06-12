@@ -21,7 +21,7 @@ import { ProjectCard } from '../components/dashboard/ProjectCard';
 import { DashboardFilters } from '../components/dashboard/DashboardFilters';
 import { KanbanColumn } from '../components/dashboard/KanbanColumn';
 import {
-    KANBAN_COLUMNS, buildProjectStats, filterProjectsByDashboardState,
+    KANBAN_COLUMNS, buildProjectStats, filterProjectsByDashboardState, getDueDateHighlight,
 } from '../utils/dashboardUtils';
 import type { SearchableSelectOption } from '@/components/ui/searchable-select';
 
@@ -335,7 +335,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                         <thead>
                                             <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border)]">
                                                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Project</th>
-                                                <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Client</th>
+                                                {userRole !== 'Estimator' && <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Client</th>}
                                                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Status</th>
                                                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Due Date</th>
                                                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-[var(--text-faint)] uppercase tracking-wider">Project #</th>
@@ -351,16 +351,22 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                                 const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
+                                                const rowHighlight = getDueDateHighlight(project.dueDate, project.status, project.clientIds);
+                                                const rowBg = rowHighlight === 'red'
+                                                    ? 'bg-red-50 hover:bg-red-100/70'
+                                                    : rowHighlight === 'yellow'
+                                                        ? 'bg-amber-50 hover:bg-amber-100/70'
+                                                        : 'hover:bg-[var(--bg-subtle)]';
                                                 return (
                                                     <tr
                                                         key={project.id}
                                                         onClick={() => onSelectProject(project.id)}
-                                                        className="hover:bg-[var(--bg-subtle)] cursor-pointer group transition-colors"
+                                                        className={`cursor-pointer group transition-colors ${rowBg}`}
                                                     >
                                                         <td className="px-4 py-3">
                                                             <span className="font-medium text-[var(--text)] text-sm">{project.name}</span>
                                                         </td>
-                                                        <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{project.client || '—'}</td>
+                                                        {userRole !== 'Estimator' && <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{project.client || '—'}</td>}
                                                         <td className="px-4 py-3">
                                                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                                                                 <span className={`w-1.5 h-1.5 rounded-full ${col?.dot ?? statusStyle.dot}`} />
@@ -519,6 +525,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                 onClose={closeTrash}
                 onRestore={onRestoreProject}
                 onPermDelete={onPermDeleteProject}
+                userRole={userRole}
             />
 
             <AlertDialog open={listDeleteTarget !== null} onOpenChange={open => { if (!open) { setListDeleteTarget(null); setListDeleteConfirmation(''); } }}>

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Project, ProjectStatus } from '../../types';
 import { TeamMember } from '../../types';
 import type { RoleName } from '@/types/auth';
+import { getDueDateHighlight } from '@/utils/dashboardUtils';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -79,6 +80,13 @@ export function ProjectCard({
     const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
     const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
     const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
+
+    const dueDateHighlight = userRole !== 'Client' ? getDueDateHighlight(project.dueDate, project.status, project.clientIds) : null;
+    const cardHighlightClass = dueDateHighlight === 'red'
+        ? 'bg-red-50 border-red-200 hover:border-red-300'
+        : dueDateHighlight === 'yellow'
+            ? 'bg-amber-50 border-amber-200 hover:border-amber-300'
+            : 'bg-[var(--bg)] border-[var(--border)] hover:border-[var(--primary-border)]';
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);
     // Separate staff (estimator-assignable) from client members
@@ -164,7 +172,7 @@ export function ProjectCard({
     return (
         <>
             <div
-                className={`bg-[var(--bg)] rounded-md border hover:border-[var(--primary-border)] hover:shadow-sm transition-all p-4 group relative cursor-pointer ${isDragging ? 'opacity-50 border-[var(--primary-ring)] shadow-sm' : 'border-[var(--border)]'}`}
+                className={`rounded-md border hover:shadow-sm transition-all p-4 group relative cursor-pointer ${isDragging ? 'opacity-50 border-[var(--primary-ring)] shadow-sm bg-[var(--bg)]' : cardHighlightClass}`}
                 onClick={handleCardClick}
                 draggable={draggable}
                 onDragStart={(e) => {
@@ -189,7 +197,7 @@ export function ProjectCard({
                 <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-[var(--text)] text-sm leading-tight truncate">{project.name}</h4>
-                        {project.client && (
+                        {project.client && userRole !== 'Estimator' && userRole !== 'Client' && (
                             <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{project.client}</p>
                         )}
                     </div>

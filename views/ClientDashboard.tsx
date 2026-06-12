@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Project } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
-import { MapPin, Calendar, Search, FolderOpen, ArrowUpRight, Layers } from 'lucide-react';
+import { MapPin, Calendar, Search, FolderOpen, ArrowUpRight } from 'lucide-react';
 
 interface ClientDashboardProps {
     projects: Project[];
@@ -57,12 +57,6 @@ function ProjectCard({ project, onClick }: ProjectCardProps) {
 
             {/* Meta info */}
             <div className="space-y-2">
-                {project.client && (
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                        <Layers className="w-3.5 h-3.5 text-[var(--text-faint)] flex-shrink-0" />
-                        <span className="truncate">{project.client}</span>
-                    </div>
-                )}
                 {project.location && (
                     <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                         <MapPin className="w-3.5 h-3.5 text-[var(--text-faint)] flex-shrink-0" />

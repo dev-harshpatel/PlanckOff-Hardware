@@ -21,6 +21,7 @@
  */
 
 import type { ExtractedHardwareSet } from '@/lib/db/hardware';
+import { extractDoorScheduleGrid } from '@/lib/ai/doorScheduleGrid';
 import { MAX_FILE_SIZE_BYTES, TIER1_SIZE_LIMIT } from './hardwarePdf/config';
 import { makeOpenRouterClient } from './hardwarePdf/openRouterClient';
 import { saveDebugFiles } from './hardwarePdf/debugFiles';
@@ -33,7 +34,8 @@ export interface HardwarePdfResult {
   itemCount: number;
   warnings: string[];
   durationMs: number;
-  tier: 1 | 2; // which extraction path was used
+  /** which extraction path was used — 0 = deterministic door-schedule grid (no AI) */
+  tier: 0 | 1 | 2;
 }
 
 /**
@@ -73,8 +75,45 @@ export async function extractHardwareSetsFromPdf(
   const fileSizeMb = buffer.length / 1024 / 1024;
 
   let sets: ExtractedHardwareSet[] = [];
-  let tier: 1 | 2 = 1;
+  let tier: 0 | 1 | 2 = 1;
   let rawVisual = '';
+
+  // ── Tier 0: deterministic door-schedule mark grid (no AI) ────────────────
+  // Per-door schedules with hardware indicator columns (YES/− text values or
+  // graphical checkboxes per door row). These defeat both AI tiers — text
+  // extraction loses the column alignment and the marks are often pure
+  // pixels — but they are fully recoverable deterministically from the text
+  // layer positions + ruling lines + cell pixels. Returns null for anything
+  // that is not such a schedule, and the normal tiers run unchanged.
+  try {
+    const gridResult = await extractDoorScheduleGrid(buffer);
+    if (gridResult) {
+      const itemCount = gridResult.sets.reduce((sum, s) => sum + s.hardwareItems.length, 0);
+      console.log(`[hardwarePdf] Tier 0 (door-schedule grid) succeeded — ${gridResult.sets.length} door sets, ${itemCount} items from ${gridResult.tableCount} table(s).`);
+      const durationMs = Date.now() - startMs;
+      saveDebugFiles(projectId, fileName, '', gridResult.sets, {
+        tier: 0,
+        setCount: gridResult.sets.length,
+        itemCount,
+        durationMs,
+        fileSizeMb: fileSizeMb.toFixed(2),
+        tables: gridResult.tables,
+        warnings,
+      });
+      return {
+        sets: gridResult.sets,
+        setCount: gridResult.sets.length,
+        itemCount,
+        warnings,
+        durationMs,
+        tier: 0,
+      };
+    }
+  } catch (t0Err) {
+    if (t0Err instanceof Error && t0Err.name === 'AbortError') throw t0Err;
+    const msg = t0Err instanceof Error ? t0Err.message : String(t0Err);
+    console.warn(`[hardwarePdf] Tier 0 (door-schedule grid) failed: ${msg} — continuing with normal tiers.`);
+  }
 
   // ── Tier 1: text extraction ───────────────────────────────────────────────
   // Try pdfjs text extraction first. If the text is garbled (broken font
