@@ -35,6 +35,20 @@ to `debug-extractions/pdf-extraction/`).
 
 ### Gap 1 — Matrix drawn as vector graphics (not an embedded image)
 
+> **PARTIALLY RESOLVED 2026-06-12** — the per-door variant of this gap is now handled
+> by Tier 0: `extractDoorScheduleGrid` (`lib/ai/doorScheduleGrid.ts`), a fully
+> deterministic extractor (no AI calls) for vector-drawn per-door schedules where
+> doors are ROWS and hardware items are indicator COLUMNS (text "YES"/"−" cells or
+> graphical checkbox cells). Validated on `New-Type-Matrix-Format-PDF-2.pdf`
+> (105 sets, two side-by-side tables, rotated page, YES/− text marks) and
+> `New-Type-Matrix-Format-PDF-3.pdf` (98 sets, black-filled checkbox marks,
+> hyphenated door numbers, lock-function column in an unruled stretch).
+> Structure comes from the text layer (`extractPositionedText`), column boundaries
+> from ruling-line projection, marks from cell-pixel dark fractions.
+> STILL OPEN: a vector-drawn Format F matrix (doors as COLUMNS, items as rows) —
+> that orientation is not covered by Tier 0 and would still fall through to the
+> visual tier without close-ups.
+
 **Symptom:** the matrix is drawn with PDF line/text operators directly on the sheet.
 `renderEmbeddedImageCloseups` finds no embedded raster image → no close-ups → the
 matrix path never triggers → full-sheet visual extraction misreads checkboxes.

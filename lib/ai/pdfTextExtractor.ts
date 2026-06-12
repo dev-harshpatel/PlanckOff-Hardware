@@ -160,6 +160,89 @@ export async function extractPdfText(
 }
 
 // ---------------------------------------------------------------------------
+// Positioned text extraction
+// ---------------------------------------------------------------------------
+
+export interface PositionedTextItem {
+  str: string;
+  /** viewport coordinates at scale 1: origin top-left, page rotation applied */
+  x: number;
+  y: number;
+  width: number;
+  /** approximate font height from the transform matrix */
+  height: number;
+}
+
+export interface PositionedPage {
+  pageNumber: number;
+  /** page size in PDF user-space points */
+  pageWidth: number;
+  pageHeight: number;
+  items: PositionedTextItem[];
+}
+
+/**
+ * Extract raw text items WITH their positions, instead of flattening to
+ * row-reconstructed strings. Needed by deterministic table analyzers that
+ * map text cells to grid columns (e.g. per-door mark-grid door schedules).
+ */
+export async function extractPositionedText(buffer: Buffer): Promise<PositionedPage[]> {
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as string);
+
+  const WORKER_SUBPATH = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
+  let workerSrc: string;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (import.meta as any).resolve === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      workerSrc = (import.meta as any).resolve(WORKER_SUBPATH);
+    } else {
+      throw new Error('import.meta.resolve unavailable');
+    }
+  } catch {
+    const { pathToFileURL } = await import('url');
+    const { resolve } = await import('path');
+    workerSrc = pathToFileURL(resolve(process.cwd(), 'node_modules', ...WORKER_SUBPATH.split('/'))).href;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc;
+
+  const uint8 = new Uint8Array(buffer);
+  const pdf = await pdfjsLib.getDocument({
+    data: uint8,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    disableAutoFetch: true,
+  }).promise;
+
+  const pages: PositionedPage[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    // Convert raw user-space coordinates to viewport coordinates so that
+    // rotated pages (common for landscape architectural sheets) come out in
+    // visual orientation: origin top-left, y growing downward.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = (content.items as any[])
+      .filter((it) => typeof it.str === 'string' && it.str.trim() !== '')
+      .map((it) => {
+        const [vx, vy] = viewport.convertToViewportPoint(it.transform[4] as number, it.transform[5] as number);
+        return {
+          str: it.str as string,
+          x: vx,
+          y: vy,
+          width: it.width as number,
+          height: Math.abs(it.transform[3] as number) || Math.abs(it.transform[1] as number) || 8,
+        };
+      });
+    pages.push({ pageNumber: i, pageWidth: viewport.width, pageHeight: viewport.height, items });
+    page.cleanup();
+  }
+  return pages;
+}
+
+// ---------------------------------------------------------------------------
 // PDF → PNG image renderer
 // ---------------------------------------------------------------------------
 

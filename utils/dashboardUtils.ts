@@ -39,6 +39,29 @@ export const buildProjectStats = (projects: Project[]): Record<string, number> =
     return counts;
 };
 
+/**
+ * Returns the due-date urgency level for a project card highlight.
+ * - 'red'    → overdue or due today, and status is not Submitted
+ * - 'yellow' → due tomorrow (regardless of status)
+ * - null     → no highlight
+ */
+export function getDueDateHighlight(dueDate?: string, status?: string): 'red' | 'yellow' | null {
+    if (!dueDate) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const due = new Date(dueDate + 'T00:00:00');
+
+    if (due.getTime() === tomorrow.getTime()) return 'yellow';
+    if (due <= today && status !== 'Submitted') return 'red';
+
+    return null;
+}
+
 export const filterProjectsByDashboardState = (
     projects: Project[],
     searchQuery: string,

@@ -132,6 +132,16 @@ const ALIAS_MAP: Record<string, string> = {
   '1 set mtg. stile':   'meeting_stile',
   '1 set meeting stile':'meeting_stile',
 
+  // Drip Guard / Drip Cap
+  'drip guard':         'drip_guard',
+  'drip guards':        'drip_guard',
+  'dripguard':          'drip_guard',
+  'drip cap':           'drip_guard',
+  'drip caps':          'drip_guard',
+  'overhead drip':      'drip_guard',
+  'overhead drip guard':'drip_guard',
+  'overhead drip cap':  'drip_guard',
+
   // Sensor
   'sensor':             'sensor',
   'motion sensor':      'sensor',
@@ -194,6 +204,15 @@ const RULES: Record<string, RuleFn> = {
     value: formatInches(door.height),
     rule: 'H',
   }),
+
+  drip_guard: (door, isPair) => {
+    // Drip guard spans the full opening, so use total width for pairs.
+    const openingWidth = isPair ? door.width * 2 : door.width;
+    return {
+      value: formatInches(openingWidth + 4),
+      rule: isPair ? '(2 × W) + 4" (pair opening)' : 'W + 4"',
+    };
+  },
 
   sensor: (door, isPair) => {
     const openingWidth = isPair ? door.width * 2 : door.width;

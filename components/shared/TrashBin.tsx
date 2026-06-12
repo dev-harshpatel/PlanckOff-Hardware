@@ -23,6 +23,7 @@ interface TrashBinProps {
   onClose: () => void;
   onRestore: (id: string) => Promise<void> | void;
   onPermDelete: (id: string) => Promise<void> | void;
+  userRole?: string;
 }
 
 const TRASH_TTL_DAYS = 30;
@@ -81,7 +82,7 @@ const CountdownBadge: React.FC<CountdownBadgeProps> = ({ daysLeft }) => {
   );
 };
 
-const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, onPermDelete }) => {
+const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, onPermDelete, userRole }) => {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -177,7 +178,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ isOpen, trash, onClose, onRestore, 
                         <FolderOpen className="w-4 h-4 text-[var(--text-faint)] flex-shrink-0" />
                         <div className="min-w-0">
                           <h3 className="text-sm font-semibold text-[var(--text)] truncate">{project.name}</h3>
-                          {project.client && (
+                          {project.client && userRole !== 'Estimator' && userRole !== 'Client' && (
                             <p className="text-xs text-[var(--text-muted)] truncate">{project.client}</p>
                           )}
                         </div>
