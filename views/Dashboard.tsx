@@ -69,8 +69,6 @@ const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     'Under Review': { text: 'text-[var(--warning-text)]', bg: 'bg-[var(--warning-bg)]', dot: 'bg-[var(--warning-dot)]' },
     Submitted:      { text: 'text-[var(--primary-text)]', bg: 'bg-[var(--primary-bg)]', dot: 'bg-[var(--primary-action)]' },
     Client:         { text: 'text-teal-700',               bg: 'bg-teal-50',              dot: 'bg-teal-400' },
-    'On Hold':      { text: 'text-[var(--text-muted)]',   bg: 'bg-[var(--bg-muted)]',   dot: 'bg-[var(--text-faint)]' },
-    Archived:       { text: 'text-purple-700',             bg: 'bg-purple-50',            dot: 'bg-purple-400' },
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject, onAddNewProject, onProjectUpdate, onDeleteProject, onRestoreProject, onPermDeleteProject, userRole, addToast, teamMembers, isLoadingTeamMembers = false }) => {
@@ -427,7 +425,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                         </div>
                     ) : selectedStatusFilter === 'All' ? (
                         /* ── Kanban view (All statuses) ── */
-                        <div className="flex gap-4 h-full min-w-[1900px]">
+                        <div className="flex gap-4 h-full min-w-[900px]">
                             {visibleColumns.map(col => (
                                 <KanbanColumn
                                     key={col.id}

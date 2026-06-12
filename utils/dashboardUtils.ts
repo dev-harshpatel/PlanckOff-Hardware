@@ -13,8 +13,6 @@ export const KANBAN_COLUMNS: {
     { id: 'Under Review', label: 'Under Review',  dot: 'bg-[var(--warning-dot)]',    countBg: 'bg-[var(--warning-bg)]',  countText: 'text-[var(--warning-text)]' },
     { id: 'Submitted',    label: 'Submitted',     dot: 'bg-[var(--primary-action)]', countBg: 'bg-[var(--primary-bg)]',  countText: 'text-[var(--primary-text)]' },
     { id: 'Client',       label: 'Client',        dot: 'bg-teal-400',                countBg: 'bg-teal-50',              countText: 'text-teal-700' },
-    { id: 'On Hold',      label: 'On Hold',       dot: 'bg-[var(--text-faint)]',     countBg: 'bg-[var(--bg-muted)]',    countText: 'text-[var(--text-muted)]' },
-    { id: 'Archived',     label: 'Archived',      dot: 'bg-purple-400',              countBg: 'bg-purple-50',            countText: 'text-purple-700' },
 ];
 
 export const getProjectStatus = (project: Project, overrides?: ProjectStatusOverrides): ProjectStatus => {

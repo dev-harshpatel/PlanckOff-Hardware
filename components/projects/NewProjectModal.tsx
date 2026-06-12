@@ -36,8 +36,6 @@ const statusOptions: { id: ProjectStatus; label: string }[] = [
   { id: 'Under Review', label: 'Review' },
   { id: 'Submitted', label: 'Submitted' },
   { id: 'Client', label: 'Client' },
-  { id: 'On Hold', label: 'Hold' },
-  { id: 'Archived', label: 'Archive' }
 ];
 
 interface NewProjectModalProps {
