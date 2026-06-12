@@ -103,6 +103,7 @@ export async function getProjectsForEstimator(estimatorId: string): Promise<DbRe
       .from('projects')
       .select(BASE_SELECT)
       .eq('assigned_to', estimatorId)
+      .neq('status', 'Client')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 

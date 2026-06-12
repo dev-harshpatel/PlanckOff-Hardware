@@ -30,7 +30,7 @@ export const POST = withRoleAuth(
     const { error: assignErr } = await addProjectToClient(body.clientId, projectId, assignedById);
     if (assignErr) return NextResponse.json({ error: assignErr.message }, { status: 500 });
 
-    // Only clear the assignee if they are an Estimator; keep Admin / Team Lead assigned
+    // Move project to Client column; only clear the assignee if they are an Estimator.
     const { data: currentProject } = await getProjectById(projectId);
     const projectUpdate: { status: ProjectStatus; assignedTo?: string } = { status: 'Client' };
     if (currentProject?.assignedTo) {

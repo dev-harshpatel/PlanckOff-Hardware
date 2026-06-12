@@ -17,6 +17,11 @@ const Dashboard = dynamic(() => import('@/views/Dashboard'), {
   loading: () => <DashboardSkeleton />,
 });
 
+const ClientDashboard = dynamic(() => import('@/views/ClientDashboard'), {
+  ssr: false,
+  loading: () => <DashboardSkeleton />,
+});
+
 export default function HomePage() {
   const router = useRouter();
   const { projects, trash, projectsHydrated, addProject, updateProject, deleteProject, restoreProject, permDeleteProject } = useProject();
@@ -56,15 +61,26 @@ export default function HomePage() {
     return <DashboardSkeleton />;
   }
 
+  const handleSelectProject = (id: string) => {
+    const href = `/project/${id}`;
+    startNavigation(href);
+    router.push(href);
+  };
+
+  if (user?.role === 'Client') {
+    return (
+      <ClientDashboard
+        projects={projects}
+        onSelectProject={handleSelectProject}
+      />
+    );
+  }
+
   return (
     <Dashboard
       projects={projects}
       trash={trash}
-      onSelectProject={(id) => {
-        const href = `/project/${id}`;
-        startNavigation(href);
-        router.push(href);
-      }}
+      onSelectProject={handleSelectProject}
       onAddNewProject={addProject}
       onProjectUpdate={updateProject}
       onDeleteProject={deleteProject}

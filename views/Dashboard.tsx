@@ -56,22 +56,13 @@ const formatDate = (isoDate?: string): string => {
 };
 
 
-const STATUS_FILTERS: Array<{
-    id: ProjectStatus | 'All';
-    label: string;
-    dot: string;
-    countBg: string;
-    countText: string;
-}> = [
-    ...KANBAN_COLUMNS,
-    {
-        id: 'All',
-        label: 'All',
-        dot: 'bg-[var(--text-secondary)]',
-        countBg: 'bg-[var(--primary-bg)]',
-        countText: 'text-[var(--primary-text)]',
-    },
-];
+const ALL_FILTER = {
+    id: 'All' as const,
+    label: 'All',
+    dot: 'bg-[var(--text-secondary)]',
+    countBg: 'bg-[var(--primary-bg)]',
+    countText: 'text-[var(--primary-text)]',
+};
 
 const STAT_COLORS: Record<string, { text: string; bg: string; dot: string }> = {
     Active:         { text: 'text-[var(--success-text)]', bg: 'bg-[var(--success-bg)]', dot: 'bg-[var(--success-dot)]' },
@@ -100,6 +91,15 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
     const [listDeleteTarget, setListDeleteTarget] = useState<Project | null>(null);
     const [listDeleteConfirmation, setListDeleteConfirmation] = useState('');
 
+    // Estimators must not see the Client column or client-assigned projects.
+    const visibleColumns = useMemo(() =>
+        userRole === 'Estimator'
+            ? KANBAN_COLUMNS.filter(c => c.id !== 'Client')
+            : KANBAN_COLUMNS,
+    [userRole]);
+
+    const statusFilters = useMemo(() => [...visibleColumns, ALL_FILTER], [visibleColumns]);
+
     const stats = useMemo(() => buildProjectStats(effectiveProjects), [effectiveProjects]);
 
     const filteredProjects = useMemo(() => {
@@ -113,7 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
     const filteredProjectCount = filteredProjects.length;
 
-    const selectedFilterMeta = STATUS_FILTERS.find(filter => filter.id === selectedStatusFilter) ?? STATUS_FILTERS[0];
+    const selectedFilterMeta = statusFilters.find(filter => filter.id === selectedStatusFilter) ?? statusFilters[0];
 
     const sectionTitle = selectedStatusFilter === 'All'
         ? 'All Projects'
@@ -288,7 +288,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
 
                     {/* Stat pills */}
                     <div className="flex items-center gap-2 mt-4 flex-wrap">
-                        {STATUS_FILTERS.map(col => {
+                        {statusFilters.map(col => {
                             const count = col.id === 'All' ? projects.length : (stats[col.id] ?? 0);
                             const isActive = selectedStatusFilter === col.id;
                             return (
@@ -323,7 +323,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     isLoadingTeamMembers={isLoadingTeamMembers}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
-                    showMemberFilter={userRole !== 'Client'}
+                    showMemberFilter={userRole === 'Administrator' || userRole === 'Team Lead'}
                 />
 
                 {/* Projects content */}
@@ -428,7 +428,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                     ) : selectedStatusFilter === 'All' ? (
                         /* ── Kanban view (All statuses) ── */
                         <div className="flex gap-4 h-full min-w-[1900px]">
-                            {KANBAN_COLUMNS.map(col => (
+                            {visibleColumns.map(col => (
                                 <KanbanColumn
                                     key={col.id}
                                     col={col}
