@@ -81,7 +81,7 @@ export function ProjectCard({
     const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
     const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
 
-    const dueDateHighlight = userRole !== 'Client' ? getDueDateHighlight(project.dueDate, project.status) : null;
+    const dueDateHighlight = userRole !== 'Client' ? getDueDateHighlight(project.dueDate, project.status, project.clientIds) : null;
     const cardHighlightClass = dueDateHighlight === 'red'
         ? 'bg-red-50 border-red-200 hover:border-red-300'
         : dueDateHighlight === 'yellow'

@@ -44,9 +44,13 @@ export const buildProjectStats = (projects: Project[]): Record<string, number> =
  * - 'red'    → overdue or due today, and status is not Submitted
  * - 'yellow' → due tomorrow (regardless of status)
  * - null     → no highlight
+ *
+ * Projects assigned to a client are never highlighted — once handed off,
+ * due-date urgency no longer applies and the card shows the normal colour.
  */
-export function getDueDateHighlight(dueDate?: string, status?: string): 'red' | 'yellow' | null {
+export function getDueDateHighlight(dueDate?: string, status?: string, clientIds?: string[]): 'red' | 'yellow' | null {
     if (!dueDate) return null;
+    if (clientIds?.length) return null;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

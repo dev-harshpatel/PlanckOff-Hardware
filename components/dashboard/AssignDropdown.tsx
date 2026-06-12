@@ -42,7 +42,7 @@ export function AssignDropdown({
   searchPlaceholder = 'Search by name or role…',
 }: AssignDropdownProps) {
   const [query, setQuery] = useState('');
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Position the panel relative to the trigger button using fixed coords
@@ -51,17 +51,20 @@ export function AssignDropdown({
     if (!btn) return;
     const r = btn.getBoundingClientRect();
     const panelHeight = 340;
-    const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - r.bottom;
+    const panelWidth = 288;
+    const spaceBelow = window.innerHeight - r.bottom;
     const spaceAbove = r.top;
 
-    // Prefer opening below; flip above only when there's not enough room below
-    const top =
-      spaceBelow >= Math.min(panelHeight, 200) || spaceBelow >= spaceAbove
-        ? r.bottom + 6
-        : r.top - Math.min(panelHeight, spaceAbove) - 6;
+    // Keep the panel inside the viewport horizontally
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - panelWidth - 8));
 
-    setPos({ top, left: r.left, width: Math.max(r.width, 288) });
+    // Prefer opening below; flip above only when there's not enough room below.
+    // When flipped, anchor the panel's BOTTOM edge to the trigger so it stays
+    // attached regardless of how tall the content actually renders.
+    const openBelow = spaceBelow >= Math.min(panelHeight, 200) || spaceBelow >= spaceAbove;
+    setPos(openBelow
+      ? { top: r.bottom + 6, left, maxHeight: Math.max(120, Math.min(panelHeight, spaceBelow - 12)) }
+      : { bottom: window.innerHeight - r.top + 6, left, maxHeight: Math.max(120, Math.min(panelHeight, spaceAbove - 12)) });
   }, [triggerRef]);
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export function AssignDropdown({
 
   const panel = (
     <div
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: '288px', maxHeight: '340px', zIndex: 9999 }}
+      style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: '288px', maxHeight: pos.maxHeight, zIndex: 9999 }}
       className="bg-[var(--bg)] rounded-lg shadow-xl border border-[var(--border)] overflow-hidden flex flex-col"
       onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
       onClick={(e) => e.stopPropagation()}

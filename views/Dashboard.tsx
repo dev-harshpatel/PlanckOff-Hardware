@@ -351,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, trash, onSelectProject,
                                                 const canEdit = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 const canDelete = userRole === 'Administrator' || userRole === 'Team Lead';
                                                 const canAssign = userRole === 'Administrator' || userRole === 'Team Lead';
-                                                const rowHighlight = getDueDateHighlight(project.dueDate, project.status);
+                                                const rowHighlight = getDueDateHighlight(project.dueDate, project.status, project.clientIds);
                                                 const rowBg = rowHighlight === 'red'
                                                     ? 'bg-red-50 hover:bg-red-100/70'
                                                     : rowHighlight === 'yellow'
