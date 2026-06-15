@@ -83,10 +83,12 @@ function fmt(val: string): string {
 
 function getDoorMaterial(door: MergedDoor): string {
   const fromSection = door.sections?.door?.['DOOR MATERIAL'];
-  if (fromSection?.trim()) return fromSection.trim();
+  if (fromSection?.trim() && !isEmptyMaterialValue(fromSection.trim())) return fromSection.trim();
   const fromAll = getDoorParam(door, 'DOOR MATERIAL');
-  if (fromAll) return fromAll;
-  return door.doorMaterial?.trim() || 'Unspecified';
+  if (fromAll && !isEmptyMaterialValue(fromAll)) return fromAll;
+  const direct = door.doorMaterial?.trim();
+  if (direct && !isEmptyMaterialValue(direct)) return direct;
+  return 'Unspecified';
 }
 
 function getElevationType(
@@ -155,7 +157,7 @@ function buildSectionParams(
 
 // ── Material type classification ─────────────────────────────────────────────
 
-type DoorMatType  = 'hm' | 'wood' | 'fiberglass' | 'vinyl' | 'other';
+type DoorMatType  = 'hm' | 'wood' | 'fiberglass' | 'vinyl' | 'aluminum' | 'other';
 type FrameMatType = 'hm' | 'wood' | 'fiberglass' | 'aluminum' | 'other';
 
 interface DoorTypeGroup  { matType: DoorMatType;  displayName: string; doors: MergedDoor[]; totalQuantity: number; }
@@ -165,29 +167,38 @@ type SectionKey = 'basic_information' | 'door' | 'frame' | 'hardware';
 interface ColumnDef { key: string; section: SectionKey; }
 
 // Aliases — order matters: first match wins.
+// MET / MET3 / MET7 etc. are common door-schedule shorthand for Hollow Metal.
 function classifyDoorMat(raw: string): DoorMatType {
   const m = raw.trim().toLowerCase();
-  if (/\bhm\b|hollow[\s-]?metal/i.test(m))                               return 'hm';
+  if (/\bhm\b|hollow[\s-]?metal|\bmet\d*\b/i.test(m))                    return 'hm';
   if (/\bwd\b|\bwood\b|wooden|timber|solid[\s-]?wood/i.test(m))          return 'wood';
   if (/fibr[ei][\s-]?glass|fiberglass|fibreglass|\bfg\b|\bfrp\b/i.test(m)) return 'fiberglass';
   if (/vinyl|\bvd\b|\bpvc\b|\bupvc\b/i.test(m))                          return 'vinyl';
+  if (/alumin[ui]m|\bal\b|\balu\b/i.test(m))                             return 'aluminum';
   return 'other';
 }
 
 function classifyFrameMat(raw: string): FrameMatType {
   const m = raw.trim().toLowerCase();
-  if (/\bhm\b|hollow[\s-]?metal/i.test(m))                               return 'hm';
+  if (/\bhm\b|hollow[\s-]?metal|\bmet\d*\b/i.test(m))                    return 'hm';
   if (/\bwd\b|\bwood\b|wooden|timber/i.test(m))                          return 'wood';
   if (/fibr[ei][\s-]?glass|fiberglass|fibreglass|\bfg\b|\bfrp\b/i.test(m)) return 'fiberglass';
   if (/alumin[ui]m|\bal\b|\balu\b/i.test(m))                             return 'aluminum';
   return 'other';
 }
 
-function getFrameMaterialValue(door: MergedDoor): string {
-  return (door.sections?.frame?.['FRAME MATERIAL'] ?? door.frameMaterial ?? '').trim();
+// Treat Excel placeholder values (0, -, --) as empty so they don't create
+// spurious material groups in the report.
+function isEmptyMaterialValue(val: string): boolean {
+  return !val || /^[-–—]+$/.test(val) || val === '0';
 }
 
-const DOOR_TYPE_DISPLAY: Record<DoorMatType,  string> = { hm: 'Hollow Metal', wood: 'Wood', fiberglass: 'Fiberglass', vinyl: 'Vinyl', other: 'Other' };
+function getFrameMaterialValue(door: MergedDoor): string {
+  const val = (door.sections?.frame?.['FRAME MATERIAL'] ?? door.frameMaterial ?? '').trim();
+  return isEmptyMaterialValue(val) ? '' : val;
+}
+
+const DOOR_TYPE_DISPLAY: Record<DoorMatType,  string> = { hm: 'Hollow Metal', wood: 'Wood', fiberglass: 'Fiberglass', vinyl: 'Vinyl', aluminum: 'Aluminum', other: 'Other' };
 const FRAME_TYPE_DISPLAY: Record<FrameMatType, string> = { hm: 'Hollow Metal', wood: 'Wood', fiberglass: 'Fiberglass', aluminum: 'Aluminum', other: 'Other' };
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -265,6 +276,7 @@ const DOOR_TYPE_COLS: Record<DoorMatType, ColumnDef[] | null> = {
   wood:       WOOD_FG_DOOR_COLS,
   fiberglass: WOOD_FG_DOOR_COLS,
   vinyl:      VINYL_DOOR_COLS,
+  aluminum:   null,
   other:      null,  // null → fall back to dynamic buildSectionParams
 };
 
@@ -424,37 +436,64 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
   // Section 1: group by classified Door Material type
   const doorTypeGroups = useMemo<DoorTypeGroup[]>(() => {
-    const map = new Map<DoorMatType, DoorTypeGroup>();
+    const knownMap = new Map<DoorMatType, DoorTypeGroup>();
+    // Unrecognised materials get their own group keyed by raw value so the actual
+    // material name shows in the report instead of the generic fallback "Other".
+    const otherMap = new Map<string, DoorTypeGroup>();
     for (const door of allDoors) {
       const raw = getDoorMaterial(door);
       const matType = classifyDoorMat(raw);
-      if (!map.has(matType)) {
-        map.set(matType, { matType, displayName: DOOR_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
+      if (matType !== 'other') {
+        if (!knownMap.has(matType)) {
+          knownMap.set(matType, { matType, displayName: DOOR_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
+        }
+        const g = knownMap.get(matType)!;
+        g.doors.push(door);
+        g.totalQuantity += doorQuantity(door);
+      } else {
+        const displayName = raw && raw !== 'Unspecified' ? raw : 'Other';
+        if (!otherMap.has(displayName)) {
+          otherMap.set(displayName, { matType: 'other', displayName, doors: [], totalQuantity: 0 });
+        }
+        const g = otherMap.get(displayName)!;
+        g.doors.push(door);
+        g.totalQuantity += doorQuantity(door);
       }
-      const g = map.get(matType)!;
-      g.doors.push(door);
-      g.totalQuantity += doorQuantity(door);
     }
-    // Preferred display order
-    const order: DoorMatType[] = ['hm', 'wood', 'fiberglass', 'vinyl', 'other'];
-    return order.map(t => map.get(t)).filter((g): g is DoorTypeGroup => g !== undefined);
+    const order: DoorMatType[] = ['hm', 'wood', 'fiberglass', 'vinyl', 'aluminum'];
+    const knownGroups = order.map(t => knownMap.get(t)).filter((g): g is DoorTypeGroup => g !== undefined);
+    const otherGroups = Array.from(otherMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return [...knownGroups, ...otherGroups];
   }, [allDoors]);
 
   // Section 2: group by classified Frame Material type (reads FRAME MATERIAL, not DOOR MATERIAL)
   const frameTypeGroups = useMemo<FrameTypeGroup[]>(() => {
-    const map = new Map<FrameMatType, FrameTypeGroup>();
+    const knownMap = new Map<FrameMatType, FrameTypeGroup>();
+    const otherMap = new Map<string, FrameTypeGroup>();
     for (const door of allDoors) {
       const raw = getFrameMaterialValue(door);
       const matType = classifyFrameMat(raw);
-      if (!map.has(matType)) {
-        map.set(matType, { matType, displayName: FRAME_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
+      if (matType !== 'other') {
+        if (!knownMap.has(matType)) {
+          knownMap.set(matType, { matType, displayName: FRAME_TYPE_DISPLAY[matType], doors: [], totalQuantity: 0 });
+        }
+        const g = knownMap.get(matType)!;
+        g.doors.push(door);
+        g.totalQuantity += doorQuantity(door);
+      } else {
+        const displayName = raw && raw !== 'Unspecified' ? raw : 'Other';
+        if (!otherMap.has(displayName)) {
+          otherMap.set(displayName, { matType: 'other', displayName, doors: [], totalQuantity: 0 });
+        }
+        const g = otherMap.get(displayName)!;
+        g.doors.push(door);
+        g.totalQuantity += doorQuantity(door);
       }
-      const g = map.get(matType)!;
-      g.doors.push(door);
-      g.totalQuantity += doorQuantity(door);
     }
-    const order: FrameMatType[] = ['hm', 'wood', 'fiberglass', 'aluminum', 'other'];
-    return order.map(t => map.get(t)).filter((g): g is FrameTypeGroup => g !== undefined);
+    const order: FrameMatType[] = ['hm', 'wood', 'fiberglass', 'aluminum'];
+    const knownGroups = order.map(t => knownMap.get(t)).filter((g): g is FrameTypeGroup => g !== undefined);
+    const otherGroups = Array.from(otherMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return [...knownGroups, ...otherGroups];
   }, [allDoors]);
 
   // Section 3A: one entry per MergedHardwareSet
