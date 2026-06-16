@@ -577,7 +577,6 @@ export function useProjectUploads({
                     );
                 }
                 uploadedPdfStoragePath = storagePath;
-                addLog('info', `Large PDF (${(pdfFile.size / 1024 / 1024).toFixed(1)} MB) uploaded to secure storage — bypassing server size limit.`);
             }
 
             // If the user cancelled during the storage upload, abort now before the fetch.

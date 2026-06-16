@@ -365,11 +365,11 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                 return (
                                     <React.Fragment key={set.id}>
                                         <tr className={`transition-colors ${allHwExcluded ? 'opacity-50' : ''} ${isUnavailable
-                                            ? 'border-l-2 border-l-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                            ? 'border-l-2 border-l-[var(--error-dot)] bg-[var(--error-bg)] hover:opacity-90'
                                             : hasZeroDoors
-                                                ? 'border-l-2 border-l-red-400 dark:border-l-red-800 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                                ? 'border-l-2 border-l-[var(--error-dot)] bg-[var(--error-bg)] hover:opacity-90'
                                                 : isManualEntry
-                                                    ? 'border-l-2 border-l-amber-300 bg-amber-50/80 hover:bg-amber-100'
+                                                    ? 'border-l-2 border-l-[var(--warning-dot)] bg-[var(--warning-bg)] hover:opacity-90'
                                                     : isSelected
                                                         ? 'bg-[var(--primary-bg)] hover:bg-[var(--primary-bg-hover)]'
                                                         : 'hover:bg-[var(--bg-subtle)]'
@@ -384,11 +384,11 @@ const HardwareSetsManager: React.FC<HardwareSetsManagerProps> = (props) => {
                                                             ? <ChevronDown className="w-4 h-4" />
                                                             : <ChevronRight className="w-4 h-4" />}
                                                     </button>
-                                                    <span className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${isUnavailable ? 'bg-red-100 text-red-700 line-through' : 'bg-[var(--bg-muted)] text-[var(--text)]'}`}>
+                                                    <span className={`font-mono text-xs font-semibold px-2 py-0.5 rounded ${isUnavailable ? 'bg-[var(--error-bg)] text-[var(--error-text)] line-through' : 'bg-[var(--bg-muted)] text-[var(--text)]'}`}>
                                                         {set.name}
                                                     </span>
                                                     {isManualEntry && (
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700">
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--warning-bg)] text-[var(--warning-text)] border border-[var(--warning-border)]">
                                                             Manual
                                                         </span>
                                                     )}
