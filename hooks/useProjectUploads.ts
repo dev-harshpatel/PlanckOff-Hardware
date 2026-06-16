@@ -547,16 +547,29 @@ export function useProjectUploads({
             await new Promise(r => setTimeout(r, 200));
 
             // PDFs ≥4 MB exceed Vercel's 4.5 MB request-body limit.
-            // Upload directly from the browser to Supabase Storage; the API
-            // downloads it from there using the service-role key, then deletes it.
+            // Upload directly from the browser to Supabase Storage using a signed
+            // upload URL (this app uses its own session-cookie auth, not Supabase
+            // Auth, so the browser's Supabase client has no "authenticated" role —
+            // a direct insert would always fail RLS). The signed URL is minted by
+            // our own API, which validates the user via the app's real auth first.
             const PDF_STORAGE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
             if (pdfFile.size >= PDF_STORAGE_THRESHOLD) {
+                step('Preparing secure upload slot…', 11);
+                const urlRes = await fetch(`/api/projects/${projectId}/process/upload-url`, {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+                const urlJson = await urlRes.json().catch(() => null) as { data?: { path: string; token: string }; error?: string } | null;
+                if (!urlRes.ok || !urlJson?.data) {
+                    throw new Error(urlJson?.error ?? 'Could not prepare a storage upload slot. Please try again.');
+                }
+                const { path: storagePath, token: uploadToken } = urlJson.data;
+
                 step('Uploading PDF to secure storage…', 12);
                 const supabase = createSupabaseBrowserClient();
-                const storagePath = `temp/${projectId}/${crypto.randomUUID()}.pdf`;
                 const { error: storageUploadError } = await supabase.storage
                     .from('temp-pdf-uploads')
-                    .upload(storagePath, pdfFile, { contentType: 'application/pdf' });
+                    .uploadToSignedUrl(storagePath, uploadToken, pdfFile, { contentType: 'application/pdf' });
                 if (storageUploadError) {
                     throw new Error(
                         `Failed to upload PDF to storage: ${storageUploadError.message}. ` +
@@ -735,15 +748,20 @@ export function useProjectUploads({
 
         } catch (err) {
             if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
-            // Best-effort client-side cleanup: delete the storage file if we uploaded one
-            // but the API never ran (e.g. cancelled before/during the fetch, or storage
-            // error before the fetch started). The API also deletes in its own finally
-            // block, so double-deletion is safe — remove() on a missing path is a no-op.
+            // Best-effort cleanup: delete the storage file if we uploaded one but the
+            // /process API never ran (e.g. cancelled before/during the fetch, or a
+            // storage error before the fetch started). Routed through our own API
+            // (not the browser Supabase client directly) since this app's browser
+            // client has no real Supabase Auth session and can't pass storage RLS.
+            // /process also deletes in its own finally block, so double-deletion is
+            // safe — remove() on an already-deleted path is a no-op.
             if (uploadedPdfStoragePath) {
-                createSupabaseBrowserClient().storage
-                    .from('temp-pdf-uploads')
-                    .remove([uploadedPdfStoragePath])
-                    .catch(() => {});
+                fetch(`/api/projects/${projectId}/process/upload-url`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: uploadedPdfStoragePath }),
+                }).catch(() => {});
             }
             if (err instanceof Error && err.name === 'AbortError') {
                 // User cancelled — reset to a fresh state so they can re-upload
