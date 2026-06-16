@@ -14,14 +14,6 @@ export function filterExcludedFromFinalJson(finalJson: MergedHardwareSet[]): Mer
 }
 
 /**
- * Remove doors where the DOOR component is excluded.
- * Use for: door-schedule report — only the door leaf itself is out of scope.
- */
-export function filterExcludedDoors(doors: Door[]): Door[] {
-  return doors.filter(d => d.doorIncludeExclude?.toUpperCase() !== 'EXCLUDE');
-}
-
-/**
  * Remove doors where the HARDWARE component is excluded.
  * Use for: hardware-set report, submittal package, pricing set membership.
  */

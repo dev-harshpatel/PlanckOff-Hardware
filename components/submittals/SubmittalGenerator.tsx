@@ -417,6 +417,33 @@ const FLAT_ROWS_PER_PAGE = 22;
 // 22 rows fits safely inside 210mm on both first and continuation pages.
 const COMMON_ROWS_PER_PAGE = 22;
 
+// ── Hardware Set Report flow-packing constants (all mm, matches the .spage CSS box model) ──
+// Several sets are stacked per page until the page is full; a set whose table
+// is too long to fit the remaining space is split, continuing on the next page.
+const HWSET_PAGE_BUDGET_MM    = 245; // usable height per page, kept under the true ~261mm to avoid clipping (overflow:hidden)
+const HWSET_HEADER_MM         = 23;  // full title + subtitle + qty block (first chunk of a set)
+const HWSET_CONT_HEADER_MM    = 9;   // compact "(cont'd)" label used on continuation chunks
+const HWSET_TABLE_HEADER_MM   = 6;   // table <thead>, repeated on every chunk
+const HWSET_ROW_MM            = 6.2; // one item row
+const HWSET_AFFECTED_TITLE_MM = 10;  // "Affected Doors" title, only on the last chunk of a set
+const HWSET_TAG_ROW_MM        = 5;   // one wrapped row of door-tag chips
+const HWSET_TAGS_PER_ROW      = 10;  // average chip width assumption
+const HWSET_GAP_MM            = 8;   // vertical space between stacked sets on the same page
+const HWSET_MIN_ROWS          = 2;   // never start a chunk that can't show at least this many rows
+
+interface HwSetChunk {
+  key: string;
+  set: HwSetDisplay;
+  startIdx: number;
+  endIdx: number;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+function hwSetTagRowCount(n: number): number {
+  return n === 0 ? 0 : Math.ceil(n / HWSET_TAGS_PER_ROW);
+}
+
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
@@ -594,6 +621,80 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       });
   }, [finalJson]);
 
+  // Pack hardware sets into pages: stack multiple sets per page with a gap between
+  // them, splitting a set's table across pages when it doesn't fit the remaining space.
+  const hwSetPages = useMemo<HwSetChunk[][]>(() => {
+    const pages: HwSetChunk[][] = [];
+    let current: HwSetChunk[] = [];
+    let used = 0;
+
+    const startNewPage = () => {
+      if (current.length > 0) pages.push(current);
+      current = [];
+      used = 0;
+    };
+
+    hwSetDisplays.forEach((set, setIdx) => {
+      const total = set.items.length;
+      const tagRows = hwSetTagRowCount(set.doorTags.length);
+      const affectedCost = HWSET_AFFECTED_TITLE_MM + tagRows * HWSET_TAG_ROW_MM;
+
+      let idx = 0;
+      let isFirst = true;
+      let chunkN = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const gapBefore = current.length > 0 ? HWSET_GAP_MM : 0;
+        const headerCost = isFirst ? HWSET_HEADER_MM : HWSET_CONT_HEADER_MM;
+        const fixedCost = headerCost + HWSET_TABLE_HEADER_MM;
+        const remaining = HWSET_PAGE_BUDGET_MM - used - gapBefore;
+        const minNeeded = fixedCost + HWSET_MIN_ROWS * HWSET_ROW_MM;
+
+        if (remaining < minNeeded && current.length > 0) {
+          startNewPage();
+          continue;
+        }
+
+        const availForRows = Math.max(0, remaining - fixedCost);
+        const rowsRemainingInSet = total - idx;
+
+        let take: number;
+        let chunkIsLast: boolean;
+
+        if (rowsRemainingInSet * HWSET_ROW_MM + affectedCost <= availForRows) {
+          take = rowsRemainingInSet;
+          chunkIsLast = true;
+        } else {
+          take = Math.max(HWSET_MIN_ROWS, Math.floor(availForRows / HWSET_ROW_MM));
+          if (take >= rowsRemainingInSet) take = Math.max(1, rowsRemainingInSet - 1);
+          chunkIsLast = false;
+        }
+
+        const chunkHeight = fixedCost + take * HWSET_ROW_MM + (chunkIsLast ? affectedCost : 0);
+
+        current.push({
+          key: `${set.setName}__${setIdx}__${chunkN}`,
+          set,
+          startIdx: idx,
+          endIdx: idx + take,
+          isFirst,
+          isLast: chunkIsLast,
+        });
+
+        used += gapBefore + chunkHeight;
+        idx += take;
+        isFirst = false;
+        chunkN += 1;
+
+        if (idx >= total) break;
+      }
+    });
+
+    if (current.length > 0) pages.push(current);
+    return pages;
+  }, [hwSetDisplays]);
+
   // Section 3B: flat list — aggregate by item identity
   const flatListItems = useMemo<FlatListRow[]>(() => {
     const map = new Map<string, FlatListRow>();
@@ -709,7 +810,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
     doorSectionTotal +
     frameSectionTotal +
     prehungGroups.length +
-    hwSetDisplays.length +
+    hwSetPages.length +
     flatListPages.length;
 
   // Cumulative first-page number for each door group (common sheet page 1)
@@ -737,7 +838,19 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   // Section start pages for sections 3–5
   const prehungSectionStart  = COVER_PAGES + doorSectionTotal + frameSectionTotal + 1;
   const hwSetSectionStart    = prehungSectionStart + prehungGroups.length;
-  const flatListSectionStart = hwSetSectionStart   + hwSetDisplays.length;
+  const flatListSectionStart = hwSetSectionStart   + hwSetPages.length;
+
+  // Section numbers are derived from which sections actually have content, so the
+  // visible "SECTION N" badges never skip a number when e.g. there are no prehung doors.
+  const sectionNumbers = useMemo(() => {
+    let n = 0;
+    const door     = doorTypeGroups.length  > 0 ? ++n : null;
+    const frame    = frameTypeGroups.length > 0 ? ++n : null;
+    const prehung  = prehungGroups.length   > 0 ? ++n : null;
+    const hwSet    = hwSetPages.length      > 0 ? ++n : null;
+    const flatList = flatListPages.length   > 0 ? ++n : null;
+    return { door, frame, prehung, hwSet, flatList };
+  }, [doorTypeGroups.length, frameTypeGroups.length, prehungGroups.length, hwSetPages.length, flatListPages.length]);
 
   // ── Table of Contents entries ──────────────────────────────────────────────
   interface TocEntry {
@@ -750,12 +863,12 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   const tocEntries = useMemo<TocEntry[]>(() => {
     const entries: TocEntry[] = [];
 
-    // Section 1 — Door Specification
+    // Section — Door Specification
     if (doorTypeGroups.length > 0) {
       const secStart = doorGroupStartPages[0] ?? COVER_PAGES + 1;
       const lastIdx  = doorTypeGroups.length - 1;
       const secEnd   = (doorGroupStartPages[lastIdx] ?? secStart) + (doorCommonPageCounts[lastIdx] ?? 1) + (doorSpecPageCounts[lastIdx] ?? 1) - 1;
-      entries.push({ label: 'Section 1 — Door Specification', startPage: secStart, endPage: secEnd, isHeader: true });
+      entries.push({ label: `Section ${sectionNumbers.door} — Door Specification`, startPage: secStart, endPage: secEnd, isHeader: true });
       doorTypeGroups.forEach((g, i) => {
         const start = doorGroupStartPages[i] ?? secStart;
         const end   = start + (doorCommonPageCounts[i] ?? 1) + (doorSpecPageCounts[i] ?? 1) - 1;
@@ -763,12 +876,12 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       });
     }
 
-    // Section 2 — Frame Specification
+    // Section — Frame Specification
     if (frameTypeGroups.length > 0) {
       const secStart = frameGroupStartPages[0] ?? COVER_PAGES + doorSectionTotal + 1;
       const lastIdx  = frameTypeGroups.length - 1;
       const secEnd   = (frameGroupStartPages[lastIdx] ?? secStart) + (frameCommonPageCounts[lastIdx] ?? 1) + (frameSpecPageCounts[lastIdx] ?? 1) - 1;
-      entries.push({ label: 'Section 2 — Frame Specification', startPage: secStart, endPage: secEnd, isHeader: true });
+      entries.push({ label: `Section ${sectionNumbers.frame} — Frame Specification`, startPage: secStart, endPage: secEnd, isHeader: true });
       frameTypeGroups.forEach((g, i) => {
         const start = frameGroupStartPages[i] ?? secStart;
         const end   = start + (frameCommonPageCounts[i] ?? 1) + (frameSpecPageCounts[i] ?? 1) - 1;
@@ -776,26 +889,26 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       });
     }
 
-    // Section 3 — Prehung
+    // Section — Prehung
     if (prehungGroups.length > 0) {
-      entries.push({ label: 'Section 3 — Prehung Doors', startPage: prehungSectionStart, endPage: prehungSectionStart + prehungGroups.length - 1, isHeader: true });
+      entries.push({ label: `Section ${sectionNumbers.prehung} — Prehung Doors`, startPage: prehungSectionStart, endPage: prehungSectionStart + prehungGroups.length - 1, isHeader: true });
       prehungGroups.forEach((g, i) => {
         entries.push({ label: g.material, startPage: prehungSectionStart + i, endPage: prehungSectionStart + i, isHeader: false });
       });
     }
 
-    // Section 4 — Hardware Sets
-    if (hwSetDisplays.length > 0) {
-      entries.push({ label: 'Section 4 — Hardware Sets', startPage: hwSetSectionStart, endPage: hwSetSectionStart + hwSetDisplays.length - 1, isHeader: true });
+    // Section — Hardware Sets
+    if (hwSetPages.length > 0) {
+      entries.push({ label: `Section ${sectionNumbers.hwSet} — Hardware Sets`, startPage: hwSetSectionStart, endPage: hwSetSectionStart + hwSetPages.length - 1, isHeader: true });
     }
 
-    // Section 5 — Hardware Schedule
+    // Section — Hardware Schedule
     if (flatListPages.length > 0) {
-      entries.push({ label: 'Section 5 — Hardware Schedule', startPage: flatListSectionStart, endPage: flatListSectionStart + flatListPages.length - 1, isHeader: true });
+      entries.push({ label: `Section ${sectionNumbers.flatList} — Hardware Schedule`, startPage: flatListSectionStart, endPage: flatListSectionStart + flatListPages.length - 1, isHeader: true });
     }
 
     return entries;
-  }, [doorTypeGroups, doorGroupStartPages, doorCommonPageCounts, doorSpecPageCounts, doorSectionTotal, frameTypeGroups, frameGroupStartPages, frameCommonPageCounts, frameSpecPageCounts, prehungGroups, hwSetDisplays, flatListPages, prehungSectionStart, hwSetSectionStart, flatListSectionStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doorTypeGroups, doorGroupStartPages, doorCommonPageCounts, doorSpecPageCounts, doorSectionTotal, frameTypeGroups, frameGroupStartPages, frameCommonPageCounts, frameSpecPageCounts, prehungGroups, hwSetPages, flatListPages, prehungSectionStart, hwSetSectionStart, flatListSectionStart, sectionNumbers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasContent = allDoors.length > 0 || hwSetDisplays.length > 0;
 
@@ -1648,7 +1761,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                       {doorChunks.map((chunk, ci) => (
                         <div key={`door-common-${idx}-${ci}`} className="spage spage-landscape">
                           <div className="ssec-badge">
-                            Section 1 · Door Schedule{doorChunks.length > 1 ? ` (${ci + 1} / ${doorChunks.length})` : ''}
+                            Section {sectionNumbers.door} · Door Schedule{doorChunks.length > 1 ? ` (${ci + 1} / ${doorChunks.length})` : ''}
                           </div>
                           {ci === 0 && (
                             <div className="spage-header">
@@ -1689,7 +1802,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
                         return (
                           <div key={`door-spec-${idx}-${vi}`} className="spage">
-                            <div className="ssec-badge">Section 1 · Door Specification</div>
+                            <div className="ssec-badge">Section {sectionNumbers.door} · Door Specification</div>
                             <div className="spage-header">
                               <div>
                                 <h1 className="spage-title">{group.displayName}</h1>
@@ -1809,7 +1922,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                       {frameChunks.map((chunk, ci) => (
                         <div key={`frame-common-${idx}-${ci}`} className="spage spage-landscape">
                           <div className="ssec-badge">
-                            Section 2 · Frame Schedule{frameChunks.length > 1 ? ` (${ci + 1} / ${frameChunks.length})` : ''}
+                            Section {sectionNumbers.frame} · Frame Schedule{frameChunks.length > 1 ? ` (${ci + 1} / ${frameChunks.length})` : ''}
                           </div>
                           {ci === 0 && (
                             <div className="spage-header">
@@ -1850,7 +1963,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
                         return (
                           <div key={`frame-spec-${idx}-${vi}`} className="spage">
-                            <div className="ssec-badge">Section 2 · Frame Specification</div>
+                            <div className="ssec-badge">Section {sectionNumbers.frame} · Frame Specification</div>
                             <div className="spage-header">
                               <div>
                                 <h1 className="spage-title">{group.displayName}</h1>
@@ -1976,7 +2089,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
                   return (
                     <div key={`prehung-${group.material}`} className="spage">
-                      <div className="ssec-badge">Section 3 · Prehung Specification</div>
+                      <div className="ssec-badge">Section {sectionNumbers.prehung} · Prehung Specification</div>
                       <div className="spage-header">
                         <div>
                           <h1 className="spage-title">{group.material}</h1>
@@ -2080,67 +2193,86 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     Columns: Item Name, Description, Mfr, Finish, Total, Door Material
                     Usage: count + all door tags
                 ══════════════════════════════════════════════════ */}
-                {hwSetDisplays.map((set, idx) => {
-                  const pageNum = hwSetSectionStart + idx;
+                {hwSetPages.map((chunks, pageIdx) => {
+                  const pageNum = hwSetSectionStart + pageIdx;
                   return (
-                    <div key={`hwset-${set.setName}-${idx}`} className="spage">
-                      <div className="ssec-badge">Section 4 · Hardware Schedule — Set Report</div>
-                      <div className="spage-header">
-                        <div>
-                          <h1 className="spage-title">{set.setName}</h1>
-                          <p className="spage-subtitle">Hardware Set · Group By Set</p>
-                        </div>
-                        <div className="spage-qty-block">
-                          <div className="spage-qty-label">Total Doors</div>
-                          <div className="spage-qty-value">{set.totalDoorQty}</div>
-                        </div>
-                      </div>
+                    <div key={`hwset-page-${pageIdx}`} className="spage">
+                      <div className="ssec-badge">Section {sectionNumbers.hwSet} · Hardware Schedule — Set Report</div>
 
-                      <div className="shw-table-wrap">
-                        <table className="shw-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: '20%' }}>Item Name</th>
-                              <th style={{ width: '28%' }}>Description</th>
-                              <th style={{ width: '16%' }}>Manufacturer</th>
-                              <th style={{ width: '10%' }}>Finish</th>
-                              <th className="th-r" style={{ width: '8%' }}>Total</th>
-                              <th style={{ width: '18%' }}>Door Material</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {set.items.map((item, ii) => (
-                              <tr key={ii}>
-                                <td className="td-name">{item.itemName}</td>
-                                <td>{item.description}</td>
-                                <td>{item.manufacturer}</td>
-                                <td>{item.finish}</td>
-                                <td className="td-r">{item.totalQty}</td>
-                                <td className="td-muted">{item.doorMaterials.join(', ') || '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-
-                        <div className="shw-affected">
-                          <div className="shw-affected-title">
-                            Affected Doors ({set.doorTags.length})
-                          </div>
-                          <div className="stags-wrap">
-                            {set.doorTags.slice(0, 100).map((tag, ti) => (
-                              <span key={ti} className="stag">{tag}</span>
-                            ))}
-                            {set.doorTags.length > 100 && (
-                              <span
-                                className="stag"
-                                style={{ color: '#94a3b8', background: 'none', border: 'none' }}
-                              >
-                                +{set.doorTags.length - 100} more
-                              </span>
+                      {chunks.map((chunk, ci) => {
+                        const { set } = chunk;
+                        const items = set.items.slice(chunk.startIdx, chunk.endIdx);
+                        return (
+                          <div
+                            key={chunk.key}
+                            className="shw-set-block"
+                            style={{ marginTop: ci > 0 ? '8mm' : 0 }}
+                          >
+                            {chunk.isFirst ? (
+                              <div className="spage-header">
+                                <div>
+                                  <h1 className="spage-title">{set.setName}</h1>
+                                  <p className="spage-subtitle">Hardware Set · Group By Set</p>
+                                </div>
+                                <div className="spage-qty-block">
+                                  <div className="spage-qty-label">Total Doors</div>
+                                  <div className="spage-qty-value">{set.totalDoorQty}</div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="shw-set-label">{set.setName} (continued)</div>
                             )}
+
+                            <div className="shw-table-wrap">
+                              <table className="shw-table">
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '20%' }}>Item Name</th>
+                                    <th style={{ width: '28%' }}>Description</th>
+                                    <th style={{ width: '16%' }}>Manufacturer</th>
+                                    <th style={{ width: '10%' }}>Finish</th>
+                                    <th className="th-r" style={{ width: '8%' }}>Total</th>
+                                    <th style={{ width: '18%' }}>Door Material</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.map((item, ii) => (
+                                    <tr key={ii}>
+                                      <td className="td-name">{item.itemName}</td>
+                                      <td>{item.description}</td>
+                                      <td>{item.manufacturer}</td>
+                                      <td>{item.finish}</td>
+                                      <td className="td-r">{item.totalQty}</td>
+                                      <td className="td-muted">{item.doorMaterials.join(', ') || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+
+                              {chunk.isLast && (
+                                <div className="shw-affected">
+                                  <div className="shw-affected-title">
+                                    Affected Doors ({set.doorTags.length})
+                                  </div>
+                                  <div className="stags-wrap">
+                                    {set.doorTags.slice(0, 100).map((tag, ti) => (
+                                      <span key={ti} className="stag">{tag}</span>
+                                    ))}
+                                    {set.doorTags.length > 100 && (
+                                      <span
+                                        className="stag"
+                                        style={{ color: '#94a3b8', background: 'none', border: 'none' }}
+                                      >
+                                        +{set.doorTags.length - 100} more
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        );
+                      })}
 
                       <div className="spage-footer">
                         <span>Generated by Planckoff Estimating</span>
@@ -2164,7 +2296,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   return (
                     <div key={`flat-${idx}`} className="spage">
                       <div className="ssec-badge">
-                        Section 4 · Hardware Schedule — Flat List{continuationLabel}
+                        Section {sectionNumbers.flatList} · Hardware Schedule — Flat List{continuationLabel}
                       </div>
                       <div className="spage-header">
                         <div>
