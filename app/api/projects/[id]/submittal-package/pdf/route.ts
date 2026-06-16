@@ -6,6 +6,7 @@ import { buildExportFilename } from '@/utils/exportFilename';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export const GET = withProjectAuth(
   async (request: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
@@ -19,14 +20,34 @@ export const GET = withProjectAuth(
       );
     }
 
-    let browser: Awaited<ReturnType<typeof import('playwright')['chromium']['launch']>> | null = null;
+    let browser: Awaited<ReturnType<typeof import('playwright-core')['chromium']['launch']>> | null = null;
     let context: Awaited<ReturnType<NonNullable<typeof browser>['newContext']>> | null = null;
 
     try {
-      const { chromium } = await import('playwright');
-      browser = await chromium.launch({
+      // Vercel's serverless runtime has no system Chromium, and the full `playwright`
+      // package's bundled browser binary doesn't run there. On Vercel we use
+      // `playwright-core` (no bundled browser) paired with `@sparticuz/chromium`,
+      // a Chromium build packaged specifically to run inside the Lambda sandbox.
+      // Locally, fall back to the full `playwright` package's own downloaded browser.
+      const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+      let executablePath: string | undefined;
+      let launchArgs = ['--no-sandbox', '--disable-dev-shm-usage'];
+      let chromiumModule: typeof import('playwright-core')['chromium'];
+
+      if (isServerless) {
+        const sparticuzChromium = (await import('@sparticuz/chromium')).default;
+        executablePath = await sparticuzChromium.executablePath();
+        launchArgs = sparticuzChromium.args;
+        chromiumModule = (await import('playwright-core')).chromium;
+      } else {
+        chromiumModule = (await import('playwright')).chromium;
+      }
+
+      browser = await chromiumModule.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-dev-shm-usage'],
+        args: launchArgs,
+        executablePath,
       });
 
       const origin = request.nextUrl.origin;
@@ -37,8 +58,8 @@ export const GET = withProjectAuth(
       const page = await context.newPage();
       const printUrl = `${origin}/project/${encodeURIComponent(projectId)}/reports/submittal-package?print=1`;
 
-      await page.goto(printUrl, { waitUntil: 'networkidle', timeout: 120_000 });
-      await page.waitForSelector('.submittal-root .spage', { timeout: 120_000 });
+      await page.goto(printUrl, { waitUntil: 'networkidle', timeout: 45_000 });
+      await page.waitForSelector('.submittal-root .spage', { timeout: 45_000 });
       await page.emulateMedia({ media: 'print' });
       await page.evaluate(async () => {
         await document.fonts.ready;

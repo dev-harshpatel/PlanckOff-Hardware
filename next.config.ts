@@ -4,7 +4,7 @@ import path from 'path';
 const nextConfig: NextConfig = {
   // Prevent browser-only packages from being bundled into the server build.
   // These packages access browser globals (DOMMatrix, canvas, etc.) at module init time.
-  serverExternalPackages: ['playwright', 'jspdf', 'jspdf-autotable', 'xlsx', 'xlsx-js-style', 'file-saver', 'pdfjs-dist', '@napi-rs/canvas'],
+  serverExternalPackages: ['playwright', 'playwright-core', '@sparticuz/chromium', 'jspdf', 'jspdf-autotable', 'xlsx', 'xlsx-js-style', 'file-saver', 'pdfjs-dist', '@napi-rs/canvas'],
 
   // Prevents pdfjs-dist from trying to spawn its own nested worker inside upload.worker.ts.
   // pdfjs internally uses `new URL('pdf.worker.min.mjs', import.meta.url)` which Turbopack
@@ -50,6 +50,9 @@ const nextConfig: NextConfig = {
     '/api/**': [
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.js',
+      // @sparticuz/chromium reads these brotli-compressed binaries from disk at runtime
+      // (chromium.executablePath()) rather than via require(), so static tracing misses them.
+      './node_modules/@sparticuz/chromium/bin/**',
     ],
   },
 
