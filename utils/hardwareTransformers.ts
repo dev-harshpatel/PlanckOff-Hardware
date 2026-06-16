@@ -73,6 +73,17 @@ function parseThickness(val: string | undefined): number {
   return parseFraction(val) ?? 0;
 }
 
+// Extraction sources sometimes write "EXCLUDED"/"INCLUDED" instead of the
+// canonical "EXCLUDE"/"INCLUDE" used by all downstream exclusion filters —
+// normalize so every check (=== 'EXCLUDE') matches regardless of source wording.
+function normalizeIncludeExclude(val: string | undefined): string | undefined {
+  if (!val) return val;
+  const trimmed = val.trim().toUpperCase();
+  if (trimmed.startsWith('EXCLUD')) return 'EXCLUDE';
+  if (trimmed.startsWith('INCLUD')) return 'INCLUDE';
+  return val;
+}
+
 function parseLeafCountValue(val: string | number | undefined): number | undefined {
   if (val === undefined || val === null) return undefined;
 
@@ -193,7 +204,7 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
       doorFace:           d?.['DOOR FACE']          ?? row.doorFace,
       doorEdge:           d?.['DOOR EDGE']          ?? row.doorEdge,
       doorGauge:          d?.['DOOR GUAGE']         ?? row.doorGauge,
-      doorIncludeExclude: d?.['DOOR INCLUDE/EXCLUDE'] ?? row.doorIncludeExclude,
+      doorIncludeExclude: normalizeIncludeExclude(d?.['DOOR INCLUDE/EXCLUDE'] ?? row.doorIncludeExclude),
       elevationTypeId:    d?.['DOOR ELEVATION TYPE']  ?? row.doorElevationType,
 
       // Frame section
@@ -211,10 +222,10 @@ export function transformDoors(rows: DoorScheduleRow[], hardwareSets: HardwareSe
       prehung:           fr?.['PREHUNG']             ?? row.prehung,
       frameHead:         fr?.['FRAME HEAD']          ?? row.frameHead,
       casing:            fr?.['CASING']              ?? row.casing,
-      frameIncludeExclude: fr?.['FRAME INCLUDE/EXCLUDE'] ?? row.frameIncludeExclude,
+      frameIncludeExclude: normalizeIncludeExclude(fr?.['FRAME INCLUDE/EXCLUDE'] ?? row.frameIncludeExclude),
 
       // Hardware section
-      hardwareIncludeExclude: hw?.['HARDWARE INCLUDE/EXCLUDE'] ?? row.hardwareIncludeExclude,
+      hardwareIncludeExclude: normalizeIncludeExclude(hw?.['HARDWARE INCLUDE/EXCLUDE'] ?? row.hardwareIncludeExclude),
       hardwarePrep: row.hardwarePrep ?? assignedSet?.prep ?? undefined,
 
       // Carry raw sections through as-is for preservation
@@ -322,7 +333,7 @@ export function transformFromFinalJson(
         doorFace: ds?.['DOOR FACE'],
         doorEdge: ds?.['DOOR EDGE'],
         doorGauge: ds?.['DOOR GUAGE'],
-        doorIncludeExclude: ds?.['DOOR INCLUDE/EXCLUDE'],
+        doorIncludeExclude: normalizeIncludeExclude(ds?.['DOOR INCLUDE/EXCLUDE']),
         elevationTypeId:
           ds?.['DOOR ELEVATION TYPE'] ??
           door.doorElevationType ??
@@ -342,9 +353,9 @@ export function transformFromFinalJson(
         prehung: door.sections?.frame?.['PREHUNG'],
         frameHead: door.sections?.frame?.['FRAME HEAD'],
         casing: door.sections?.frame?.['CASING'],
-        frameIncludeExclude: door.sections?.frame?.['FRAME INCLUDE/EXCLUDE'],
+        frameIncludeExclude: normalizeIncludeExclude(door.sections?.frame?.['FRAME INCLUDE/EXCLUDE']),
 
-        hardwareIncludeExclude: door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE'],
+        hardwareIncludeExclude: normalizeIncludeExclude(door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE']),
 
         // Carry raw sections through, overriding HARDWARE SET with the authoritative set name
         // so column displays and grouping always reflect variant assignments (e.g. "28.W" not "28").

@@ -13,7 +13,7 @@ import type { TrashItem } from '@/lib/db/hardware';
 import UndoToast from '../components/shared/UndoToast';
 import HardwareTrashModal from '../components/hardware/HardwareTrashModal';
 import UploadConfirmationModal from '../components/upload/UploadConfirmationModal';
-import { PipelineLoader } from '../components/upload/PipelineLoader';
+import { PipelineLoader } from '../components/upload/loader';
 import ErrorModal from '../components/shared/ErrorModal';
 import ValidationReportModal from '../components/reports/ValidationReportModal';
 import ResizablePanels from '../components/layout/ResizablePanels';
@@ -72,7 +72,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
         doorUploadFile, isDoorUploadModalOpen, setIsDoorUploadModalOpen, setDoorUploadFile,
         isCombinedUploadOpen, isCombinedMinimized, setIsCombinedUploadOpen,
         combinedExcelFile, combinedPdfFile, setCombinedExcelFile, setCombinedPdfFile,
-        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedActiveDetail, combinedLogs, logsEndRef, pipelineStep,
+        isCombinedProcessing, combinedProgress, combinedCurrentStep, combinedLogs, pipelineStep,
         isCombinedOverwriteOpen, setIsCombinedOverwriteOpen, isCombinedOverwriteChecking,
         uploadErrors, isErrorModalOpen, setIsErrorModalOpen,
         validationReport, isValidationModalOpen, setIsValidationModalOpen, validationReportTitle,
@@ -496,26 +496,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ project, onProjectUpdate, app
                             </div>
                         )}
 
-                        {/* Pipeline step loader */}
-                        <PipelineLoader currentStep={pipelineStep} activeDetail={combinedActiveDetail} />
-
-                        {/* Logs panel (shown once processing starts or logs exist) */}
-                        {combinedLogs.length > 0 && (
-                            <div className="mx-5 mb-3 flex-1 min-h-0 overflow-y-auto bg-[var(--bg-muted)] border border-[var(--border)] rounded-lg p-3 font-mono text-xs space-y-1 max-h-52">
-                                {combinedLogs.map((log, i) => (
-                                    <div key={i} className={
-                                        log.level === 'success' ? 'text-green-600 dark:text-green-400' :
-                                        log.level === 'warn' ? 'text-amber-600 dark:text-amber-400' :
-                                        log.level === 'error' ? 'text-red-600 dark:text-red-400' :
-                                        'text-[var(--text-muted)]'
-                                    }>
-                                        {log.level === 'success' ? '✓ ' : log.level === 'warn' ? '⚠ ' : log.level === 'error' ? '✗ ' : '· '}
-                                        {log.msg}
-                                    </div>
-                                ))}
-                                <div ref={logsEndRef} />
-                            </div>
-                        )}
+                        {/* Pipeline step loader — active step's detail line doubles as the live narrative */}
+                        <PipelineLoader currentStep={pipelineStep} logs={combinedLogs} />
 
                         {/* Footer */}
                         <div className="px-5 py-4 border-t border-[var(--border)] flex items-center justify-end gap-2 flex-shrink-0">

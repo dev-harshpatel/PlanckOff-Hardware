@@ -83,9 +83,9 @@ export function ProjectCard({
 
     const dueDateHighlight = userRole !== 'Client' ? getDueDateHighlight(project.dueDate, project.status, project.clientIds) : null;
     const cardHighlightClass = dueDateHighlight === 'red'
-        ? 'bg-red-50 border-red-200 hover:border-red-300'
+        ? 'bg-[var(--error-bg)] border-[var(--error-border)] hover:border-[var(--error-text)]'
         : dueDateHighlight === 'yellow'
-            ? 'bg-amber-50 border-amber-200 hover:border-amber-300'
+            ? 'bg-[var(--warning-bg)] border-[var(--warning-border)] hover:border-[var(--warning-text)]'
             : 'bg-[var(--bg)] border-[var(--border)] hover:border-[var(--primary-border)]';
 
     const assignedMember = teamMembers.find(m => m.id === project.assignedTo);

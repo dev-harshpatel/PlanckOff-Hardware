@@ -56,8 +56,8 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
   // excluded, the frame data must still be visible.
   const includedDoors = useMemo(() => doors.filter(d => {
     const sec = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined);
-    const doorExcluded = (sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
-    const frameExcluded = (sec?.frame?.['FRAME INCLUDE/EXCLUDE'] ?? d.frameIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
+    const doorExcluded = (sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
+    const frameExcluded = (sec?.frame?.['FRAME INCLUDE/EXCLUDE'] ?? d.frameIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
     return !(doorExcluded && frameExcluded);
   }), [doors]);
 
