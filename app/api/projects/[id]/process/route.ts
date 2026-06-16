@@ -34,6 +34,7 @@ import type { ExtractedHardwareSet } from '@/lib/db/hardware';
 import { mergeHardwareData } from '@/services/mergeService';
 import { queueItemsForApproval } from '@/lib/db/masterHardware';
 import { acquireProcessingLock, releaseProcessingLock } from '@/lib/db/processingLock';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const maxDuration = 300;
 
@@ -77,6 +78,8 @@ export const POST = withProjectAuth(
 
     const scheduleField = formData.get('excel');
     const pdfField = formData.get('pdf');
+    const pdfStoragePathField = formData.get('pdfStoragePath');
+    const pdfNameField = formData.get('pdfName');
 
     if (!(scheduleField instanceof File)) {
       return NextResponse.json(
@@ -84,9 +87,13 @@ export const POST = withProjectAuth(
         { status: 400 },
       );
     }
-    if (!(pdfField instanceof File)) {
+
+    const hasPdfFile = pdfField instanceof File;
+    const hasPdfStoragePath = typeof pdfStoragePathField === 'string' && pdfStoragePathField.length > 0;
+
+    if (!hasPdfFile && !hasPdfStoragePath) {
       return NextResponse.json(
-        { error: 'Missing "pdf" field. Send the hardware PDF as a multipart field named "pdf".' },
+        { error: 'Missing hardware PDF. Send it as a "pdf" field, or upload it to storage first and provide "pdfStoragePath".' },
         { status: 400 },
       );
     }
@@ -94,7 +101,7 @@ export const POST = withProjectAuth(
     if (scheduleField.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: 'Door schedule file too large. Maximum size is 50 MB.' }, { status: 413 });
     }
-    if (pdfField.size > MAX_FILE_SIZE) {
+    if (hasPdfFile && (pdfField as File).size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: 'Hardware PDF too large. Maximum size is 50 MB.' }, { status: 413 });
     }
 
@@ -111,6 +118,10 @@ export const POST = withProjectAuth(
         { status: 429 },
       );
     }
+
+    // Tracks the storage path when the PDF arrived via Supabase Storage (large-file path).
+    // Set inside the try block; read by finally to delete the temp file after processing.
+    let tempPdfStoragePath: string | null = null;
 
     try {
     // ── Phase 1: Parse & AI — NO database writes yet ──────────────────────
@@ -150,10 +161,37 @@ export const POST = withProjectAuth(
 
     // Step 1b: Extract hardware sets from PDF (AI) ─────────────────────────
     if (signal.aborted) return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
-    const pdfBuffer = Buffer.from(await pdfField.arrayBuffer());
+
+    let pdfBuffer: Buffer;
+    let pdfFileName: string;
+
+    if (hasPdfStoragePath) {
+      // Large-file path: PDF was uploaded directly to Supabase Storage by the client
+      // to bypass Vercel's 4.5 MB request-body limit. Download it here using the
+      // service-role key (bypasses RLS), then delete it in the finally block.
+      tempPdfStoragePath = pdfStoragePathField as string;
+      const adminClient = createSupabaseAdminClient();
+      const { data: storageBlob, error: storageError } = await adminClient.storage
+        .from('temp-pdf-uploads')
+        .download(tempPdfStoragePath);
+      if (storageError || !storageBlob) {
+        return NextResponse.json(
+          { error: 'Could not retrieve your uploaded PDF from storage. Please try uploading again.' },
+          { status: 500 },
+        );
+      }
+      pdfBuffer = Buffer.from(await storageBlob.arrayBuffer());
+      pdfFileName = typeof pdfNameField === 'string' && pdfNameField
+        ? pdfNameField
+        : tempPdfStoragePath.split('/').pop() ?? 'hardware.pdf';
+    } else {
+      pdfBuffer = Buffer.from(await (pdfField as File).arrayBuffer());
+      pdfFileName = (pdfField as File).name;
+    }
+
     let pdfResult;
     try {
-      pdfResult = await extractHardwareSetsFromPdf(pdfBuffer, pdfField.name, projectId, signal);
+      pdfResult = await extractHardwareSetsFromPdf(pdfBuffer, pdfFileName, projectId, signal);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         return NextResponse.json({ error: 'Cancelled.' }, { status: 499 });
@@ -217,7 +255,7 @@ export const POST = withProjectAuth(
     // Step 2b: Persist PDF extraction ──────────────────────────────────────
     const { data: pdfData, error: pdfError } = await upsertHardwarePdfExtraction(projectId, {
       extractedJson: setsWithPrep,
-      fileName: pdfField.name,
+      fileName: pdfFileName,
       uploadedBy: ctx.user.id,
     });
 
@@ -245,7 +283,7 @@ export const POST = withProjectAuth(
       const queueResult = await queueItemsForApproval(
         candidateItems,
         projectId,
-        pdfField.name,
+        pdfFileName,
         ctx.user.id,
       );
       if (queueResult.data) {
@@ -292,6 +330,16 @@ export const POST = withProjectAuth(
       // Runs on every exit path: success, validation error, AI error, and user cancel.
       // This guarantees the project is never permanently locked.
       await releaseProcessingLock(projectId, lockId);
+      // Delete the temp PDF from Supabase Storage (large-file path only).
+      // Wrapped in its own try/catch so a cleanup failure never changes the response.
+      if (tempPdfStoragePath) {
+        try {
+          const adminClient = createSupabaseAdminClient();
+          await adminClient.storage.from('temp-pdf-uploads').remove([tempPdfStoragePath]);
+        } catch (cleanupErr) {
+          console.warn('[process] Failed to delete temp PDF from storage:', cleanupErr);
+        }
+      }
     }
   },
 );

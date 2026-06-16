@@ -1,13 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PrinterIcon } from '../shared/icons';
 import type { MergedHardwareSet, MergedDoor, HardwareItem } from '@/lib/db/hardware';
 import type { ElevationType } from '@/types';
 import { buildExportFilename } from '@/utils/exportFilename';
+import ScheduleTable from './ScheduleTable';
+import type { ScheduleCol } from './ScheduleTable';
+import type { SubmittalMeta } from '@/lib/db/submittalMetadata';
 
 interface SubmittalGeneratorProps {
+  projectId: string;
   finalJson: MergedHardwareSet[];
   projectName: string;
   elevationTypes?: ElevationType[];
+  submittalMeta?: SubmittalMeta;
+  printMode?: boolean;
 }
 
 // ── Data shapes ──────────────────────────────────────────────────────────────
@@ -183,7 +189,7 @@ function classifyFrameMat(raw: string): FrameMatType {
   if (/\bhm\b|hollow[\s-]?metal|\bmet\d*\b/i.test(m))                    return 'hm';
   if (/\bwd\b|\bwood\b|wooden|timber/i.test(m))                          return 'wood';
   if (/fibr[ei][\s-]?glass|fiberglass|fibreglass|\bfg\b|\bfrp\b/i.test(m)) return 'fiberglass';
-  if (/alumin[ui]m|\bal\b|\balu\b/i.test(m))                             return 'aluminum';
+  if (/alumin[ui]m|\bal\b|\balu\b|\balum\b/i.test(m))                    return 'aluminum';
   return 'other';
 }
 
@@ -406,14 +412,77 @@ function buildPrehungParams(
 
 const FLAT_ROWS_PER_PAGE = 22;
 
+// Max data rows per landscape common-schedule page.
+// Both headers and data cells word-wrap, so rows may be 2+ lines.
+// 22 rows fits safely inside 210mm on both first and continuation pages.
+const COMMON_ROWS_PER_PAGE = 22;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks.length > 0 ? chunks : [[]];
+}
+
+// Fallback schedule columns for material types with no predefined column set
+// (aluminum, other). Reads all non-skip keys from the representative door.
+function buildFallbackScheduleCols(
+  door: MergedDoor,
+  sections: ScheduleCol['section'][],
+): ScheduleCol[] {
+  const seen = new Set<string>();
+  const cols: ScheduleCol[] = [];
+  for (const sec of sections) {
+    const data = (door.sections?.[sec] ?? {}) as Record<string, string>;
+    for (const rawKey of Object.keys(data)) {
+      const key = rawKey.toUpperCase().trim();
+      if (SKIP_SECTION_KEYS.has(key)) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cols.push({ key, section: sec });
+    }
+  }
+  return cols;
+}
+
+// Dedup doors by their non-identity column values.
+// Doors that share identical values for every column (excluding DOOR TAG,
+// QUANTITY, HARDWARE SET) are merged into one variant with comma-separated tags.
+interface DoorVariant {
+  doorTags: string;  // comma-separated
+  rep:      MergedDoor;
+  count:    number;
+}
+
+const DEDUP_SKIP_KEYS = new Set(['DOOR TAG', 'QUANTITY', 'HARDWARE SET']);
+
+function dedupDoorsByColumns(doors: MergedDoor[], cols: ScheduleCol[]): DoorVariant[] {
+  const compCols = cols.filter(c => !DEDUP_SKIP_KEYS.has(c.key.toUpperCase()));
+  const map = new Map<string, { tags: string[]; rep: MergedDoor }>();
+  for (const door of doors) {
+    const fp = compCols.map(col => {
+      const sec = (door.sections?.[col.section] ?? {}) as Record<string, string>;
+      return (sec[col.key] ?? '').trim().toLowerCase();
+    }).join('␟');
+    if (!map.has(fp)) map.set(fp, { tags: [], rep: door });
+    map.get(fp)!.tags.push(door.doorTag);
+  }
+  return Array.from(map.values()).map(v => ({
+    doorTags: v.tags.join(', '),
+    rep:      v.rep,
+    count:    v.tags.length,
+  }));
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
+  projectId,
   finalJson,
   projectName,
   elevationTypes = [],
+  submittalMeta,
+  printMode = false,
 }) => {
-  const componentRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [zoom, setZoom] = useState(1.0);
   const adjustZoom = (delta: number) =>
@@ -431,8 +500,13 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       .catch(() => {});
   }, []);
 
-  // All doors across all sets
-  const allDoors = useMemo(() => finalJson.flatMap(s => s.doors), [finalJson]);
+  // All doors across all sets — exclude doors that have an EXCLUDE REASON
+  // (existing doors like EX211/EX214 that only need hardware, not new door/frame spec)
+  const allDoors = useMemo(() =>
+    finalJson.flatMap(s => s.doors).filter(
+      d => !d.sections?.basic_information?.['EXCLUDE REASON']?.trim()
+    ),
+  [finalJson]);
 
   // Section 1: group by classified Door Material type
   const doorTypeGroups = useMemo<DoorTypeGroup[]>(() => {
@@ -579,98 +653,179 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
   );
 
   const COVER_PAGES = 1;
+
+  // How many landscape common-sheet pages each material group needs
+  const doorCommonPageCounts = useMemo(
+    () => doorTypeGroups.map(g => Math.max(1, Math.ceil(g.doors.length / COMMON_ROWS_PER_PAGE))),
+    [doorTypeGroups],
+  );
+  const frameCommonPageCounts = useMemo(
+    () => frameTypeGroups.map(g => Math.max(1, Math.ceil(g.doors.length / COMMON_ROWS_PER_PAGE))),
+    [frameTypeGroups],
+  );
+
+  // Precompute schedule column sets per group (needed for dedup before render)
+  const doorGroupSchedCols = useMemo<ScheduleCol[][]>(() =>
+    doorTypeGroups.map(group => {
+      const colSet = DOOR_TYPE_COLS[group.matType];
+      const rep = group.doors[0];
+      return (colSet as ScheduleCol[] | null) ?? buildFallbackScheduleCols(rep, ['basic_information', 'door', 'hardware']);
+    }),
+  [doorTypeGroups]);
+
+  const frameGroupSchedCols = useMemo<ScheduleCol[][]>(() =>
+    frameTypeGroups.map(group => {
+      const colSet = FRAME_TYPE_COLS[group.matType];
+      const rep = group.doors[0];
+      return (colSet as ScheduleCol[] | null) ?? buildFallbackScheduleCols(rep, ['basic_information', 'frame', 'hardware']);
+    }),
+  [frameTypeGroups]);
+
+  // Number of spec pages per group = number of unique door parameter combinations
+  const doorSpecPageCounts = useMemo<number[]>(() =>
+    doorTypeGroups.map((group, i) =>
+      Math.max(1, dedupDoorsByColumns(group.doors, doorGroupSchedCols[i] ?? []).length)
+    ),
+  [doorTypeGroups, doorGroupSchedCols]);
+
+  const frameSpecPageCounts = useMemo<number[]>(() =>
+    frameTypeGroups.map((group, i) =>
+      Math.max(1, dedupDoorsByColumns(group.doors, frameGroupSchedCols[i] ?? []).length)
+    ),
+  [frameTypeGroups, frameGroupSchedCols]);
+
+  // Total page count for each section (common pages + N spec pages per group)
+  const doorSectionTotal  = useMemo(
+    () => doorTypeGroups.reduce((s, _, i) => s + (doorCommonPageCounts[i] ?? 1) + (doorSpecPageCounts[i] ?? 1), 0),
+    [doorTypeGroups, doorCommonPageCounts, doorSpecPageCounts],
+  );
+  const frameSectionTotal = useMemo(
+    () => frameTypeGroups.reduce((s, _, i) => s + (frameCommonPageCounts[i] ?? 1) + (frameSpecPageCounts[i] ?? 1), 0),
+    [frameTypeGroups, frameCommonPageCounts, frameSpecPageCounts],
+  );
+
   const totalPages =
     COVER_PAGES +
-    doorTypeGroups.length +
-    frameTypeGroups.length +
+    doorSectionTotal +
+    frameSectionTotal +
     prehungGroups.length +
     hwSetDisplays.length +
     flatListPages.length;
 
+  // Cumulative first-page number for each door group (common sheet page 1)
+  const doorGroupStartPages = useMemo(() => {
+    const starts: number[] = [];
+    let page = COVER_PAGES + 1;
+    doorTypeGroups.forEach((_, i) => {
+      starts.push(page);
+      page += (doorCommonPageCounts[i] ?? 1) + (doorSpecPageCounts[i] ?? 1);
+    });
+    return starts;
+  }, [doorTypeGroups, doorCommonPageCounts, doorSpecPageCounts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cumulative first-page number for each frame group
+  const frameGroupStartPages = useMemo(() => {
+    const starts: number[] = [];
+    let page = COVER_PAGES + doorSectionTotal + 1;
+    frameTypeGroups.forEach((_, i) => {
+      starts.push(page);
+      page += (frameCommonPageCounts[i] ?? 1) + (frameSpecPageCounts[i] ?? 1);
+    });
+    return starts;
+  }, [frameTypeGroups, frameCommonPageCounts, frameSpecPageCounts, doorSectionTotal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Section start pages for sections 3–5
+  const prehungSectionStart  = COVER_PAGES + doorSectionTotal + frameSectionTotal + 1;
+  const hwSetSectionStart    = prehungSectionStart + prehungGroups.length;
+  const flatListSectionStart = hwSetSectionStart   + hwSetDisplays.length;
+
+  // ── Table of Contents entries ──────────────────────────────────────────────
+  interface TocEntry {
+    label:     string;
+    startPage: number;
+    endPage:   number;
+    isHeader:  boolean;
+  }
+
+  const tocEntries = useMemo<TocEntry[]>(() => {
+    const entries: TocEntry[] = [];
+
+    // Section 1 — Door Specification
+    if (doorTypeGroups.length > 0) {
+      const secStart = doorGroupStartPages[0] ?? COVER_PAGES + 1;
+      const lastIdx  = doorTypeGroups.length - 1;
+      const secEnd   = (doorGroupStartPages[lastIdx] ?? secStart) + (doorCommonPageCounts[lastIdx] ?? 1) + (doorSpecPageCounts[lastIdx] ?? 1) - 1;
+      entries.push({ label: 'Section 1 — Door Specification', startPage: secStart, endPage: secEnd, isHeader: true });
+      doorTypeGroups.forEach((g, i) => {
+        const start = doorGroupStartPages[i] ?? secStart;
+        const end   = start + (doorCommonPageCounts[i] ?? 1) + (doorSpecPageCounts[i] ?? 1) - 1;
+        entries.push({ label: g.displayName, startPage: start, endPage: end, isHeader: false });
+      });
+    }
+
+    // Section 2 — Frame Specification
+    if (frameTypeGroups.length > 0) {
+      const secStart = frameGroupStartPages[0] ?? COVER_PAGES + doorSectionTotal + 1;
+      const lastIdx  = frameTypeGroups.length - 1;
+      const secEnd   = (frameGroupStartPages[lastIdx] ?? secStart) + (frameCommonPageCounts[lastIdx] ?? 1) + (frameSpecPageCounts[lastIdx] ?? 1) - 1;
+      entries.push({ label: 'Section 2 — Frame Specification', startPage: secStart, endPage: secEnd, isHeader: true });
+      frameTypeGroups.forEach((g, i) => {
+        const start = frameGroupStartPages[i] ?? secStart;
+        const end   = start + (frameCommonPageCounts[i] ?? 1) + (frameSpecPageCounts[i] ?? 1) - 1;
+        entries.push({ label: g.displayName, startPage: start, endPage: end, isHeader: false });
+      });
+    }
+
+    // Section 3 — Prehung
+    if (prehungGroups.length > 0) {
+      entries.push({ label: 'Section 3 — Prehung Doors', startPage: prehungSectionStart, endPage: prehungSectionStart + prehungGroups.length - 1, isHeader: true });
+      prehungGroups.forEach((g, i) => {
+        entries.push({ label: g.material, startPage: prehungSectionStart + i, endPage: prehungSectionStart + i, isHeader: false });
+      });
+    }
+
+    // Section 4 — Hardware Sets
+    if (hwSetDisplays.length > 0) {
+      entries.push({ label: 'Section 4 — Hardware Sets', startPage: hwSetSectionStart, endPage: hwSetSectionStart + hwSetDisplays.length - 1, isHeader: true });
+    }
+
+    // Section 5 — Hardware Schedule
+    if (flatListPages.length > 0) {
+      entries.push({ label: 'Section 5 — Hardware Schedule', startPage: flatListSectionStart, endPage: flatListSectionStart + flatListPages.length - 1, isHeader: true });
+    }
+
+    return entries;
+  }, [doorTypeGroups, doorGroupStartPages, doorCommonPageCounts, doorSpecPageCounts, doorSectionTotal, frameTypeGroups, frameGroupStartPages, frameCommonPageCounts, frameSpecPageCounts, prehungGroups, hwSetDisplays, flatListPages, prehungSectionStart, hwSetSectionStart, flatListSectionStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const hasContent = allDoors.length > 0 || hwSetDisplays.length > 0;
 
-  // ── Download (unchanged capture logic) ────────────────────────────────────
+  // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async () => {
-    if (!componentRef.current || isDownloading || !hasContent) return;
+    if (isDownloading || !hasContent || printMode) return;
     setIsDownloading(true);
+
     try {
-      const { jsPDF } = await import('jspdf');
-      const html2canvas = (await import('html2canvas')).default;
-
-      if (!document.querySelector('link[data-submittal-font]')) {
-        await new Promise<void>(resolve => {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href =
-            'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=block';
-          link.dataset.submittalFont = '1';
-          link.onload = () => resolve();
-          link.onerror = () => resolve();
-          document.head.appendChild(link);
-        });
-      }
-
-      await Promise.allSettled([
-        document.fonts.load('400 12px Inter'),
-        document.fonts.load('500 12px Inter'),
-        document.fonts.load('600 12px Inter'),
-        document.fonts.load('700 12px Inter'),
-        document.fonts.load('800 12px Inter'),
-        document.fonts.load('900 12px Inter'),
-      ]);
-      await document.fonts.ready;
-
-      const zoomWrapper = componentRef.current.parentElement as HTMLElement;
-      const savedZoom = zoomWrapper.style.zoom;
-      zoomWrapper.style.zoom = '1';
-
-      const captureOverride = document.createElement('style');
-      captureOverride.textContent = `
-        .submittal-root .spage-body,
-        .submittal-root .scol-left,
-        .submittal-root .scol-right,
-        .submittal-root .shw-items,
-        .submittal-root .shw-item-detail,
-        .submittal-root .shw-table-wrap {
-          overflow: visible !important;
-          max-height: none !important;
-        }
-      `;
-      document.head.appendChild(captureOverride);
-
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-      const pages = Array.from(
-        componentRef.current.querySelectorAll<HTMLElement>('.spage'),
-      );
-      if (!pages.length) {
-        document.head.removeChild(captureOverride);
-        zoomWrapper.style.zoom = savedZoom;
-        return;
-      }
-
-      const canvases = await Promise.all(
-        pages.map(el =>
-          html2canvas(el, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-          }),
-        ),
-      );
-
-      document.head.removeChild(captureOverride);
-      zoomWrapper.style.zoom = savedZoom;
-
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      canvases.forEach((canvas, i) => {
-        if (i > 0) pdf.addPage();
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+      const response = await fetch(`/api/projects/${projectId}/submittal-package/pdf`, {
+        credentials: 'include',
       });
 
-      pdf.save(buildExportFilename(projectName, 'Submittal Package', 'pdf'));
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(errorText || `PDF export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = buildExportFilename(projectName, 'Submittal Package', 'pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[submittal-package] PDF download failed:', err);
+      alert(err instanceof Error ? err.message : 'Failed to generate the submittal PDF.');
     } finally {
       setIsDownloading(false);
     }
@@ -678,9 +833,9 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-subtle)]">
+    <div className={printMode ? 'submittal-print-shell' : 'flex flex-col h-full bg-[var(--bg-subtle)]'}>
       {/* Toolbar */}
-      <div className="bg-[var(--bg)] border-b border-[var(--border)] px-5 py-2.5 flex items-center justify-between flex-shrink-0">
+      {!printMode && <div className="bg-[var(--bg)] border-b border-[var(--border)] px-5 py-2.5 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
           <span>
             <span className="font-semibold text-[var(--text)]">{doorTypeGroups.length}</span>
@@ -726,7 +881,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
           <PrinterIcon className="w-4 h-4" />
           {isDownloading ? 'Generating…' : 'Download PDF'}
         </button>
-      </div>
+      </div>}
 
       {!hasContent && (
         <div className="flex-1 flex items-center justify-center">
@@ -738,9 +893,16 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
       )}
 
       {hasContent && (
-        <div className="flex-1 overflow-auto p-4">
-          <div style={{ zoom }}>
-            <div ref={componentRef}>
+        <div className={printMode ? 'submittal-print-content' : 'flex-1 overflow-hidden relative'}>
+          {isDownloading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--bg)]">
+              <span className="inline-block h-5 w-5 rounded-full border-2 border-[var(--primary-action)] border-t-transparent animate-spin" />
+              <span className="text-xs font-medium text-[var(--text-muted)]">Generating PDF…</span>
+            </div>
+          )}
+          <div className={printMode ? 'submittal-print-scroll' : 'overflow-auto h-full p-4'}>
+          <div style={{ zoom: printMode ? 1 : zoom }}>
+            <div>
               <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
@@ -765,13 +927,57 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   box-shadow: 0 2px 12px rgba(0,0,0,0.10);
                 }
 
+                /* ── Landscape override for common schedule pages ── */
+                .spage.spage-landscape {
+                  width: 297mm;
+                  min-height: 210mm;
+                  max-height: 210mm;
+                  padding: 7mm 12mm 6mm;
+                }
+
                 @media print {
+                  @page {
+                    size: A4 portrait;
+                    margin: 0;
+                  }
+                  @page landscape {
+                    size: A4 landscape;
+                    margin: 0;
+                  }
+                  html,
+                  body {
+                    margin: 0;
+                    padding: 0;
+                    background: #fff;
+                  }
+                  .submittal-print-shell,
+                  .submittal-print-content,
+                  .submittal-print-scroll {
+                    width: auto;
+                    height: auto;
+                    overflow: visible;
+                    background: #fff;
+                  }
                   .spage {
                     box-shadow: none;
                     margin: 0;
-                    width: 100%;
-                    min-height: 100vh;
-                    max-height: 100vh;
+                    width: 210mm;
+                    min-height: 297mm;
+                    max-height: 297mm;
+                    break-after: page;
+                    page-break-after: always;
+                    print-color-adjust: exact;
+                    -webkit-print-color-adjust: exact;
+                  }
+                  .spage.spage-landscape {
+                    page: landscape;
+                    width: 297mm;
+                    min-height: 210mm;
+                    max-height: 210mm;
+                  }
+                  .spage:last-child {
+                    break-after: auto;
+                    page-break-after: auto;
                   }
                 }
 
@@ -839,17 +1045,14 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   gap: 6mm;
                   flex: 1;
                   min-height: 0;
-                  overflow: hidden;
                 }
                 .scol-left {
                   display: flex;
                   flex-direction: column;
-                  overflow: hidden;
                 }
                 .scol-right {
                   display: flex;
                   flex-direction: column;
-                  overflow: hidden;
                 }
 
                 /* ── Param rows ── */
@@ -896,18 +1099,24 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 .stags-wrap {
                   display: flex;
                   flex-wrap: wrap;
-                  gap: 2px;
+                  gap: 3px;
                   margin-top: 2px;
+                  align-items: center;
                 }
                 .stag {
+                  display: inline-block;
+                  height: 16px;
+                  box-sizing: border-box;
                   font-size: 6.5pt;
                   font-weight: 500;
                   color: #334155;
                   background: #f1f5f9;
                   border: 1px solid #e2e8f0;
                   border-radius: 3px;
-                  padding: 2px 5px;
-                  line-height: 1.5;
+                  padding: 0 5px;
+                  line-height: 14px;
+                  vertical-align: middle;
+                  overflow: visible;
                 }
 
                 /* ── Elevation ── */
@@ -969,7 +1178,6 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 /* ── Hardware table pages ── */
                 .shw-table-wrap {
                   flex: 1;
-                  overflow: hidden;
                 }
                 .shw-set-label {
                   background: #f1f5f9;
@@ -1037,6 +1245,47 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   margin-bottom: 1.5mm;
                 }
 
+                /* ── Common schedule table ── */
+                .sched-table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 6pt;
+                  table-layout: fixed;
+                }
+                .sched-table th.sched-col-hdr {
+                  background: #1e293b;
+                  color: #e2e8f0;
+                  padding: 4px 5px;
+                  text-align: left;
+                  font-size: 6pt;
+                  font-weight: 700;
+                  letter-spacing: 0.03em;
+                  /* Word-break so full header labels are visible (multi-line) */
+                  white-space: normal;
+                  word-break: break-word;
+                  overflow-wrap: break-word;
+                  vertical-align: bottom;
+                  border-right: 1px solid #334155;
+                }
+                .sched-table th.sched-col-hdr:last-child { border-right: none; }
+                .sched-table td {
+                  padding: 3px 5px;
+                  border-bottom: 1px solid #e8edf2;
+                  border-right: 1px solid #f1f5f9;
+                  color: #0f172a;
+                  line-height: 1.3;
+                  word-break: break-word;
+                  white-space: normal;
+                  vertical-align: middle;
+                }
+                .sched-table td:last-child { border-right: none; }
+                .sched-table tr:nth-child(even) td { background: #f8fafc; }
+                .sched-table td.sched-tag {
+                  font-weight: 700;
+                  color: #1e3a5f;
+                }
+                .sched-table td.sched-muted { color: #94a3b8; }
+
                 /* ── Footer ── */
                 .spage-footer {
                   display: flex;
@@ -1098,15 +1347,21 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 }
                 .scover-badge {
                   display: inline-block;
+                  height: 22px;
+                  box-sizing: border-box;
+                  margin-bottom: 4mm;
                   background: #1e3a5f;
                   color: #fff;
                   font-size: 7pt;
                   font-weight: 800;
                   letter-spacing: 0.18em;
                   text-transform: uppercase;
-                  padding: 3px 10px;
+                  text-align: center;
+                  padding: 0 12px;
                   border-radius: 3px;
-                  margin-bottom: 4mm;
+                  line-height: 22px;
+                  vertical-align: middle;
+                  overflow: visible;
                 }
                 .scover-project {
                   font-size: 28pt;
@@ -1148,6 +1403,83 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   text-transform: uppercase;
                   color: #94a3b8;
                   margin-top: 2px;
+                }
+                .scover-meta {
+                  border: 1px solid #e2e8f0;
+                  border-radius: 6px;
+                  overflow: hidden;
+                  margin-bottom: 5mm;
+                  font-size: 9pt;
+                }
+                .scover-meta-row {
+                  display: flex;
+                  align-items: baseline;
+                  padding: 3mm 4mm;
+                  border-bottom: 1px solid #f1f5f9;
+                }
+                .scover-meta-row:last-child { border-bottom: none; }
+                .scover-meta-label {
+                  min-width: 22mm;
+                  font-size: 7pt;
+                  font-weight: 700;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: #94a3b8;
+                }
+                .scover-meta-value {
+                  color: #1e293b;
+                  font-weight: 500;
+                }
+                /* ── Table of Contents ── */
+                .stoc {
+                  margin-top: 5mm;
+                }
+                .stoc-title {
+                  font-size: 7pt;
+                  font-weight: 700;
+                  letter-spacing: 0.10em;
+                  text-transform: uppercase;
+                  color: #94a3b8;
+                  margin-bottom: 2mm;
+                }
+                .stoc-table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 8.5pt;
+                }
+                .stoc-th {
+                  background: #1e293b;
+                  color: #e2e8f0;
+                  padding: 3px 8px;
+                  font-size: 7pt;
+                  font-weight: 700;
+                  letter-spacing: 0.06em;
+                  text-transform: uppercase;
+                }
+                .stoc-th-item { text-align: left; }
+                .stoc-th-page { text-align: right; width: 22mm; }
+                .stoc-section-row { background: #f1f5f9; }
+                .stoc-item-row { background: #ffffff; }
+                .stoc-item-row:nth-child(even) { background: #f8fafc; }
+                .stoc-td {
+                  padding: 4px 8px;
+                  border-bottom: 1px solid #e2e8f0;
+                }
+                .stoc-td-label { color: #1e293b; }
+                .stoc-section-row .stoc-td-label {
+                  font-weight: 700;
+                  color: #0f172a;
+                }
+                .stoc-td-page {
+                  text-align: right;
+                  font-weight: 600;
+                  color: #1d4ed8;
+                  font-variant-numeric: tabular-nums;
+                  white-space: nowrap;
+                }
+                .stoc-indent {
+                  color: #94a3b8;
+                  margin-right: 2px;
                 }
               `}</style>
 
@@ -1197,11 +1529,47 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     {/* Submittal title block */}
                     <div className="scover-title-block">
                       <div className="scover-badge">Submittal Package</div>
-                      <div className="scover-project">{projectName || 'Untitled Project'}</div>
+                      <div className="scover-project">{(submittalMeta?.projectName || projectName) || 'Untitled Project'}</div>
                       <div className="scover-date">
                         {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </div>
                     </div>
+
+                    {/* Submittal metadata — from/to/gc/address/company */}
+                    {submittalMeta && (submittalMeta.fromName || submittalMeta.toName || submittalMeta.gcName || submittalMeta.projectAddress || submittalMeta.companyName) && (
+                      <div className="scover-meta">
+                        {submittalMeta.fromName && (
+                          <div className="scover-meta-row">
+                            <span className="scover-meta-label">From</span>
+                            <span className="scover-meta-value">{submittalMeta.fromName}</span>
+                          </div>
+                        )}
+                        {submittalMeta.toName && (
+                          <div className="scover-meta-row">
+                            <span className="scover-meta-label">To</span>
+                            <span className="scover-meta-value">{submittalMeta.toName}</span>
+                          </div>
+                        )}
+                        {submittalMeta.gcName && (
+                          <div className="scover-meta-row">
+                            <span className="scover-meta-label">GC</span>
+                            <span className="scover-meta-value">{submittalMeta.gcName}</span>
+                          </div>
+                        )}
+                        {submittalMeta.projectAddress && (
+                          <div className="scover-meta-row">
+                            <span className="scover-meta-label">Address</span>
+                            <span className="scover-meta-value">{submittalMeta.projectAddress}</span>
+                          </div>
+                        )}
+                        {submittalMeta.companyName && (
+                          <div className="scover-meta-row">
+                            <span className="scover-meta-label">Company</span>
+                            <span className="scover-meta-value">{submittalMeta.companyName}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Stats row */}
                     <div className="scover-stats">
@@ -1223,6 +1591,36 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                       </div>
                     </div>
 
+                    {/* Table of Contents */}
+                    {tocEntries.length > 0 && (
+                      <div className="stoc">
+                        <div className="stoc-title">Table of Contents</div>
+                        <table className="stoc-table">
+                          <thead>
+                            <tr>
+                              <th className="stoc-th stoc-th-item">Section / Item</th>
+                              <th className="stoc-th stoc-th-page">Page No.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tocEntries.map((entry, i) => (
+                              <tr key={i} className={entry.isHeader ? 'stoc-section-row' : 'stoc-item-row'}>
+                                <td className="stoc-td stoc-td-label">
+                                  {!entry.isHeader && <span className="stoc-indent">└ </span>}
+                                  {entry.label}
+                                </td>
+                                <td className="stoc-td stoc-td-page">
+                                  {entry.startPage === entry.endPage
+                                    ? String(entry.startPage).padStart(2, '0')
+                                    : `${String(entry.startPage).padStart(2, '0')} – ${String(entry.endPage).padStart(2, '0')}`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
                   </div>
 
                   <div className="spage-footer">
@@ -1236,86 +1634,159 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     One page per unique Door Material
                 ══════════════════════════════════════════════════ */}
                 {doorTypeGroups.map((group, idx) => {
-                  const rep = group.doors[0];
-                  const colSet = DOOR_TYPE_COLS[group.matType];
-                  const params = colSet
-                    ? buildParamsFromCols(rep, colSet)
-                    : buildSectionParams(rep, ['basic_information', 'door']);
-                  const elevType = getElevationType(rep, elevationTypes, 'door');
-                  const elevCode = rep.doorElevationType ?? getDoorParam(rep, 'DOOR ELEVATION TYPE');
-                  const elevImg = elevType?.imageUrl ?? elevType?.imageData;
-                  const pageNum = COVER_PAGES + idx + 1;
+                  const colSet      = DOOR_TYPE_COLS[group.matType];
+                  const schedCols   = doorGroupSchedCols[idx] ?? [];
+                  const groupStart  = doorGroupStartPages[idx] ?? COVER_PAGES + 1;
+                  const nCommon     = doorCommonPageCounts[idx] ?? 1;
+                  const doorChunks  = chunkArray(group.doors, COMMON_ROWS_PER_PAGE);
+                  const uniqueVariants = dedupDoorsByColumns(group.doors, schedCols);
 
                   return (
-                    <div key={`door-${group.matType}`} className="spage">
-                      <div className="ssec-badge">Section 1 · Door Specification</div>
-                      <div className="spage-header">
-                        <div>
-                          <h1 className="spage-title">{group.displayName}</h1>
-                          <p className="spage-subtitle">Door Material Type · Basic Information</p>
-                        </div>
-                        <div className="spage-qty-block">
-                          <div className="spage-qty-label">Total Openings</div>
-                          <div className="spage-qty-value">{group.totalQuantity}</div>
-                        </div>
-                      </div>
+                    <React.Fragment key={`door-${group.matType}`}>
 
-                      <div className="spage-body">
-                        {/* Left: door params */}
-                        <div className="scol-left">
-                          <div className="sparam-section">
-                            <div className="ssection-title">Door Parameters</div>
-                            {params.map((p, pi) => (
-                              <div key={pi} className="sparam-row">
-                                <span className="sparam-label">{p.label}</span>
-                                <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
-                                  {p.value}
-                                </span>
+                      {/* ── Common schedule sheet (paginated) ───────── */}
+                      {doorChunks.map((chunk, ci) => (
+                        <div key={`door-common-${idx}-${ci}`} className="spage spage-landscape">
+                          <div className="ssec-badge">
+                            Section 1 · Door Schedule{doorChunks.length > 1 ? ` (${ci + 1} / ${doorChunks.length})` : ''}
+                          </div>
+                          {ci === 0 && (
+                            <div className="spage-header">
+                              <div>
+                                <h1 className="spage-title">{group.displayName}</h1>
+                                <p className="spage-subtitle">Door Schedule · All Parameters</p>
                               </div>
-                            ))}
+                              <div className="spage-qty-block">
+                                <div className="spage-qty-label">Total Openings</div>
+                                <div className="spage-qty-value">{group.totalQuantity}</div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="shw-table-wrap">
+                            <ScheduleTable columns={schedCols} doors={chunk} />
+                          </div>
+                          <div className="spage-footer">
+                            <span>Generated by Planckoff Estimating</span>
+                            <span>Page {groupStart + ci} of {totalPages}</span>
                           </div>
                         </div>
+                      ))}
 
-                        {/* Right: elevation + tags */}
-                        <div className="scol-right">
-                          <div className="selev-section">
-                            <div className="selev-title">
-                              Door Elevation{elevCode ? ` · ${elevCode}` : ''}
+                      {/* ── Spec pages — one per unique door parameter combination ── */}
+                      {uniqueVariants.map((variant, vi) => {
+                        const specPageNum  = groupStart + nCommon + vi;
+                        const vRep         = variant.rep;
+                        const params       = colSet
+                          ? buildParamsFromCols(vRep, colSet)
+                          : buildSectionParams(vRep, ['basic_information', 'door']);
+                        const elevType     = getElevationType(vRep, elevationTypes, 'door');
+                        const elevCode     = vRep.doorElevationType ?? getDoorParam(vRep, 'DOOR ELEVATION TYPE');
+                        const elevImg      = elevType?.imageUrl ?? elevType?.imageData;
+                        const repSetName   = vRep.hwSet ?? vRep.matchedSetName;
+                        const repSetData   = repSetName ? finalJson.find(s => s.setName === repSetName) : null;
+                        const repHwItems   = repSetData?.hardwareItems ?? [];
+                        const variantTags  = variant.doorTags.split(', ');
+
+                        return (
+                          <div key={`door-spec-${idx}-${vi}`} className="spage">
+                            <div className="ssec-badge">Section 1 · Door Specification</div>
+                            <div className="spage-header">
+                              <div>
+                                <h1 className="spage-title">{group.displayName}</h1>
+                                <p className="spage-subtitle">Door Material Type · Basic Information</p>
+                              </div>
+                              <div className="spage-qty-block">
+                                <div className="spage-qty-label">Total Openings</div>
+                                <div className="spage-qty-value">{group.totalQuantity}</div>
+                              </div>
                             </div>
-                            <div className="selev-image-wrap" style={{ height: '72mm' }}>
-                              {elevImg ? (
-                                <img src={elevImg} alt={elevCode || 'Door Elevation'} />
-                              ) : (
-                                <span className="selev-no-elev">No Elevation Linked</span>
+
+                            {/* Flex column: two-col body + optional hw table */}
+                            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '45% 55%', gap: '6mm', flex: 1, minHeight: 0 }}>
+                                {/* Left: door params */}
+                                <div className="scol-left">
+                                  <div className="sparam-section">
+                                    <div className="ssection-title">Door Parameters</div>
+                                    {params.map((p, pi) => (
+                                      <div key={pi} className="sparam-row">
+                                        <span className="sparam-label">{p.label}</span>
+                                        <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
+                                          {p.value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Right: elevation + tags */}
+                                <div className="scol-right">
+                                  <div className="selev-section">
+                                    <div className="selev-title">
+                                      Door Elevation{elevCode ? ` · ${elevCode}` : ''}
+                                    </div>
+                                    <div className="selev-image-wrap" style={{ height: '72mm' }}>
+                                      {elevImg ? (
+                                        <img src={elevImg} alt={elevCode || 'Door Elevation'} />
+                                      ) : (
+                                        <span className="selev-no-elev">No Elevation Linked</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="stags-section">
+                                    <div className="ssection-title">
+                                      Door Tags ({variant.count})
+                                    </div>
+                                    <div className="stags-wrap">
+                                      {variantTags.map((tag, ti) => (
+                                        <span key={ti} className="stag">{tag}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Hardware items table for matched set */}
+                              {repHwItems.length > 0 && (
+                                <div className="shw-items" style={{ flexShrink: 0, marginTop: '3mm' }}>
+                                  <div className="ssection-title" style={{ marginBottom: '1.5mm' }}>
+                                    Hardware Set {repSetName}
+                                  </div>
+                                  <table className="shw-table">
+                                    <thead>
+                                      <tr>
+                                        <th style={{ width: '22%' }}>Item</th>
+                                        <th style={{ width: '38%' }}>Description</th>
+                                        <th style={{ width: '20%' }}>Manufacturer</th>
+                                        <th style={{ width: '10%' }}>Finish</th>
+                                        <th className="th-r" style={{ width: '10%' }}>Qty</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {repHwItems.map((item, ii) => (
+                                        <tr key={ii}>
+                                          <td className="td-name">{item.item}</td>
+                                          <td>{(item.userDescription ?? item.processedDescription ?? item.description) || '—'}</td>
+                                          <td>{item.manufacturer || '—'}</td>
+                                          <td>{item.finish || '—'}</td>
+                                          <td className="td-r">{item.qty}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               )}
                             </div>
-                          </div>
-                          <div className="stags-section">
-                            <div className="ssection-title">
-                              Affected Door Tags ({group.doors.length})
-                            </div>
-                            <div className="stags-wrap">
-                              {group.doors.slice(0, 100).map((d, ti) => (
-                                <span key={ti} className="stag">{d.doorTag}</span>
-                              ))}
-                              {group.doors.length > 100 && (
-                                <span
-                                  className="stag"
-                                  style={{ color: '#94a3b8', background: 'none', border: 'none' }}
-                                >
-                                  +{group.doors.length - 100} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="spage-footer">
-                        <span>Generated by Planckoff Estimating</span>
-                        <span>Page {pageNum} of {totalPages}</span>
-                      </div>
-                    </div>
+                            <div className="spage-footer">
+                              <span>Generated by Planckoff Estimating</span>
+                              <span>Page {specPageNum} of {totalPages}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    </React.Fragment>
                   );
                 })}
 
@@ -1324,86 +1795,159 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     One page per unique Door Material
                 ══════════════════════════════════════════════════ */}
                 {frameTypeGroups.map((group, idx) => {
-                  const rep = group.doors[0];
-                  const colSet = FRAME_TYPE_COLS[group.matType];
-                  const params = colSet
-                    ? buildParamsFromCols(rep, colSet)
-                    : buildSectionParams(rep, ['basic_information', 'frame']);
-                  const elevType = getElevationType(rep, elevationTypes, 'frame');
-                  const elevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
-                  const elevImg = elevType?.imageUrl ?? elevType?.imageData;
-                  const pageNum = COVER_PAGES + doorTypeGroups.length + idx + 1;
+                  const colSet         = FRAME_TYPE_COLS[group.matType];
+                  const schedCols      = frameGroupSchedCols[idx] ?? [];
+                  const frameGroupStart = frameGroupStartPages[idx] ?? COVER_PAGES + doorSectionTotal + 1;
+                  const frameNCommon   = frameCommonPageCounts[idx] ?? 1;
+                  const frameChunks    = chunkArray(group.doors, COMMON_ROWS_PER_PAGE);
+                  const uniqueVariants = dedupDoorsByColumns(group.doors, schedCols);
 
                   return (
-                    <div key={`frame-${group.matType}`} className="spage">
-                      <div className="ssec-badge">Section 2 · Frame Specification</div>
-                      <div className="spage-header">
-                        <div>
-                          <h1 className="spage-title">{group.displayName}</h1>
-                          <p className="spage-subtitle">Frame Material Type · Basic Information</p>
-                        </div>
-                        <div className="spage-qty-block">
-                          <div className="spage-qty-label">Total Openings</div>
-                          <div className="spage-qty-value">{group.totalQuantity}</div>
-                        </div>
-                      </div>
+                    <React.Fragment key={`frame-${group.matType}`}>
 
-                      <div className="spage-body">
-                        {/* Left: frame params */}
-                        <div className="scol-left">
-                          <div className="sparam-section">
-                            <div className="ssection-title">Frame Parameters</div>
-                            {params.map((p, pi) => (
-                              <div key={pi} className="sparam-row">
-                                <span className="sparam-label">{p.label}</span>
-                                <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
-                                  {p.value}
-                                </span>
+                      {/* ── Common schedule sheet (paginated) ───────── */}
+                      {frameChunks.map((chunk, ci) => (
+                        <div key={`frame-common-${idx}-${ci}`} className="spage spage-landscape">
+                          <div className="ssec-badge">
+                            Section 2 · Frame Schedule{frameChunks.length > 1 ? ` (${ci + 1} / ${frameChunks.length})` : ''}
+                          </div>
+                          {ci === 0 && (
+                            <div className="spage-header">
+                              <div>
+                                <h1 className="spage-title">{group.displayName}</h1>
+                                <p className="spage-subtitle">Frame Schedule · All Parameters</p>
                               </div>
-                            ))}
+                              <div className="spage-qty-block">
+                                <div className="spage-qty-label">Total Openings</div>
+                                <div className="spage-qty-value">{group.totalQuantity}</div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="shw-table-wrap">
+                            <ScheduleTable columns={schedCols} doors={chunk} />
+                          </div>
+                          <div className="spage-footer">
+                            <span>Generated by Planckoff Estimating</span>
+                            <span>Page {frameGroupStart + ci} of {totalPages}</span>
                           </div>
                         </div>
+                      ))}
 
-                        {/* Right: elevation + tags */}
-                        <div className="scol-right">
-                          <div className="selev-section">
-                            <div className="selev-title">
-                              Frame Elevation{elevCode ? ` · ${elevCode}` : ''}
+                      {/* ── Spec pages — one per unique frame parameter combination ── */}
+                      {uniqueVariants.map((variant, vi) => {
+                        const specPageNum  = frameGroupStart + frameNCommon + vi;
+                        const vRep         = variant.rep;
+                        const params       = colSet
+                          ? buildParamsFromCols(vRep, colSet)
+                          : buildSectionParams(vRep, ['basic_information', 'frame']);
+                        const elevType     = getElevationType(vRep, elevationTypes, 'frame');
+                        const elevCode     = getDoorParam(vRep, 'FRAME ELEVATION TYPE');
+                        const elevImg      = elevType?.imageUrl ?? elevType?.imageData;
+                        const repSetName   = vRep.hwSet ?? vRep.matchedSetName;
+                        const repSetData   = repSetName ? finalJson.find(s => s.setName === repSetName) : null;
+                        const repHwItems   = repSetData?.hardwareItems ?? [];
+                        const variantTags  = variant.doorTags.split(', ');
+
+                        return (
+                          <div key={`frame-spec-${idx}-${vi}`} className="spage">
+                            <div className="ssec-badge">Section 2 · Frame Specification</div>
+                            <div className="spage-header">
+                              <div>
+                                <h1 className="spage-title">{group.displayName}</h1>
+                                <p className="spage-subtitle">Frame Material Type · Basic Information</p>
+                              </div>
+                              <div className="spage-qty-block">
+                                <div className="spage-qty-label">Total Openings</div>
+                                <div className="spage-qty-value">{group.totalQuantity}</div>
+                              </div>
                             </div>
-                            <div className="selev-image-wrap" style={{ height: '72mm' }}>
-                              {elevImg ? (
-                                <img src={elevImg} alt={elevCode || 'Frame Elevation'} />
-                              ) : (
-                                <span className="selev-no-elev">No Elevation Linked</span>
+
+                            {/* Flex column: two-col body + optional hw table */}
+                            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '45% 55%', gap: '6mm', flex: 1, minHeight: 0 }}>
+                                {/* Left: frame params */}
+                                <div className="scol-left">
+                                  <div className="sparam-section">
+                                    <div className="ssection-title">Frame Parameters</div>
+                                    {params.map((p, pi) => (
+                                      <div key={pi} className="sparam-row">
+                                        <span className="sparam-label">{p.label}</span>
+                                        <span className={`sparam-value${p.value === '-' ? ' is-dash' : ''}`}>
+                                          {p.value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Right: elevation + tags */}
+                                <div className="scol-right">
+                                  <div className="selev-section">
+                                    <div className="selev-title">
+                                      Frame Elevation{elevCode ? ` · ${elevCode}` : ''}
+                                    </div>
+                                    <div className="selev-image-wrap" style={{ height: '72mm' }}>
+                                      {elevImg ? (
+                                        <img src={elevImg} alt={elevCode || 'Frame Elevation'} />
+                                      ) : (
+                                        <span className="selev-no-elev">No Elevation Linked</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="stags-section">
+                                    <div className="ssection-title">
+                                      Door Tags ({variant.count})
+                                    </div>
+                                    <div className="stags-wrap">
+                                      {variantTags.map((tag, ti) => (
+                                        <span key={ti} className="stag">{tag}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Hardware items table for matched set */}
+                              {repHwItems.length > 0 && (
+                                <div className="shw-items" style={{ flexShrink: 0, marginTop: '3mm' }}>
+                                  <div className="ssection-title" style={{ marginBottom: '1.5mm' }}>
+                                    Hardware Set {repSetName}
+                                  </div>
+                                  <table className="shw-table">
+                                    <thead>
+                                      <tr>
+                                        <th style={{ width: '22%' }}>Item</th>
+                                        <th style={{ width: '38%' }}>Description</th>
+                                        <th style={{ width: '20%' }}>Manufacturer</th>
+                                        <th style={{ width: '10%' }}>Finish</th>
+                                        <th className="th-r" style={{ width: '10%' }}>Qty</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {repHwItems.map((item, ii) => (
+                                        <tr key={ii}>
+                                          <td className="td-name">{item.item}</td>
+                                          <td>{(item.userDescription ?? item.processedDescription ?? item.description) || '—'}</td>
+                                          <td>{item.manufacturer || '—'}</td>
+                                          <td>{item.finish || '—'}</td>
+                                          <td className="td-r">{item.qty}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               )}
                             </div>
-                          </div>
-                          <div className="stags-section">
-                            <div className="ssection-title">
-                              Affected Door Tags ({group.doors.length})
-                            </div>
-                            <div className="stags-wrap">
-                              {group.doors.slice(0, 100).map((d, ti) => (
-                                <span key={ti} className="stag">{d.doorTag}</span>
-                              ))}
-                              {group.doors.length > 100 && (
-                                <span
-                                  className="stag"
-                                  style={{ color: '#94a3b8', background: 'none', border: 'none' }}
-                                >
-                                  +{group.doors.length - 100} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="spage-footer">
-                        <span>Generated by Planckoff Estimating</span>
-                        <span>Page {pageNum} of {totalPages}</span>
-                      </div>
-                    </div>
+                            <div className="spage-footer">
+                              <span>Generated by Planckoff Estimating</span>
+                              <span>Page {specPageNum} of {totalPages}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    </React.Fragment>
                   );
                 })}
 
@@ -1421,7 +1965,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   const frameElevCode = getDoorParam(rep, 'FRAME ELEVATION TYPE');
                   const doorElevImg   = doorElevType?.imageUrl  ?? doorElevType?.imageData;
                   const frameElevImg  = frameElevType?.imageUrl ?? frameElevType?.imageData;
-                  const pageNum       = COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + idx + 1;
+                  const pageNum       = prehungSectionStart + idx;
 
                   const sectionColorClass: Record<string, string> = {
                     basic_information: 'ph-basic',
@@ -1537,7 +2081,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     Usage: count + all door tags
                 ══════════════════════════════════════════════════ */}
                 {hwSetDisplays.map((set, idx) => {
-                  const pageNum = COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + idx + 1;
+                  const pageNum = hwSetSectionStart + idx;
                   return (
                     <div key={`hwset-${set.setName}-${idx}`} className="spage">
                       <div className="ssec-badge">Section 4 · Hardware Schedule — Set Report</div>
@@ -1613,8 +2157,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                     Paginated at FLAT_ROWS_PER_PAGE rows
                 ══════════════════════════════════════════════════ */}
                 {flatListPages.map((pageItems, idx) => {
-                  const pageNum =
-                    COVER_PAGES + doorTypeGroups.length + frameTypeGroups.length + prehungGroups.length + hwSetDisplays.length + idx + 1;
+                  const pageNum = flatListSectionStart + idx;
                   const continuationLabel =
                     flatListPages.length > 1 ? ` (${idx + 1} / ${flatListPages.length})` : '';
 
@@ -1673,6 +2216,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
 
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}

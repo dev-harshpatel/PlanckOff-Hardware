@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { useNavigationLoading } from '@/contexts/NavigationLoadingContext';
 import { RouteLoadingState } from '@/components/layout/RouteLoadingState';
@@ -28,11 +28,18 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPrintMode = searchParams.get('print') === '1';
   const { projects, projectsHydrated } = useProject();
   const { startNavigation } = useNavigationLoading();
   const [isNotesOpen, setIsNotesOpen] = useState(false);
 
   const activeProject = projects.find((p) => p.id === id);
+
+  // Print routes (Playwright PDF capture) — skip the breadcrumb bar and the
+  // ProjectNotesPanel entirely. The panel is `position: fixed`, which prints
+  // on every page in some browsers even when visually off-canvas.
+  if (isPrintMode) return <>{children}</>;
 
   if (!projectsHydrated) {
     return <RouteLoadingState title="Opening reports" message="Loading project data and report configuration." />;

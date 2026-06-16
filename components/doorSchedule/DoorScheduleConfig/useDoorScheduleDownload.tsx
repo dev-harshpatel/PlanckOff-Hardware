@@ -422,13 +422,13 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
         ]);
 
         const colCount    = selectedColumns.length;
-        const useA3       = colCount > 15;
+        const useA3       = colCount > 20;
         const PAGE_W      = useA3 ? 420 : 297;
         const PAGE_H      = useA3 ? 297 : 210;
         const MARGIN      = 14;
         const USABLE_W    = PAGE_W - MARGIN * 2;
-        const fontSize    = colCount > 25 ? 5 : colCount > 15 ? 5.5 : 6.5;
-        const cellPadding = colCount > 25 ? 1 : colCount > 15 ? 1.4 : 1.8;
+        const fontSize    = colCount > 30 ? 4.5 : colCount > 20 ? 5 : colCount > 15 ? 5.5 : 6.5;
+        const cellPadding = colCount > 30 ? 0.8 : colCount > 20 ? 1 : colCount > 15 ? 1.4 : 1.8;
 
         const doc        = new jsPDF({ orientation: 'landscape', unit: 'mm', format: useA3 ? 'a3' : 'a4' });
         const logoDataUrl = await loadLogoDataUrl();
@@ -464,8 +464,11 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
         const pdfHeaders = headers.map(h => PDF_ABBREV[h] ?? h);
 
         const allExportRows = rowsByGroup.flatMap(r => r);
-        const MIN_COL = Math.max(10, USABLE_W * 0.025);
+
+        // Minimum column width scales down for very wide tables so all columns fit.
+        const MIN_COL = colCount > 35 ? 4 : colCount > 25 ? 5.5 : colCount > 15 ? 7 : 10;
         const MAX_COL = USABLE_W * 0.14;
+
         const rawWeights = selectedColumns.map((col, i) => {
           const hLen = pdfHeaders[i].length;
           const dLen = allExportRows.reduce((mx, row) =>
@@ -473,11 +476,20 @@ export function useDoorScheduleDownload(params: UseDoorScheduleDownloadParams): 
           return Math.max(hLen, Math.min(dLen, 20));
         });
         const totalWeight = rawWeights.reduce((s, w) => s + w, 0);
+
+        // Proportional widths, then clamp each column to [MIN_COL, MAX_COL].
+        const clampedWidths = rawWeights.map(w => {
+          const prop = totalWeight > 0 ? (w / totalWeight) * USABLE_W : USABLE_W / colCount;
+          return Math.min(Math.max(prop, MIN_COL), MAX_COL);
+        });
+
+        // After clamping the sum may exceed USABLE_W — scale everything down so
+        // columns always fit exactly within the printable area and nothing is cut.
+        const clampedTotal = clampedWidths.reduce((s, w) => s + w, 0);
+        const scaleFactor  = clampedTotal > USABLE_W ? USABLE_W / clampedTotal : 1;
+
         const pdfColumnStyles: Record<number, { cellWidth: number }> = Object.fromEntries(
-          rawWeights.map((w, i) => {
-            const prop = totalWeight > 0 ? (w / totalWeight) * USABLE_W : USABLE_W / colCount;
-            return [i, { cellWidth: Math.min(Math.max(prop, MIN_COL), MAX_COL) }];
-          }),
+          clampedWidths.map((w, i) => [i, { cellWidth: w * scaleFactor }]),
         );
 
         for (const [i, group] of groupsToExport.entries()) {

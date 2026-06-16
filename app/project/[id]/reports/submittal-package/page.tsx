@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 import { useEffect, useState } from 'react';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
@@ -11,8 +11,12 @@ import { filterExcludedFromFinalJson, filterHardwareExcludedDoors } from '@/util
 import { Package } from 'lucide-react';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 import type { ElevationType } from '@/types';
+import type { SubmittalMeta } from '@/lib/db/submittalMetadata';
+import SubmittalMetaForm from '@/components/submittals/SubmittalMetaForm';
 
 const SubmittalGenerator = dynamic(() => import('@/components/submittals/SubmittalGenerator'), { ssr: false });
+
+const EMPTY_META: SubmittalMeta = { fromName: '', toName: '', gcName: '', projectAddress: '', projectName: '', companyName: '' };
 
 function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): MergedHardwareSet[] {
   const activeDoors = filterHardwareExcludedDoors(doors);
@@ -61,12 +65,16 @@ function reconstructFinalJson(hardwareSets: HardwareSet[], doors: Door[]): Merge
 
 export default function SubmittalPackagePage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const printMode = searchParams.get('print') === '1';
   const { projects } = useProject();
   const activeProject = projects.find((p) => p.id === id);
 
   const [finalJson, setFinalJson] = useState<MergedHardwareSet[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'api' | 'fallback' | null>(null);
+  const [submittalMeta, setSubmittalMeta] = useState<SubmittalMeta>(EMPTY_META);
+  const [companyName, setCompanyName] = useState('');
 
   useEffect(() => {
     if (!id || !activeProject) return;
@@ -133,6 +141,22 @@ export default function SubmittalPackagePage() {
       .finally(() => setLoading(false));
   }, [id, activeProject?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load submittal metadata + company name (independent of hardware data)
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      fetch(`/api/projects/${id}/submittal-metadata`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+      fetch('/api/settings/company', { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+    ]).then(([metaRes, companyRes]) => {
+      if (metaRes?.data) setSubmittalMeta(metaRes.data as SubmittalMeta);
+      if (companyRes?.data?.companyName) setCompanyName(companyRes.data.companyName as string);
+    });
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!activeProject) return null;
 
   const setCount = finalJson?.length ?? 0;
@@ -142,8 +166,26 @@ export default function SubmittalPackagePage() {
     return <ReportPageSkeleton badgeWidth="w-36" rows={6} />;
   }
 
+  if (printMode) {
+    return (
+      <div className="bg-white">
+        {finalJson && finalJson.length > 0 && (
+          <SubmittalGenerator
+            projectId={id}
+            finalJson={finalJson}
+            projectName={activeProject.name}
+            elevationTypes={(activeProject.elevationTypes ?? []) as ElevationType[]}
+            submittalMeta={submittalMeta}
+            printMode
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-[var(--bg)] rounded-md border border-[var(--border)] overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
+      {/* Header */}
       <div className="bg-[var(--primary-bg)] border-b border-[var(--primary-border)] px-5 py-3 flex items-center gap-3 flex-shrink-0">
         <Package className="h-4 w-4 text-[var(--primary-text-muted)]" />
         <h2 className="text-sm font-semibold text-[var(--text)]">Submittal Package</h2>
@@ -161,20 +203,37 @@ export default function SubmittalPackagePage() {
         )}
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        {finalJson && finalJson.length > 0 && (
-          <SubmittalGenerator
-            finalJson={finalJson}
-            projectName={activeProject.name}
-            elevationTypes={(activeProject.elevationTypes ?? []) as ElevationType[]}
+      {/* Body: sidebar + preview */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar — submittal metadata inputs */}
+        <div className="w-56 flex-shrink-0 border-r border-[var(--border)] overflow-y-auto bg-[var(--bg-subtle)] p-4">
+          <SubmittalMetaForm
+            projectId={id}
+            defaultProjectName={activeProject.name}
+            defaultCompanyName={companyName}
+            initialMeta={submittalMeta}
+            onSave={setSubmittalMeta}
           />
-        )}
-        {(!finalJson || finalJson.length === 0) && (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
-            <p>No hardware sets found in final JSON</p>
-            <p className="text-xs">Run the merge pipeline first to generate the submittal package.</p>
-          </div>
-        )}
+        </div>
+
+        {/* Right — preview */}
+        <div className="flex-1 overflow-hidden">
+          {finalJson && finalJson.length > 0 && (
+            <SubmittalGenerator
+              projectId={id}
+              finalJson={finalJson}
+              projectName={activeProject.name}
+              elevationTypes={(activeProject.elevationTypes ?? []) as ElevationType[]}
+              submittalMeta={submittalMeta}
+            />
+          )}
+          {(!finalJson || finalJson.length === 0) && (
+            <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
+              <p>No hardware sets found in final JSON</p>
+              <p className="text-xs">Run the merge pipeline first to generate the submittal package.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { resolveAllSets } from '../utils/descriptionResolver';
 import { type ProcessingTask } from '../components/shared/ProcessingIndicator';
 import { type ProcessingLogEntry, useProcessingWidget } from '@/contexts/ProcessingWidgetContext';
 import { useBackgroundUpload, UploadTask } from '../contexts/BackgroundUploadContext';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 interface UseProjectUploadsOptions {
     projectId: string;
@@ -533,6 +534,11 @@ export function useProjectUploads({
             setWidget({ step: msg, progress });
         };
 
+        // Tracks the Supabase Storage path when the PDF is too large for Vercel (≥4 MB).
+        // Used for client-side cleanup if processing fails or is cancelled before the
+        // API gets a chance to clean it up server-side.
+        let uploadedPdfStoragePath: string | null = null;
+
         try {
             step(`Reading "${excelFile.name}" (${(excelFile.size / 1024).toFixed(0)} KB)…`, 5);
             await new Promise(r => setTimeout(r, 200));
@@ -540,12 +546,44 @@ export function useProjectUploads({
             step(`Reading "${pdfFile.name}" (${(pdfFile.size / 1024).toFixed(0)} KB)…`, 10);
             await new Promise(r => setTimeout(r, 200));
 
+            // PDFs ≥4 MB exceed Vercel's 4.5 MB request-body limit.
+            // Upload directly from the browser to Supabase Storage; the API
+            // downloads it from there using the service-role key, then deletes it.
+            const PDF_STORAGE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
+            if (pdfFile.size >= PDF_STORAGE_THRESHOLD) {
+                step('Uploading PDF to secure storage…', 12);
+                const supabase = createSupabaseBrowserClient();
+                const storagePath = `temp/${projectId}/${crypto.randomUUID()}.pdf`;
+                const { error: storageUploadError } = await supabase.storage
+                    .from('temp-pdf-uploads')
+                    .upload(storagePath, pdfFile, { contentType: 'application/pdf' });
+                if (storageUploadError) {
+                    throw new Error(
+                        `Failed to upload PDF to storage: ${storageUploadError.message}. ` +
+                        'Please check your internet connection and try again.',
+                    );
+                }
+                uploadedPdfStoragePath = storagePath;
+                addLog('info', `Large PDF (${(pdfFile.size / 1024 / 1024).toFixed(1)} MB) uploaded to secure storage — bypassing server size limit.`);
+            }
+
+            // If the user cancelled during the storage upload, abort now before the fetch.
+            if (cancelControllerRef.current?.signal.aborted) {
+                throw new DOMException('Cancelled', 'AbortError');
+            }
+
             setPipelineStep(1);
             step('Uploading files to server…', 15);
 
             const form = new FormData();
             form.append('excel', excelFile);
-            form.append('pdf', pdfFile);
+            if (uploadedPdfStoragePath) {
+                // Send only the path string — no file bytes pass through Vercel
+                form.append('pdfStoragePath', uploadedPdfStoragePath);
+                form.append('pdfName', pdfFile.name);
+            } else {
+                form.append('pdf', pdfFile);
+            }
 
             // Advance to the AI extraction step after a short delay — door schedule
             // parsing is fast (~1-2s), so this fires right as AI work begins.
@@ -697,6 +735,16 @@ export function useProjectUploads({
 
         } catch (err) {
             if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+            // Best-effort client-side cleanup: delete the storage file if we uploaded one
+            // but the API never ran (e.g. cancelled before/during the fetch, or storage
+            // error before the fetch started). The API also deletes in its own finally
+            // block, so double-deletion is safe — remove() on a missing path is a no-op.
+            if (uploadedPdfStoragePath) {
+                createSupabaseBrowserClient().storage
+                    .from('temp-pdf-uploads')
+                    .remove([uploadedPdfStoragePath])
+                    .catch(() => {});
+            }
             if (err instanceof Error && err.name === 'AbortError') {
                 // User cancelled — reset to a fresh state so they can re-upload
                 logsRef.current = [];

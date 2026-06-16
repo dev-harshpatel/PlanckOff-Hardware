@@ -92,6 +92,14 @@ export function AppShell({ children }: AppShellProps) {
   // Avoid hydration mismatch on first render
   if (!isMounted) return <>{children}</>;
 
+  // Print routes (Playwright PDF capture) — render only the page content,
+  // no app chrome (header, nav) which would otherwise leak into the PDF.
+  // Read the query string directly (not useSearchParams) so this route
+  // doesn't force dynamic rendering on every other page in the app.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('print') === '1') {
+    return <>{children}</>;
+  }
+
   // Hydrating session
   if (isLoading) {
     return (
