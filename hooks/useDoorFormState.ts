@@ -179,9 +179,9 @@ export function useDoorFormState({ door, hardwareSets, onSave }: UseDoorFormStat
     }, [editedDoor]);
 
     // Derive exclude flags — scoped per section; each section is independent.
-    const doorExcluded  = doorSec['DOOR INCLUDE/EXCLUDE']?.toUpperCase()  === 'EXCLUDE';
-    const frameExcluded = frameSec['FRAME INCLUDE/EXCLUDE']?.toUpperCase() === 'EXCLUDE';
-    const hwExcluded    = (editedDoor.hardwareIncludeExclude ?? '').toUpperCase() === 'EXCLUDE';
+    const doorExcluded  = !!doorSec['DOOR INCLUDE/EXCLUDE']?.trim().toUpperCase().startsWith('EXCLUD');
+    const frameExcluded = !!frameSec['FRAME INCLUDE/EXCLUDE']?.trim().toUpperCase().startsWith('EXCLUD');
+    const hwExcluded    = (editedDoor.hardwareIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
 
     const matchedSet = useMemo<HardwareSet | null>(() => {
         if (editedDoor.assignedHardwareSet) return editedDoor.assignedHardwareSet;

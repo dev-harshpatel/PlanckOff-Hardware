@@ -2,8 +2,8 @@ import type { Door, HardwareSet } from '@/types';
 import type { MergedHardwareSet, MergedDoor } from '@/lib/db/hardware';
 
 function isMergedDoorHardwareExcluded(door: MergedDoor): boolean {
-  const hw = door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE']?.toUpperCase();
-  return hw === 'EXCLUDE';
+  const hw = door.sections?.hardware?.['HARDWARE INCLUDE/EXCLUDE']?.trim().toUpperCase();
+  return hw?.startsWith('EXCLUD') ?? false;
 }
 
 /** Remove doors from MergedHardwareSet[] where hardware is excluded, drop sets with 0 remaining doors. */
