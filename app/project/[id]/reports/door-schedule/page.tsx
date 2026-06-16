@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import { FileSpreadsheet } from 'lucide-react';
 import type { Door, HardwareSet, ElevationType } from '@/types';
 import { transformDoors, transformHardwareSets, transformFromFinalJson } from '@/utils/hardwareTransformers';
-import { filterExcludedDoors } from '@/utils/reportFilters';
 import type { MergedHardwareSet } from '@/lib/db/hardware';
 import { ReportPageSkeleton } from '@/components/skeletons/ReportPageSkeleton';
 
@@ -55,7 +54,7 @@ export default function DoorScheduleReportPage() {
         if (finalData && finalData.length > 0) {
           const { hardwareSets: sets, doors: loadedDoors } = transformFromFinalJson(finalData);
           setHardwareSets(sets);
-          setDoors(filterExcludedDoors(loadedDoors));
+          setDoors(loadedDoors);
           return;
         }
 
@@ -75,7 +74,7 @@ export default function DoorScheduleReportPage() {
         setHardwareSets(sets);
         setDoors(
           dsJson?.data?.scheduleJson
-            ? filterExcludedDoors(transformDoors(dsJson.data.scheduleJson, sets))
+            ? transformDoors(dsJson.data.scheduleJson, sets)
             : [],
         );
       } catch (err) {
