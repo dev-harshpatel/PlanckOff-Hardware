@@ -1317,8 +1317,8 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   border-bottom: 1.5px solid #1e3a5f;
                 }
                 .scover-logo {
-                  max-height: 20mm;
-                  max-width: 60mm;
+                  max-height: 32mm;
+                  max-width: 90mm;
                   object-fit: contain;
                   margin-bottom: 4mm;
                   display: block;

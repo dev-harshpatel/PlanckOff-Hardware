@@ -5,6 +5,10 @@
     },
     "app/api/projects/[id]/hardware-pdf/route.ts": {
       "memory": 1024
+    },
+    "app/api/projects/[id]/submittal-package/pdf/route.ts": {
+      "memory": 2048,
+      "maxDuration": 60
     }
   }
 }
