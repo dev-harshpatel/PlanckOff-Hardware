@@ -50,21 +50,19 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
   projectLocation,
   projectProvince,
 }) => {
-  // ── Filter out excluded doors ─────────────────────────────────────────────
-  // A door is only fully excluded from the report when BOTH the door section
-  // AND the frame section are set to 'EXCLUDE'. If only the door leaf is
-  // excluded, the frame data must still be visible.
-  const includedDoors = useMemo(() => doors.filter(d => {
+  // ── Raw filter: flag-only, used for column derivation ────────────────────
+  // A door passes this filter unless BOTH door AND frame are flagged EXCLUDE.
+  // This stable list drives deriveColumnGroups so the column picker never
+  // loses columns just because the user deselects a section.
+  const rawIncludedDoors = useMemo(() => doors.filter(d => {
     const sec = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined);
     const doorExcluded = (sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
     const frameExcluded = (sec?.frame?.['FRAME INCLUDE/EXCLUDE'] ?? d.frameIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
     return !(doorExcluded && frameExcluded);
   }), [doors]);
 
-  const excludedCount = sumDoorQuantities(doors) - sumDoorQuantities(includedDoors);
-
   // ── Column selection ──────────────────────────────────────────────────────
-  const columnGroups  = useMemo(() => deriveColumnGroups(includedDoors), [includedDoors]);
+  const columnGroups  = useMemo(() => deriveColumnGroups(rawIncludedDoors), [rawIncludedDoors]);
   const allColumnIds  = useMemo(() => columnGroups.flatMap(g => g.cols.map(c => c.id)), [columnGroups]);
   const hasSectionData = allColumnIds.length > 0;
 
@@ -73,6 +71,22 @@ const DoorScheduleConfig: React.FC<DoorScheduleConfigProps> = ({
     for (const g of columnGroups) defaults.push(...g.cols.slice(0, 3).map(c => c.id));
     return defaults.length > 0 ? defaults : allColumnIds;
   });
+
+  // ── Effective filter: also considers which columns are selected ───────────
+  // A section is "effectively excluded" when its flag is EXCLUDE *or* the
+  // user has deselected all columns for that section in the report settings.
+  // This prevents a door with Door=EXCLUDE + Frame=INCLUDE from appearing
+  // when the user has selected 0 frame columns (nothing frame-related to show).
+  const includedDoors = useMemo(() => rawIncludedDoors.filter(d => {
+    const sec = (d.sections as unknown as Record<string, Record<string, string | undefined>> | undefined);
+    const doorExcluded = (sec?.door?.['DOOR INCLUDE/EXCLUDE'] ?? d.doorIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
+    const frameExcluded = (sec?.frame?.['FRAME INCLUDE/EXCLUDE'] ?? d.frameIncludeExclude ?? '').trim().toUpperCase().startsWith('EXCLUD');
+    const effectiveDoorExcluded  = doorExcluded  || !selectedColumns.some(c => c.startsWith('door::'));
+    const effectiveFrameExcluded = frameExcluded || !selectedColumns.some(c => c.startsWith('frame::'));
+    return !(effectiveDoorExcluded && effectiveFrameExcluded);
+  }), [rawIncludedDoors, selectedColumns]);
+
+  const excludedCount = sumDoorQuantities(doors) - sumDoorQuantities(includedDoors);
 
   const toggleColumn   = useCallback((id: string) => setSelectedColumns(p => {
     if (p.includes(id)) return p.filter(c => c !== id);

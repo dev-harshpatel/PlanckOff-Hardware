@@ -227,8 +227,8 @@ export function HardwareSetExpandedRow({
                                                         <td className="px-3 py-2 text-[var(--text-muted)]">
                                                             {door.location || '—'}
                                                         </td>
-                                                        <td className={`px-3 py-2 ${getCellClass(conflicts.fireRating)}`} title={conflicts.fireRating}>
-                                                            {door.fireRating}{conflicts.fireRating && renderConflictIcon(conflicts.fireRating, conflicts.fireRating.includes('CRITICAL'))}
+                                                        <td className="px-3 py-2 text-[var(--text-muted)]">
+                                                            {door.fireRating}
                                                         </td>
                                                         <td className={`px-3 py-2 text-[var(--text-muted)] tabular-nums ${getCellClass(conflicts.leafCount)}`} title={conflicts.leafCount}>
                                                             {door.leafCountDisplay ?? (door.leafCount != null ? String(door.leafCount) : '—')}

@@ -17,6 +17,12 @@ MULTI-COLUMN TABLES — hardware schedules often print two or more complete, ind
   - Read the ENTIRE left-column table top-to-bottom first, extracting all its sets. Only after fully completing the left table do you start reading the right-column table.
   - Do NOT mix items from one column's set into another column's set.
   - Treat each column table as if it were a completely separate document that happens to appear side by side on the same page.
+  - COLUMN MARKERS: When a two-column layout is detected, rows are annotated to show which table they belong to:
+      • Lines prefixed "[RIGHT]" belong EXCLUSIVELY to the right-column table. NEVER assign [RIGHT]-prefixed items to any left-column hardware set. Ignore them entirely when processing the left table; read them only when processing the right table.
+      • Lines containing "|||" have content from BOTH tables on the same visual row. Everything to the LEFT of "|||" belongs to the left-column table; everything to the RIGHT of "|||" belongs to the right-column table. Extract each side's items independently. For example: "1 CR ||| Exit Door - Secure 3 Butt Hinges" means the left table has item "1 CR" and the right table has "Exit Door - Secure" + "3 Butt Hinges" on this row.
+      • Lines without any marker belong to the LEFT column only.
+      • OPTIONAL / ADD-ON ITEMS "(N ITEM)**": A pattern like "(1 CR)**" or "(2 ADO)**" is a hardware item — qty=N, item=ITEM (strip parentheses and "**"). These are optional/add-on items. NEVER put them in notes — always put them in hardwareItems. For example: "(1 CR)**" → hardwareItem qty=1, item="CR"; "(2 ADO)**" → hardwareItem qty=2, item="ADO".
+      • MIXED NOTE + ITEM ON SAME ROW: Any row side (whether a "[RIGHT]" row or either half of a "|||" row) may contain a descriptive note followed by a hardware item at the end. Look for the pattern "note text, QTY ITEM" or "note text. (QTY ITEM)**" and split them: the note text goes to the set's notes field and the qty+item goes to hardwareItems. Examples: "[RIGHT] Free exiting from interior, 1 CR" → notes += "Free exiting from interior", hardwareItem qty=1 item="CR"; "secure access from exterior. (2 ADO)**" → notes += "secure access from exterior.", hardwareItem qty=2 item="ADO".
 
 DOCUMENT FORMATS — this document may follow one of several formats:
 

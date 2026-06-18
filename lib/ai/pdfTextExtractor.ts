@@ -28,44 +28,115 @@ export interface PdfExtractionResult {
 // ---------------------------------------------------------------------------
 // Row reconstruction
 //
-// pdfjs text items each have a `transform` array: [scaleX, skewX, skewY, scaleY, x, y]
-// We use transform[5] (y) to group items into the same visual row,
-// and transform[4] (x) to sort left-to-right within each row.
+// We use VIEWPORT coordinates (visual vx/vy) rather than raw PDF transform
+// coordinates. This matters for pages with rotation != 0 (e.g. rotation=90
+// landscape architectural drawings): in raw PDF space transform[5] is the
+// visual X axis and transform[4] is the visual Y axis, so grouping by
+// transform[5] would cluster visual columns together instead of rows.
+// viewport.convertToViewportPoint() applies the page rotation so that
+// vx always runs left→right and vy always runs top→bottom regardless of
+// how the page is stored in the PDF.
 // ---------------------------------------------------------------------------
 
-interface RawTextItem {
+interface VpTextItem {
+  vx: number;   // visual x — left to right
+  vy: number;   // visual y — top to bottom
   str: string;
-  transform: number[];
-  width: number;
 }
 
-function reconstructRows(items: RawTextItem[], yTolerance = 3): string {
+// When two independent hardware set tables appear side by side on the same page
+// (e.g. "EXTERIOR COMMON DOORS" and "INTERIOR COMMON DOORS"), their rows get
+// interleaved in the vy-sorted output. A right-column-only row (all items have
+// vx > splitX) looks identical to a left-column row — the AI has no way to tell
+// which column it belongs to and may assign it to the wrong hardware set.
+//
+// Solution: detect the inter-table gap by voting — each row votes for its
+// largest intra-row gap. The gap that appears consistently across many rows is
+// the real column boundary; incidental large gaps in door-schedule rows appear
+// in only 1–3 rows and lose the vote.
+const COLUMN_GAP_BIN_WIDTH = 120;   // group gap centres within 120 pts into one bin
+const COLUMN_GAP_MIN_FOR_VOTE = 80; // minimum gap (pts) to participate in voting
+const COLUMN_GAP_QUALIFY = 150;     // winning bin's max gap must be ≥ this
+const COLUMN_GAP_MIN_VOTES = 4;     // bin must win ≥ this many row votes
+
+function detectColumnSplitX(rows: VpTextItem[][]): number | null {
+  // Compute the vx range so we can focus on the "high-x" region.
+  // On pages that mix a door schedule (items from vx≈100 to vx≈2100) with a
+  // two-column hardware schedule (items from vx≈1400 to vx≈2200), the door
+  // schedule rows dominate voting because they span the full page width.
+  // By restricting to rows where EVERY item has vx > 45 % of the page range,
+  // we exclude wide door-schedule rows while keeping hardware-schedule rows
+  // (whose leftmost items are at ≈ 55–70 % of the range).
+  const allVx = rows.flat().map((i) => i.vx);
+  if (allVx.length === 0) return null;
+  const minVx = Math.min(...allVx);
+  const maxVx = Math.max(...allVx);
+  const range = maxVx - minVx;
+  if (range < 200) return null; // page too narrow to have a side-by-side two-column layout
+
+  const highVxThreshold = minVx + range * 0.45;
+  const highVxRows = rows.filter((row) => row.every((item) => item.vx >= highVxThreshold));
+
+  if (highVxRows.length < COLUMN_GAP_MIN_VOTES) return null;
+
+  const voteCounts = new Map<number, number>();
+  const voteMaxGap = new Map<number, number>();
+
+  for (const row of highVxRows) {
+    if (row.length < 2) continue;
+    const sorted = [...row].sort((a, b) => a.vx - b.vx);
+
+    // Each row casts exactly one vote — for its own largest gap
+    let rowMaxGap = 0;
+    let rowMaxCenter = 0;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gap = sorted[i + 1].vx - sorted[i].vx;
+      if (gap > rowMaxGap) {
+        rowMaxGap = gap;
+        rowMaxCenter = (sorted[i].vx + sorted[i + 1].vx) / 2;
+      }
+    }
+
+    if (rowMaxGap < COLUMN_GAP_MIN_FOR_VOTE) continue;
+
+    const bin = Math.floor(rowMaxCenter / COLUMN_GAP_BIN_WIDTH) * COLUMN_GAP_BIN_WIDTH;
+    voteCounts.set(bin, (voteCounts.get(bin) ?? 0) + 1);
+    voteMaxGap.set(bin, Math.max(voteMaxGap.get(bin) ?? 0, rowMaxGap));
+  }
+
+  // The winning bin must have both enough votes AND a qualifying gap size
+  let bestBin: number | null = null;
+  let bestVotes = 0;
+
+  for (const [bin, votes] of voteCounts) {
+    const maxGap = voteMaxGap.get(bin) ?? 0;
+    if (maxGap >= COLUMN_GAP_QUALIFY && votes > bestVotes) {
+      bestVotes = votes;
+      bestBin = bin;
+    }
+  }
+
+  if (bestBin === null || bestVotes < COLUMN_GAP_MIN_VOTES) return null;
+  return bestBin + COLUMN_GAP_BIN_WIDTH / 2;
+}
+
+function reconstructRows(items: VpTextItem[], yTolerance = 4): string {
   if (items.length === 0) return '';
 
-  // Build [x, y, str] tuples
-  const positioned = items
-    .filter((item) => item.str.trim() !== '')
-    .map((item) => ({
-      x: item.transform[4],
-      y: item.transform[5],
-      str: item.str,
-      width: item.width,
-    }));
+  const positioned = items.filter((item) => item.str.trim() !== '');
 
   if (positioned.length === 0) return '';
 
-  // Sort by y descending (PDF y=0 is bottom, so higher y = higher on page)
-  positioned.sort((a, b) => b.y - a.y);
+  // Sort by vy ascending (top to bottom in viewport)
+  positioned.sort((a, b) => a.vy - b.vy);
 
-  // Group into rows by y proximity
-  const rows: Array<typeof positioned> = [];
-  let currentRow: typeof positioned = [positioned[0]];
+  // Group into rows by vy proximity
+  const rows: VpTextItem[][] = [];
+  let currentRow: VpTextItem[] = [positioned[0]];
 
   for (let i = 1; i < positioned.length; i++) {
     const item = positioned[i];
-    const rowY = currentRow[0].y;
-
-    if (Math.abs(item.y - rowY) <= yTolerance) {
+    if (Math.abs(item.vy - currentRow[0].vy) <= yTolerance) {
       currentRow.push(item);
     } else {
       rows.push(currentRow);
@@ -74,16 +145,48 @@ function reconstructRows(items: RawTextItem[], yTolerance = 3): string {
   }
   rows.push(currentRow);
 
-  // Within each row sort by x ascending (left to right)
-  // Join with a single space — preserves column separation
+  // Detect two-column layout from the largest intra-row horizontal gap
+  const splitX = detectColumnSplitX(rows);
+
+  // Within each row sort by vx ascending (left to right), then annotate:
+  //   [RIGHT] prefix  → row belongs entirely to the right-column table
+  //   ||| separator   → row has content from BOTH tables; left of ||| = left table, right of ||| = right table
   return rows
-    .map((row) =>
-      row
-        .sort((a, b) => a.x - b.x)
+    .map((row) => {
+      const sorted = row.sort((a, b) => a.vx - b.vx);
+
+      if (splitX !== null && sorted.length > 0) {
+        const hasLeft = sorted.some((i) => i.vx <= splitX);
+        const hasRight = sorted.some((i) => i.vx > splitX);
+
+        if (!hasLeft) {
+          // All items are in the right column
+          const text = sorted.map((i) => i.str.trim()).filter(Boolean).join(' ');
+          return `[RIGHT] ${text}`;
+        }
+
+        if (hasRight) {
+          // Items span both columns — split at the boundary so the AI sees each side clearly
+          const leftText = sorted
+            .filter((i) => i.vx <= splitX)
+            .map((i) => i.str.trim())
+            .filter(Boolean)
+            .join(' ');
+          const rightText = sorted
+            .filter((i) => i.vx > splitX)
+            .map((i) => i.str.trim())
+            .filter(Boolean)
+            .join(' ');
+          return `${leftText} ||| ${rightText}`;
+        }
+      }
+
+      // Left-only row or no column split detected — output normally
+      return sorted
         .map((item) => item.str.trim())
         .filter(Boolean)
-        .join(' '),
-    )
+        .join(' ');
+    })
     .join('\n');
 }
 
@@ -138,19 +241,22 @@ export async function extractPdfText(
     onPageProgress?.(i, pageCount);
 
     const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items = content.items as any[];
-    const rawItems: RawTextItem[] = items
+    const vpItems: VpTextItem[] = items
       .filter((item) => typeof item.str === 'string')
-      .map((item) => ({
-        str: item.str,
-        transform: item.transform as number[],
-        width: item.width as number,
-      }));
+      .map((item) => {
+        const [vx, vy] = viewport.convertToViewportPoint(
+          item.transform[4] as number,
+          item.transform[5] as number,
+        );
+        return { vx, vy, str: item.str as string };
+      });
 
-    const text = reconstructRows(rawItems);
+    const text = reconstructRows(vpItems);
     pages.push({ pageNumber: i, text });
 
     page.cleanup();

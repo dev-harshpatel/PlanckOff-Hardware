@@ -21,6 +21,9 @@ function normalizeSet(raw: Record<string, unknown>): ExtractedHardwareSet {
   // Strip column-header prefixes the AI may include when reading "SET | DOOR TYPE" tables.
   // e.g. "SET DOOR TYPE 1" → "1", "SET 2" → "2"
   setName = setName.replace(/^SET\s+DOOR\s+TYPE\s+/i, '').replace(/^SET\s+/i, '').trim();
+  // PDF text extraction splits "H-1A" into "H - 1A" (separate glyphs with spacing).
+  // Normalize back: collapse word-char SPACE-HYPHEN-SPACE word-char → word-char-HYPHEN-word-char.
+  setName = setName.replace(/(\w)\s+-\s+(\w)/g, '$1-$2');
   return {
     setName,
     notes: String(raw.notes ?? '').trim(),
