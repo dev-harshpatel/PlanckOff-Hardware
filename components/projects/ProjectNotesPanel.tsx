@@ -307,8 +307,9 @@ export function ProjectNotesPanel({ projectId, projectName, isOpen, onClose }: P
     didFetch.current = projectId;
     setLoading(true);
     fetch(`/api/projects/${projectId}/notes`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((json: { data: ProjectNotes }) => {
+      .then(async (r) => {
+        const json = (await r.json()) as { data?: ProjectNotes };
+        if (!r.ok || !json.data) return;
         const loaded: DraftState = {
           hardware: json.data.hardware,
           door: json.data.door,

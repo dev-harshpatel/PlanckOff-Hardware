@@ -3,6 +3,137 @@ const RESEND_API_KEY = process.env.RESEND_API;
 const FROM_EMAIL = 'noreply@planckoff.ai';
 const FROM_NAME = 'PlanckOff';
 
+export interface SendPasswordResetEmailInput {
+  toEmail: string;
+  toName: string;
+  resetToken: string;
+}
+
+function buildPasswordResetHtml(input: SendPasswordResetEmailInput, resetLink: string): string {
+  const { toName } = input;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Reset your PlanckOff password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f1f5f9;padding:48px 16px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="padding:0 8px 24px;text-align:center;">
+              <span style="font-size:22px;font-weight:700;letter-spacing:-0.5px;color:#0f172a;">Planck<span style="color:#2563eb;">Off</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;border-radius:16px;border:1px solid #e2e8f0;padding:48px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="padding-bottom:8px;">
+                    <span style="display:inline-block;padding:6px 14px;border-radius:999px;background-color:#fef3c7;color:#d97706;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">
+                      Password Reset
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 0 12px;">
+                    <h1 style="margin:0;font-size:26px;line-height:1.3;font-weight:700;letter-spacing:-0.5px;color:#0f172a;">
+                      Reset your password
+                    </h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-bottom:32px;">
+                    <p style="margin:0;font-size:16px;line-height:1.7;color:#475569;">
+                      Hi <strong style="color:#0f172a;">${escapeHtml(toName)}</strong>, we received a request to reset your PlanckOff password. Click the button below to choose a new password.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-bottom:32px;">
+                    <table cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td style="background-color:#2563eb;border-radius:10px;">
+                          <a href="${resetLink}" style="display:inline-block;padding:15px 40px;color:#ffffff;font-size:16px;font-weight:600;letter-spacing:0.2px;text-decoration:none;border-radius:10px;">
+                            Reset Password
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="border-top:1px solid #e2e8f0;padding-top:24px;">
+                    <p style="margin:0 0 6px;font-size:13px;line-height:1.6;color:#94a3b8;">
+                      Button not working? Copy this link into your browser:
+                    </p>
+                    <p style="margin:0 0 24px;font-size:13px;line-height:1.6;word-break:break-all;">
+                      <a href="${resetLink}" style="color:#2563eb;text-decoration:none;">${resetLink}</a>
+                    </p>
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#94a3b8;">
+                      This link expires in <strong style="color:#0f172a;">1 hour</strong>. If you didn't request a password reset, you can safely ignore this email — your password won't change.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 8px 0;text-align:center;">
+              <p style="margin:0 0 6px;font-size:12px;line-height:1.6;color:#94a3b8;">
+                Need help? Reach us at
+                <a href="mailto:tech@planckoff.com" style="color:#2563eb;text-decoration:none;">tech@planckoff.com</a>
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#cbd5e1;">
+                PlanckOff — Hardware Estimating Platform
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendPasswordResetEmail(
+  input: SendPasswordResetEmailInput,
+): Promise<{ error: string | null }> {
+  if (!RESEND_API_KEY) {
+    return { error: 'RESEND_API environment variable is not set.' };
+  }
+
+  const resetLink = `${APP_URL}/reset-password?token=${input.resetToken}`;
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to: [input.toEmail],
+        subject: 'Reset your PlanckOff password',
+        html: buildPasswordResetHtml(input, resetLink),
+      }),
+    });
+
+    if (response.ok) return { error: null };
+
+    const body = await response.json().catch(() => ({})) as { message?: string; name?: string };
+    return { error: body.message ?? `Resend API error ${response.status}` };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export interface SendInviteEmailInput {
   toEmail: string;
   toName: string;

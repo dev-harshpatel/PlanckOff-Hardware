@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { LogOut, Moon, Settings, Shield, Sun, UserCircle2, Users } from 'lucide-react';
+import { KeyRound, LogOut, Moon, Settings, Shield, Sun, UserCircle2, Users } from 'lucide-react';
 import { Page } from '../../types';
 import type { AuthUser, RoleName } from '@/types/auth';
 import {
@@ -21,6 +21,7 @@ interface HeaderProps {
   onNavigate: (page: Page) => void;
   user: AuthUser;
   onLogout: () => Promise<void>;
+  onChangePassword: () => void;
   pendingCount?: number;
 }
 
@@ -43,7 +44,7 @@ const NavLink: React.FC<{
 
 const TEAM_ROLES: RoleName[] = ['Administrator', 'Team Lead'];
 
-const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, user, onLogout, pendingCount = 0 }) => {
+const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, user, onLogout, onChangePassword, pendingCount = 0 }) => {
   const { theme, setTheme } = useTheme();
   const canManageTeam = TEAM_ROLES.includes(user.role);
   const canAccessDatabase = user.role === 'Administrator' || user.role === 'Team Lead';
@@ -159,6 +160,11 @@ const Header: React.FC<HeaderProps> = ({ currentPage, projectName, onNavigate, u
                   <span>Team Management</span>
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onChangePassword}>
+                <KeyRound className="h-4 w-4" />
+                <span>Change Password</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onLogout()}>
                 <LogOut className="h-4 w-4" />

@@ -10,6 +10,8 @@ import type { RoleName } from '@/types/auth';
 const PUBLIC_PREFIXES = [
   '/login',
   '/set-password',
+  '/forgot-password',
+  '/reset-password',
   '/api/auth/',
   '/api/team/invite/',       // GET validate token
   '/api/team/set-password',  // POST accept invite
