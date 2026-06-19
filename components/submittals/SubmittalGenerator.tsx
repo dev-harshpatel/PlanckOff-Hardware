@@ -2187,7 +2187,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                   );
                 })}
 
-                {/* ══════════════════════════════════════════════════
+                {/* ════════════════════════════════════════
                     HARDWARE SCHEDULE · SET REPORT
                     Group By Hardware Set, multiple sets flowed per page via hwSetPages
                     Columns: Item Name, Description, Mfr, Finish, Total, Door Material

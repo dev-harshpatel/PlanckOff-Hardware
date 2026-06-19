@@ -57,4 +57,24 @@ export const AUTH_ERRORS = {
     message: 'Failed to change the password.',
     action: 'Please try again.',
   },
+  INCORRECT_CURRENT_PASSWORD: {
+    code: 'AUTH_INCORRECT_CURRENT_PASSWORD',
+    message: 'Current password is incorrect.',
+    action: 'Please enter your current password correctly.',
+  },
+  FORGOT_PASSWORD_FAILED: {
+    code: 'AUTH_FORGOT_PASSWORD_FAILED',
+    message: 'Failed to send the reset email.',
+    action: 'Please try again.',
+  },
+  RESET_TOKEN_INVALID: {
+    code: 'AUTH_RESET_TOKEN_INVALID',
+    message: 'Invalid or expired password reset link.',
+    action: 'Request a new password reset from the login page.',
+  },
+  RESET_PASSWORD_FAILED: {
+    code: 'AUTH_RESET_PASSWORD_FAILED',
+    message: 'Failed to reset your password.',
+    action: 'Please try again or request a new reset link.',
+  },
 } as const satisfies Record<string, AppError>;

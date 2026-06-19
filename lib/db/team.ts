@@ -335,6 +335,151 @@ export async function updateAdminPasswordHash(id: string, passwordHash: string):
   }
 }
 
+// ---------------------------------------------------------------------------
+// Password reset helpers
+// ---------------------------------------------------------------------------
+
+export async function getTeamMemberByResetToken(
+  token: string,
+): Promise<DbResult<TeamMemberWithRole & { resetTokenExpiresAt: string | null }>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('team_members')
+      .select(`${MEMBER_WITH_ROLE_SELECT}, reset_token_expires_at`)
+      .eq('reset_token', token)
+      .single();
+
+    if (error) return { data: null, error: { message: error.message } };
+    const row = data as unknown as TeamMemberRow & { reset_token_expires_at: string | null };
+    return {
+      data: { ...toTeamMemberWithRole(row), resetTokenExpiresAt: row.reset_token_expires_at },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function setTeamMemberResetToken(
+  id: string,
+  token: string | null,
+  expiresAt: string | null,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db
+      .from('team_members')
+      .update({ reset_token: token, reset_token_expires_at: expiresAt })
+      .eq('id', id);
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function getTeamMemberPasswordHash(id: string): Promise<DbResult<string | null>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('team_members')
+      .select('password_hash')
+      .eq('id', id)
+      .single();
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data as { password_hash: string | null }).password_hash, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function getAdminByEmail(email: string): Promise<DbResult<AdminBasic>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('admins')
+      .select('id, email, name, role, initials')
+      .eq('email', email)
+      .single();
+    if (error) return { data: null, error: { message: error.message } };
+    const row = data as unknown as AdminRow;
+    return {
+      data: {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role as RoleName,
+        initials: row.initials ?? row.name.slice(0, 2).toUpperCase(),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function getAdminByResetToken(
+  token: string,
+): Promise<DbResult<AdminBasic & { resetTokenExpiresAt: string | null }>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('admins')
+      .select('id, email, name, role, initials, reset_token_expires_at')
+      .eq('reset_token', token)
+      .single();
+    if (error) return { data: null, error: { message: error.message } };
+    const row = data as unknown as AdminRow & { reset_token_expires_at: string | null };
+    return {
+      data: {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role as RoleName,
+        initials: row.initials ?? row.name.slice(0, 2).toUpperCase(),
+        resetTokenExpiresAt: row.reset_token_expires_at,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function setAdminResetToken(
+  id: string,
+  token: string | null,
+  expiresAt: string | null,
+): Promise<DbResult<boolean>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { error } = await db
+      .from('admins')
+      .update({ reset_token: token, reset_token_expires_at: expiresAt })
+      .eq('id', id);
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
+export async function getAdminPasswordHash(id: string): Promise<DbResult<string | null>> {
+  try {
+    const db = createSupabaseAdminClient();
+    const { data, error } = await db
+      .from('admins')
+      .select('password_hash')
+      .eq('id', id)
+      .single();
+    if (error) return { data: null, error: { message: error.message } };
+    return { data: (data as { password_hash: string | null }).password_hash, error: null };
+  } catch (err) {
+    return { data: null, error: { message: String(err) } };
+  }
+}
+
 /** Find the role id for a given role name. */
 export async function getRoleIdByName(roleName: string): Promise<DbResult<string>> {
   try {

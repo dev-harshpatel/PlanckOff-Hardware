@@ -12,6 +12,7 @@ import { RouteTransitionIndicator } from '@/components/layout/RouteTransitionInd
 import { Toaster } from '@/components/ui/sonner';
 import UploadProgressWidget from '@/components/upload/UploadProgressWidget';
 import KeyboardShortcutsHelpModal from '@/components/shared/KeyboardShortcutsHelpModal';
+import { ChangePasswordModal } from '@/components/auth/ChangePasswordModal';
 import { Loader2, CheckCircle2, Database, ChevronUp } from 'lucide-react';
 
 interface AppShellProps {
@@ -23,6 +24,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   const { user: currentUser, isAuthenticated, isLoading, logout } = useAuth();
   const { projects } = useProject();
@@ -86,7 +88,11 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   // Public paths — render without the shell
-  const isPublicPath = pathname === '/login' || pathname.startsWith('/set-password');
+  const isPublicPath =
+    pathname === '/login' ||
+    pathname.startsWith('/set-password') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password');
   if (isPublicPath) return <>{children}</>;
 
   // Avoid hydration mismatch on first render
@@ -127,6 +133,7 @@ export function AppShell({ children }: AppShellProps) {
         projectName={activeProjectName}
         user={currentUser}
         onLogout={logout}
+        onChangePassword={() => setIsChangePasswordOpen(true)}
         pendingCount={pendingCount}
       />
 
@@ -174,6 +181,11 @@ export function AppShell({ children }: AppShellProps) {
       <KeyboardShortcutsHelpModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
       />
     </div>
   );
