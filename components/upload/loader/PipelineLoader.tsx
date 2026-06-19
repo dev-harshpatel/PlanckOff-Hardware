@@ -15,7 +15,7 @@ const STEPS = [
   { label: 'Saving project',         detail: 'Writing to database'              },
 ];
 
-const ROW_HEIGHT = 54; // px — label + detail + padding
+const ROW_HEIGHT = 58; // px — circle + connector + label + detail + padding
 const MAX_VISIBLE = 4;
 
 interface PipelineLoaderProps {
@@ -57,19 +57,29 @@ export function PipelineLoader({ currentStep, logs = [] }: PipelineLoaderProps) 
         }}
       >
         {STEPS.slice(0, visibleCount).map((step, i) => {
-          const isDone   = i < currentStep || isComplete;
-          const isActive = i === currentStep && !isComplete;
-          const status   = isDone ? 'done' : isActive ? 'active' : 'pending';
+          const isDone        = i < currentStep || isComplete;
+          const isActive      = i === currentStep && !isComplete;
+          const status        = isDone ? 'done' : isActive ? 'active' : 'pending';
+          const isLastVisible = i === visibleCount - 1;
           return (
             <div
               key={i}
-              className="animate-stepIn flex items-start gap-2.5 px-4 py-2.5 border-b border-[var(--border-subtle)] last:border-b-0"
+              className={`animate-stepIn flex gap-2.5 px-4 ${i === 0 ? 'pt-2.5' : ''} ${isLastVisible ? 'pb-2.5' : ''}`}
             >
-              <div className="mt-0.5">
+              {/* Status circle + connector line down to the next step */}
+              <div className="flex flex-col items-center flex-shrink-0">
                 <StepIcon status={status} />
+                {!isLastVisible && (
+                  <div
+                    className={`w-0.5 flex-1 my-1 rounded-full transition-colors duration-300 ${
+                      isDone ? 'bg-emerald-500' : 'bg-[var(--border)]'
+                    }`}
+                    style={{ minHeight: '20px' }}
+                  />
+                )}
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 flex-1 ${isLastVisible ? '' : 'pb-3'}`}>
                 <p className={`text-xs font-medium leading-snug ${
                   isDone   ? 'text-[var(--text-secondary)]' :
                   isActive ? 'text-[var(--text)]'           :

@@ -2188,8 +2188,8 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 })}
 
                 {/* ══════════════════════════════════════════════════
-                    SECTION 3A — HARDWARE SCHEDULE · SET REPORT
-                    Group By Hardware Set
+                    HARDWARE SCHEDULE · SET REPORT
+                    Group By Hardware Set, multiple sets flowed per page via hwSetPages
                     Columns: Item Name, Description, Mfr, Finish, Total, Door Material
                     Usage: count + all door tags
                 ══════════════════════════════════════════════════ */}
@@ -2283,7 +2283,7 @@ const SubmittalGenerator: React.FC<SubmittalGeneratorProps> = ({
                 })}
 
                 {/* ══════════════════════════════════════════════════
-                    SECTION 3B — HARDWARE SCHEDULE · FLAT LIST
+                    HARDWARE SCHEDULE · FLAT LIST
                     Columns: Item Name, Description, Mfr, Finish, Total
                     Doors column: count
                     Paginated at FLAT_ROWS_PER_PAGE rows
