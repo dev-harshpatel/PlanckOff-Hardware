@@ -600,291 +600,28 @@ export function usePricingExport({
 
   const handleDownloadProposalPdf = useCallback(async () => {
     try {
-    const { default: jsPDF } = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
+      const params = new URLSearchParams();
+      if (hiddenProposalTables.has('doors'))    params.set('hideDoors',    '1');
+      if (hiddenProposalTables.has('frames'))   params.set('hideFrames',   '1');
+      if (hiddenProposalTables.has('hardware')) params.set('hideHardware', '1');
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    type DocWithAutoTable = typeof doc & { lastAutoTable?: { finalY: number } };
-    const d = doc as DocWithAutoTable;
+      const res = await fetch(
+        `/api/projects/${_projectId}/pricing-proposal/pdf?${params.toString()}`,
+        { credentials: 'include' },
+      );
 
-    const pageW  = doc.internal.pageSize.width;
-    const pageH  = doc.internal.pageSize.height;
-    const margin = 40;
-    let y = margin;
-
-    if (companySettings?.companyName) {
-      const co = companySettings;
-      let textX = margin;
-
-      if (co.logoUrl) {
-        try {
-          const resp    = await fetch(co.logoUrl);
-          const blob    = await resp.blob();
-          const dataUrl = await new Promise<string>((res, rej) => {
-            const reader    = new FileReader();
-            reader.onloadend = () => res(reader.result as string);
-            reader.onerror   = rej;
-            reader.readAsDataURL(blob);
-          });
-          const img = new Image();
-          await new Promise<void>(res => { img.onload = () => res(); img.src = dataUrl; });
-          const maxLogoH = 40;
-          const scale    = maxLogoH / img.height;
-          const logoW    = Math.min(img.width * scale, 120);
-          const canvas   = document.createElement('canvas');
-          canvas.width   = logoW;
-          canvas.height  = maxLogoH;
-          canvas.getContext('2d')?.drawImage(img, 0, 0, logoW, maxLogoH);
-          doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, logoW, maxLogoH);
-          textX = margin + logoW + 12;
-        } catch { /* skip logo on error */ }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `PDF generation failed (${res.status})`);
       }
 
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(20, 20, 20);
-      doc.text(co.companyName, textX, y + 14);
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      const contactLines: string[] = [];
-      if (co.websiteUrl || co.email) contactLines.push([co.websiteUrl, co.email].filter(Boolean).join('  ·  '));
-      if (co.phone) contactLines.push(co.phone);
-      const addr = [co.address, co.province, co.country].filter(Boolean).join(', ');
-      if (addr) contactLines.push(addr);
-      contactLines.forEach((line, i) => doc.text(line, textX, y + 26 + i * 10));
-
-      y += 54;
-      doc.setDrawColor(210, 215, 225);
-      doc.line(margin, y, pageW - margin, y);
-      y += 16;
-    }
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(130, 140, 160);
-    doc.text('PROPOSAL', margin, y);
-    y += 14;
-
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 20, 30);
-    doc.text(projectName || 'Untitled Project', margin, y);
-    y += 14;
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(110, 110, 120);
-    doc.text(
-      `Prepared on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-      margin, y,
-    );
-    y += 22;
-
-    doc.setDrawColor(225, 228, 235);
-    doc.line(margin, y, pageW - margin, y);
-    y += 16;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 35, 45);
-    doc.text('Pricing Summary', margin, y);
-    y += 8;
-
-    const summaryRows = [
-      { label: 'Doors',    base: proposalDoorBase,  pct: profitPct.door,     total: proposalDoorTotal,  alloc: doorAlloc   },
-      { label: 'Frames',   base: proposalFrameBase, pct: profitPct.frame,    total: proposalFrameTotal, alloc: frameAlloc  },
-      { label: 'Hardware', base: proposalHwBase,    pct: profitPct.hardware, total: proposalHwTotal,    alloc: hwAlloc     },
-    ];
-    const grandLabel = allocateExpenses && extraExpensesTotal > 0
-      ? `${fmt.format(proposalGrandTotal)} + ${fmt.format(extraExpensesTotal)} exp.`
-      : '';
-
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [['Category', 'Base Cost', 'Profit %', 'Total']],
-      body: [
-        ...summaryRows.map(r => [
-          r.label,
-          fmt.format(r.base),
-          r.pct ? `${r.pct}%` : '—',
-          fmt.format(r.total + r.alloc),
-        ]),
-        ['Grand Total', grandLabel, '', fmt.format(proposalGrandTotal + (allocateExpenses ? extraExpensesTotal : 0))],
-      ],
-      styles:     { fontSize: 8, cellPadding: 5 },
-      headStyles: { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
-      didParseCell: (data) => {
-        if (data.row.index === summaryRows.length) {
-          Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
-        }
-      },
-    });
-    y = (d.lastAutoTable?.finalY ?? y) + 20;
-
-    if (!hiddenProposalTables.has('doors') && doorGroups.length > 0) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 35, 45);
-      doc.text('Doors', margin, y);
-      y += 8;
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        head: [['Description', 'Total Qty']],
-        body: [
-          ...doorGroups.map(g => [g.description, g.totalQty]),
-          ['Total', doorGroups.reduce((s, g) => s + g.totalQty, 0)],
-        ],
-        styles:       { fontSize: 8, cellPadding: 5 },
-        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
-        columnStyles: { 1: { halign: 'right' } },
-        didParseCell: (data) => {
-          if (data.row.index === doorGroups.length) {
-            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
-          }
-        },
-      });
-      y = (d.lastAutoTable?.finalY ?? y) + 20;
-    }
-
-    if (!hiddenProposalTables.has('frames') && frameGroups.length > 0) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 35, 45);
-      doc.text('Frames', margin, y);
-      y += 8;
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        head: [['Description', 'Total Qty']],
-        body: [
-          ...frameGroups.map(g => [g.description, g.totalQty]),
-          ['Total', frameGroups.reduce((s, g) => s + g.totalQty, 0)],
-        ],
-        styles:       { fontSize: 8, cellPadding: 5 },
-        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
-        columnStyles: { 1: { halign: 'right' } },
-        didParseCell: (data) => {
-          if (data.row.index === frameGroups.length) {
-            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
-          }
-        },
-      });
-      y = (d.lastAutoTable?.finalY ?? y) + 20;
-    }
-
-    if (!hiddenProposalTables.has('hardware') && hwSetList.length > 0) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 35, 45);
-      doc.text('Hardware', margin, y);
-      y += 8;
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        head: [['Hardware Set', 'Doors Used In']],
-        body: hwSetList.map(s => [s.name, s.doorCount]),
-        styles:       { fontSize: 8, cellPadding: 5 },
-        headStyles:   { fillColor: [45, 60, 100], textColor: 255, fontStyle: 'bold' },
-        columnStyles: { 1: { halign: 'right' } },
-      });
-      y = (d.lastAutoTable?.finalY ?? y) + 20;
-    }
-
-    if (extraExpenses.length > 0) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 35, 45);
-      doc.text('Extra Expenses', margin, y);
-      y += 8;
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        head: [['Description', 'Total Price']],
-        body: [
-          ...extraExpenses.map(e => [e.delivery || '—', fmt.format(parseFloat(e.totalPrice) || 0)]),
-          ['Total', fmt.format(extraExpensesTotal)],
-        ],
-        styles:       { fontSize: 8, cellPadding: 5 },
-        headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
-        columnStyles: { 1: { halign: 'right' } },
-        didParseCell: (data) => {
-          if (data.row.index === extraExpenses.length) {
-            Object.assign(data.cell.styles, { fontStyle: 'bold', fillColor: [235, 240, 252] });
-          }
-        },
-      });
-      y = (d.lastAutoTable?.finalY ?? y) + 20;
-    }
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 35, 45);
-    doc.text('Tax', margin, y);
-    y += 8;
-
-    const taxBody: string[][] = [
-      ['Pricing Summary Total', fmt.format(proposalGrandTotal)],
-      ['Extra Expense Total',   fmt.format(extraExpensesTotal)],
-      ['Subtotal',              fmt.format(taxSubtotal)],
-      ...taxRows.map(r => [
-        r.description || '(Tax)',
-        `${fmt.format(taxSubtotal * (Math.max(0, parseFloat(r.taxPct) || 0) / 100))} (${r.taxPct || 0}%)`,
-      ]),
-      ['Total After Tax', fmt.format(totalAfterTax)],
-    ];
-
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [['Description', 'Amount']],
-      body: taxBody,
-      styles:       { fontSize: 8, cellPadding: 5 },
-      headStyles:   { fillColor: [45, 60, 100], textColor: 255 },
-      columnStyles: {
-        0: { halign: 'left' },
-        1: { halign: 'right' },
-      },
-      didParseCell: (data) => {
-        if (data.section === 'body' && data.row.index === taxBody.length - 1) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [235, 240, 252];
-        }
-      },
-    });
-    y = (d.lastAutoTable?.finalY ?? y) + 20;
-
-    if (remarks.trim()) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 35, 45);
-      doc.text('Remarks', margin, y);
-      y += 12;
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60, 65, 75);
-      const splitText = doc.splitTextToSize(remarks, pageW - margin * 2);
-      doc.text(splitText, margin, y);
-    }
-
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(7);
-      doc.setTextColor(160, 165, 175);
-      doc.text(`Page ${i} of ${pageCount}`, pageW - margin, pageH - 20, { align: 'right' });
-    }
-
-    doc.save(buildExportFilename(projectName || 'project', 'proposal', 'pdf'));
+      const blob     = await res.blob();
+      const url      = URL.createObjectURL(blob);
+      const a        = document.createElement('a');
+      a.href         = url;
+      a.download     = buildExportFilename(projectName || 'project', 'proposal', 'pdf');
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('[usePricingExport] Proposal PDF export failed:', err);
       addToast({
@@ -893,17 +630,7 @@ export function usePricingExport({
         details: PDF_ERRORS.EXPORT_FAILED.action,
       });
     }
-  }, [
-    companySettings, projectName,
-    proposalDoorBase, proposalFrameBase, proposalHwBase,
-    profitPct, proposalDoorTotal, proposalFrameTotal, proposalHwTotal,
-    doorAlloc, frameAlloc, hwAlloc,
-    proposalGrandTotal, allocateExpenses,
-    extraExpenses, extraExpensesTotal,
-    taxRows, taxSubtotal, totalAfterTax,
-    remarks,
-    hiddenProposalTables, doorGroups, frameGroups, hwSetList, addToast,
-  ]);
+  }, [_projectId, projectName, hiddenProposalTables, addToast]);
 
   return { handleDownloadExcel, handleDownloadPdf, handleDownloadProposalPdf };
 }

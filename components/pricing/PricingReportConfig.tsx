@@ -35,6 +35,8 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
   const [modalGroup, setModalGroup] = useState<DoorPricingGroup | HardwarePricingGroup | null>(null);
   const [loadingPrices, setLoadingPrices] = useState(true);
 
+  const [isExportingProposal, setIsExportingProposal] = useState(false);
+
   const [zoom, setZoom] = useState(1.0);
   const adjustZoom = (delta: number) => setZoom(z => Math.min(2, Math.max(0.4, Math.round((z + delta) * 10) / 10)));
 
@@ -246,12 +248,24 @@ const PricingReportConfig: React.FC<Props> = ({ projectId, doors, hardwareSets, 
         <div className="flex items-center gap-2 border-l border-[var(--primary-border)] pl-4">
           {activeTab === 'proposal' ? (
             <button
-              onClick={() => void handleDownloadProposalPdf()}
+              onClick={() => {
+                if (isExportingProposal) return;
+                setIsExportingProposal(true);
+                void handleDownloadProposalPdf().finally(() => setIsExportingProposal(false));
+              }}
+              disabled={isExportingProposal}
               title="Export Proposal PDF"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-[var(--primary-action)]/10 hover:bg-[var(--primary-action)]/20 text-[var(--primary-text)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <FileDown className="w-3.5 h-3.5" />
-              Export Proposal
+              {isExportingProposal ? (
+                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <FileDown className="w-3.5 h-3.5" />
+              )}
+              {isExportingProposal ? 'Exporting…' : 'Export Proposal'}
             </button>
           ) : (
             <div ref={exportDialogRef} className="relative flex items-center gap-2">
