@@ -79,7 +79,7 @@ export function useProjectPersistence({
                     thickness: d.thickness ? String(d.thickness) : undefined,
                     doorMaterial: d.doorMaterial,
                     frameMaterial: d.frameMaterial as string | undefined,
-                    hardwarePrep: d.hardwarePrep,
+                    hardwarePrep: set.prep || d.hardwarePrep,
                     excludeReason: d.excludeReason,
                     sections: syncedSections(d),
                 }));

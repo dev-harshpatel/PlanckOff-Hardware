@@ -796,12 +796,17 @@ export function useProjectUploads({
 
     const handleSaveSet = (set: HardwareSet) => {
         const index = hardwareSets.findIndex(s => s.id === set.id);
+        let updatedSets: HardwareSet[];
         if (index > -1) {
-            setHardwareSets(current => current.map(s => s.id === set.id ? set : s));
+            updatedSets = hardwareSets.map(s => s.id === set.id ? set : s);
         } else {
             const newSet = { ...set, id: `hs-manual-${Date.now()}` };
-            setHardwareSets(current => [...current, newSet]);
+            updatedSets = [...hardwareSets, newSet];
         }
+        setHardwareSets(updatedSets);
+        // Persist immediately so the DB is up-to-date even if the user navigates
+        // away before the 1s debounce in useProjectPersistence fires.
+        saveToFinalJson(updatedSets, doors, trashItemsRef.current).catch(() => {});
     };
 
     const handleAssignAll = async (): Promise<void> => {

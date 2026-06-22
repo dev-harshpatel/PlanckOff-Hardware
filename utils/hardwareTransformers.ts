@@ -374,7 +374,7 @@ export function transformFromFinalJson(
         assignmentConfidence: assignedSet ? 'high' : undefined,
         assignmentReason: assignedSet ? 'Matched from door schedule' : undefined,
 
-        hardwarePrep: door.hardwarePrep ?? set.prep ?? undefined,
+        hardwarePrep: set.prep ?? door.hardwarePrep ?? undefined,
       };
 
       doorsWithOrder.push({ door: builtDoor, order: door.scheduleOrder ?? Infinity });
