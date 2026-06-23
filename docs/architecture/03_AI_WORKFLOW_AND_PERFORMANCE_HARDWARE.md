@@ -1,5 +1,5 @@
 # PlanckOff — AI Integration, PDF Pipeline & Performance
-> Interview Prep Guide · Part 3 of 3
+> Codebase Onboarding Guide · Part 3 of 3
 
 ---
 
@@ -247,8 +247,6 @@ const text = provider === 'gemini'
 
 ## How to Make the App More Snappy — Performance Analysis
 
-This section covers current bottlenecks and their solutions. Very good for interviews.
-
 ---
 
 ### Bottleneck 1: PDF Extraction is Sequential (CONCURRENCY = 1)
@@ -381,65 +379,6 @@ LIMIT 50 OFFSET $3;
 
 This requires the relational schema migration (already planned as Phase 2).
 
----
-
-## Expected Interview Questions — AI & Performance
-
----
-
-**Q: How do you make AI output reliable? JSON can be messy.**
-
-A: Three layers of reliability. First, we use Gemini's native `responseSchema` feature — you give it a schema and it tries to conform the output. Second, we have a custom `safeParseJson` function that iteratively repairs syntax errors (up to 100 attempts). Third, we have a validation layer that checks required fields and flags issues. This combination handles real-world AI output reliably.
-
----
-
-**Q: What is an async generator and why did you use it for PDF parsing?**
-
-A: An async generator is a function that can `yield` values over time asynchronously. We use it because a 200-page PDF shouldn't be processed all at once — that would either crash the browser (memory) or freeze the UI (CPU). The generator processes 20 pages, yields the result, processes the next 20, and so on. The caller receives a stream of batches and can update the progress bar after each one. It's the streaming/lazy evaluation pattern applied to file processing.
-
----
-
-**Q: How do you handle rate limiting from the AI API?**
-
-A: The server proxy uses exponential backoff retry logic. If Gemini returns a 429 (rate limit), we wait 1 second, retry. If it fails again, we wait 2 seconds, then 4, then 8, up to a configurable max retries. The current CONCURRENCY=1 setting is conservative to avoid hitting rate limits on free tier keys. On paid tiers, we'd increase concurrency and rely on the backoff to handle the occasional limit hit.
-
----
-
-**Q: How would you scale the PDF extraction for 1000+ page documents?**
-
-A: Several changes. First, move the extraction to a server-side background job (a queue like BullMQ or Inngest) rather than the browser. Second, increase AI concurrency with a proper job queue and rate-limit handling. Third, stream results back to the client via Server-Sent Events or WebSockets so users see progress in real time. Fourth, cache extracted results — if the same PDF is uploaded again, skip re-extraction.
-
----
-
-**Q: You mentioned MLOps — can you explain that in PlanckOff's context?**
-
-A: We're not training custom models, but we are doing in-context learning. When a user corrects an AI-assigned hardware set, we save that correction as an example. On future assignments, we include these examples in the prompt — "for this door type in the past, the correct set was X". This is called few-shot prompting. The AI uses those examples as a pattern to improve its assignment accuracy over time without any model retraining.
-
----
-
-**Q: What's the biggest performance bottleneck right now and how would you fix it?**
-
-A: The PDF extraction pipeline is sequential (one chunk at a time). A 200-page PDF with 20 chunks at 3 seconds each = 60 seconds. With `CONCURRENCY = 5` on a paid API tier, that drops to ~15 seconds. The second bottleneck is `ProjectContext` — it's a 1000-line monolithic state that causes unnecessary re-renders. Splitting it into domain-specific contexts (DoorsContext, HardwareContext) and adding React.memo on expensive components would fix that.
-
----
-
-**Q: Why did you use Web Workers instead of just `async/await`?**
-
-A: `async/await` is still single-threaded. When you `await` a promise, other code can run (the event loop continues), but if you have CPU-heavy work like parsing a PDF's binary content, it will block the main thread even with async/await. Web Workers run on a genuinely separate OS thread, so CPU-intensive work doesn't affect the UI thread at all. It's the difference between multitasking (async) and multiprocessing (workers).
-
----
-
-**Q: How do you ensure the AI doesn't hallucinate hardware set names that don't exist?**
-
-A: The prompt includes the complete list of available hardware sets (name, description, division). The AI is explicitly instructed to choose only from that list. If the AI somehow returns a set name that isn't in our list, we catch that at the application level and flag it as an error. We also validate the confidence level — anything that isn't an exact or normalized match gets flagged for human review.
-
----
-
-**Q: What's your approach to prompting the AI for structured data extraction?**
-
-A: We use structured prompting with four elements: (1) a clear role definition ("You are an expert door hardware estimator"), (2) explicit output schema (JSON structure with field names and types), (3) domain-specific rules ("dimensions like '3070' mean width=36 inches, height=84 inches"), and (4) learned examples from past corrections. The schema is also passed to Gemini's `responseSchema` parameter when supported, which constrains the output format at the model level.
-
----
 
 ## Quick Reference — Key Numbers
 

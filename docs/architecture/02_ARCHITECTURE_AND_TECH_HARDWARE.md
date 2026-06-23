@@ -1,5 +1,5 @@
 # PlanckOff — Architecture & Technology Decisions
-> Interview Prep Guide · Part 2 of 3
+> Codebase Onboarding Guide · Part 2 of 3
 
 ---
 
@@ -56,7 +56,7 @@ Think of the app like an onion. Each layer only talks to the layer directly belo
 
 ---
 
-## Why These Technologies? (The "Why" Questions)
+## Why These Technologies?
 
 ---
 
@@ -76,8 +76,6 @@ The old codebase was React + Vite. We migrated to Next.js for three critical rea
 
 ### Why Supabase instead of MongoDB?
 
-This is a very common interview question. Here's the honest breakdown:
-
 | Reason | Supabase (PostgreSQL) | MongoDB |
 |---|---|---|
 | **Data shape** | Doors and hardware have fixed schemas with known fields | Better for truly flexible/unknown schemas |
@@ -88,11 +86,11 @@ This is a very common interview question. Here's the honest breakdown:
 | **Free tier** | Generous free tier for a startup/MVP | Atlas free tier has stricter limits |
 | **Open source** | Can self-host Supabase | MongoDB has open-source version but Atlas is cloud-only |
 
-**The short answer for an interview:** "Our data is fundamentally relational — projects have doors, doors have hardware sets, hardware sets have items. PostgreSQL is the natural fit. We also needed Row Level Security for multi-tenancy, and Supabase gives us that built in."
+**The short answer:** Our data is fundamentally relational — projects have doors, doors have hardware sets, hardware sets have items. PostgreSQL is the natural fit. We also needed Row Level Security for multi-tenancy, and Supabase gives us that built in.
 
 ---
 
-### Why JSON? (The "Why not just store everything in tables?" question)
+### Why JSONB Instead of Fully Normalized Tables?
 
 We actually use **both** — relational tables for structure AND JSONB for flexibility.
 
@@ -359,56 +357,3 @@ export async function POST(request: NextRequest) {
 }
 ```
 
----
-
-## Expected Interview Questions — Architecture
-
----
-
-**Q: How do you ensure API keys are never exposed to the browser?**
-
-A: All AI API calls go through a Next.js API route (`/api/ai/generate`). The client sends the prompt to our server. The server reads `GEMINI_API_KEY` from environment variables (never in the client bundle) and calls Gemini directly. The client only ever sees our own domain's response.
-
----
-
-**Q: How does multi-tenancy work in PlanckOff?**
-
-A: Two layers. First, every DB query is scoped by `admin_id` — so each company's data stays separate at the query level. Second, Supabase Row Level Security (RLS) policies enforce this at the PostgreSQL level, so even a miscoded query can't leak another company's data.
-
----
-
-**Q: Why did you choose Supabase over Firebase?**
-
-A: Several reasons. Our data is relational — doors belong to projects, hardware sets have items. PostgreSQL is the natural fit. Firebase is document-based and would require denormalization. Also, Supabase's RLS is more expressive than Firebase's security rules for fine-grained multi-tenancy. And Supabase is open-source, so we can self-host if needed.
-
----
-
-**Q: How do you handle background processing in the browser?**
-
-A: Web Workers. When a user uploads a PDF, the file parsing and AI extraction happen in a background worker thread. The main thread stays responsive, shows a progress bar, and receives results via message passing. We also persist task state to IndexedDB so if the user refreshes, the upload can resume.
-
----
-
-**Q: Why TypeScript? Is it worth the overhead?**
-
-A: Definitely, especially for a data-heavy domain like this. A `Door` object has 50+ optional fields. TypeScript catches mistakes at compile time — if a function expects a `HardwareSet` and you pass a `HardwareItem`, the compiler tells you immediately. We also use strict `no-any` rules. The overhead is front-loaded (writing types) but the savings in debugging are ongoing.
-
----
-
-**Q: How do you handle database migrations?**
-
-A: We use SQL migration files in `supabase/migrations/`. Each migration is numbered (001, 002, etc.) and run in order. We never modify existing migrations — if we need to change a table, we add a new migration. This gives us a full history of schema changes and makes deployments predictable.
-
----
-
-**Q: Why JSONB in PostgreSQL instead of normalized tables for doors?**
-
-A: It was a deliberate MVP trade-off. Doors have 50+ optional fields and we were still discovering the full data model. Storing doors as JSONB in the projects table let us iterate fast without running migrations every time we added a field. The downside is that complex SQL queries on door fields are harder. We're now incrementally normalizing as the schema stabilizes.
-
----
-
-**Q: What is your authentication mechanism?**
-
-A: Custom session-based auth. On login, bcrypt compares the password to a stored hash. If valid, we create a session record in Postgres with an expiry time and set an HttpOnly cookie with the session token. The middleware validates this cookie on every request. We didn't use Supabase Auth because we needed custom role management and the team-invitation flow.
-
----

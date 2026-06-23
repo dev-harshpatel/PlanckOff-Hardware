@@ -1,9 +1,9 @@
 # PlanckOff — What Is This Application?
-> Interview Prep Guide · Part 1 of 3
+> Codebase Onboarding Guide · Part 1 of 3
 
 ---
 
-## The One-Line Pitch
+## What Is PlanckOff?
 
 PlanckOff is a SaaS platform that helps construction hardware estimators manage door schedules, hardware specifications, and pricing — powered by AI that reads PDFs and does the data entry for them.
 
@@ -36,8 +36,6 @@ PlanckOff is a SaaS platform that helps construction hardware estimators manage 
 ---
 
 ## Industry Standards This App Handles
-
-Understanding these terms helps in interviews:
 
 | Term | What It Means |
 |---|---|
@@ -142,44 +140,3 @@ Supabase Database (saved)
 
 Team members are invited by email. The admin sets their role. Access is enforced both in the UI and at the database level (Supabase Row Level Security).
 
----
-
-## Expected Interview Questions — What Is PlanckOff?
-
----
-
-**Q: Can you describe what PlanckOff does in simple terms?**
-
-A: It's a tool for door hardware estimators in construction. They get big PDFs listing hundreds of doors — our app uses AI to read those PDFs, extract all the door data, match them to hardware specifications, calculate pricing, and generate the professional documents they need to submit a bid. What used to take days of manual work happens in hours.
-
----
-
-**Q: Who are the end users?**
-
-A: Hardware estimators and suppliers who work on commercial construction projects. They deal with standards like CSI Division 08, ANSI grades, and fire ratings. They need accurate data extraction and professional-looking submittals.
-
----
-
-**Q: What was the biggest pain point you were solving?**
-
-A: Manual data entry from PDF door schedules. A 300-page PDF might have 200 doors, each with 15+ data fields. Copying that manually is slow and error-prone. AI extraction turns that into a one-click process with a confidence score so users know what to double-check.
-
----
-
-**Q: How does multi-tenancy work?**
-
-A: Each admin account has its own team. Team members are scoped to that admin's organization. Supabase Row Level Security (RLS) policies ensure one company's data is never visible to another. The auth middleware validates the session on every API call.
-
----
-
-**Q: What file formats do you support and why?**
-
-A: PDF (most common — what architects send), Excel/CSV (what some clients prefer for structured data), and Word (for text-based specs). Each format has its own parser — PDF uses `pdfjs-dist`, Excel uses `xlsx`, CSV uses `papaparse`, Word uses `mammoth`.
-
----
-
-**Q: What does the AI actually output?**
-
-A: Structured JSON. We give the AI a strict schema and ask it to return an array of door objects with specific fields. If the AI returns messy or partially broken JSON (which happens), we have a custom JSON repair function that iteratively fixes syntax errors before parsing.
-
----
