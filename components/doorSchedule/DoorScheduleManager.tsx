@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Door, HardwareSet, AppSettings, ElevationType, Toast } from '../../types';
-import { sumDoorQuantities } from '../../utils/doorUtils';
 import EnhancedDoorEditModal from '../doors/EnhancedDoorEditModal';
 import ContextualProgressBar from '../shared/ContextualProgressBar';
 import ValidationReportModal from '../reports/ValidationReportModal';
@@ -267,7 +266,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
                         <div>
                             <h2 className="text-sm font-semibold text-[var(--text)]">Door Schedule</h2>
                             <p className="text-[var(--primary-text-muted)] text-xs mt-0.5">
-                                {sumDoorQuantities(filteredAndSortedDoors)} {sumDoorQuantities(filteredAndSortedDoors) === 1 ? 'door' : 'doors'} · {statusCounts.complete || 0} assigned
+                                {filteredAndSortedDoors.length} {filteredAndSortedDoors.length === 1 ? 'door' : 'doors'} · {statusCounts.complete || 0} assigned
                             </p>
                         </div>
                     </div>
@@ -517,7 +516,7 @@ const DoorScheduleManager: React.FC<DoorScheduleManagerProps> = ({
             {/* Table info bar */}
             <div className="px-4 py-2 flex justify-between items-center bg-[var(--bg)] border-b border-[var(--border-subtle)] flex-shrink-0">
                 <span className="text-xs text-[var(--text-muted)]">
-                    Showing <strong className="text-[var(--text-secondary)]">{sumDoorQuantities(filteredAndSortedDoors)}</strong> doors
+                    Showing <strong className="text-[var(--text-secondary)]">{filteredAndSortedDoors.length}</strong> doors
                 </span>
                 <span className="text-[10px] text-[var(--text-faint)]">Click any row to open the editor</span>
             </div>

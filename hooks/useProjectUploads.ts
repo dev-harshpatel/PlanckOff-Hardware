@@ -78,7 +78,11 @@ export function useProjectUploads({
         } else if (task.type === 'door-schedule') {
             const newDoors: Door[] = report.data;
             if (newDoors.length > 0) {
-                setDoors(currentDoors => [...currentDoors, ...newDoors]);
+                setDoors(currentDoors => {
+                    const existingTags = new Set(currentDoors.map(d => d.doorTag));
+                    const freshDoors = newDoors.filter(d => !existingTags.has(d.doorTag));
+                    return freshDoors.length > 0 ? [...currentDoors, ...freshDoors] : currentDoors;
+                });
                 isInitialMount.current = true;
                 addToast({ type: 'success', message: `Background Upload: Imported ${newDoors.length} doors.` });
             }
@@ -515,6 +519,12 @@ export function useProjectUploads({
         setCombinedLogs([]);
         logsRef.current = [];
         sessionStorage.setItem(`planckoff_proc_${projectId}`, Date.now().toString());
+        // Block reloadDoorSchedule for the duration of the pipeline so the Supabase
+        // realtime event from the server's door_schedule_imports write (step 2a) cannot
+        // trigger an auto-save that would overwrite the server's fresh final_json.
+        const prevHasFinalJson = hasFinalJsonRef.current;
+        hasFinalJsonRef.current = true;
+        let pipelineCompleted = false;
         cancelControllerRef.current = new AbortController();
         setWidget({
             isActive: true,
@@ -733,6 +743,7 @@ export function useProjectUploads({
             if (resolvedSets.length > 0) { setHardwareSets(resolvedSets); isInitialMount.current = true; }
             if (autoDoors.length > 0) { setDoors(autoDoors); isInitialMount.current = true; }
             await saveToFinalJson(resolvedSets, autoDoors, trashWithoutLiveSets(resolvedSets));
+            pipelineCompleted = true;
 
             setPipelineStep(6);
             setCombinedProgress(100);
@@ -781,6 +792,9 @@ export function useProjectUploads({
         } finally {
             if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
             if (stepAdvanceTimerRef.current) { clearTimeout(stepAdvanceTimerRef.current); stepAdvanceTimerRef.current = null; }
+            // Restore the ref if the pipeline failed — so reloadDoorSchedule can still
+            // run for legitimate realtime events after a cancel/error.
+            if (!pipelineCompleted) hasFinalJsonRef.current = prevHasFinalJson;
             setCombinedActiveDetail('');
             setIsCombinedProcessing(false);
             cancelControllerRef.current = null;

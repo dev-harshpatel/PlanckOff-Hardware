@@ -53,8 +53,16 @@ export function autoCreateVariants(
         let variantIdx = 1;
         for (const [, variantDoors] of variantGroups) {
             seq++;
-            const variantId = `hs-autovariant-${Date.now()}-${seq}`;
             const variantName = variantIdx === 1 ? `${set.name}.W` : `${set.name}.W${variantIdx}`;
+
+            // Skip if a set with this name already exists — prevents accumulation when
+            // autoCreateVariants is called on data that already has variants.
+            if (updatedSets.some(s => s.name.toLowerCase() === variantName.toLowerCase())) {
+                variantIdx++;
+                continue;
+            }
+
+            const variantId = `hs-autovariant-${Date.now()}-${seq}`;
 
             const newVariant: HardwareSet = {
                 ...set,

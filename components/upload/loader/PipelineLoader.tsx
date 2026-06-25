@@ -47,7 +47,7 @@ export function PipelineLoader({ currentStep, logs = [] }: PipelineLoaderProps) 
   const latestLog = logs.length > 0 ? logs[logs.length - 1] : null;
 
   return (
-    <div className="mx-5 mb-1 flex-shrink-0 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] overflow-hidden animate-stepIn">
+    <div className="mx-5 my-4 flex-shrink-0 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] overflow-hidden animate-stepIn">
       <div
         ref={listRef}
         className="overflow-hidden"
@@ -64,7 +64,7 @@ export function PipelineLoader({ currentStep, logs = [] }: PipelineLoaderProps) 
           return (
             <div
               key={i}
-              className={`animate-stepIn flex gap-2.5 px-4 ${i === 0 ? 'pt-2.5' : ''} ${isLastVisible ? 'pb-2.5' : ''}`}
+              className={`animate-stepIn flex gap-2.5 px-4 ${i === 0 ? 'pt-4' : ''} ${isLastVisible ? 'pb-4' : ''}`}
             >
               {/* Status circle + connector line down to the next step */}
               <div className="flex flex-col items-center flex-shrink-0">
