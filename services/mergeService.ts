@@ -303,8 +303,15 @@ export function mergeHardwareData(
   for (const [scheduleOrder, row] of doorRows.entries()) {
     const hwSetRaw = row.hwSet?.trim();
 
-    // NOTE# and '-' are explicit placeholders — skip entirely.
-    if (hwSetRaw?.toUpperCase().startsWith('NOTE#') || hwSetRaw === '-') {
+    // NOTE# rows are non-door annotation rows — skip entirely.
+    if (hwSetRaw?.toUpperCase().startsWith('NOTE#')) {
+      continue;
+    }
+
+    // '-' means the door has no hardware set (e.g. cased opening, not found).
+    // Preserve it as unassigned so it still appears in the door schedule view.
+    if (hwSetRaw === '-') {
+      unassignedDoors.push(toMergedDoor(row, '', scheduleOrder));
       continue;
     }
 
