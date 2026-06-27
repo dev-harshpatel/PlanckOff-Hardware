@@ -75,19 +75,25 @@ export async function visualExtract(
   let messageContent: Array<{ type: 'image_url'; image_url: { url: string } } | { type: 'text'; text: string }>;
 
   if (pageImages.length > 0) {
-    // Image path: rendered pages + optional close-ups
-    const imageItems = [...pageImages, ...closeupImages].map(b64 => ({
+    // When close-ups exist the hardware schedule is embedded as a raster image
+    // inside a larger architectural sheet. The full-page render contains the
+    // hardware schedule at tiny scale alongside other elements (door schedule,
+    // title block, grid lines) that confuse the model. Sending only the
+    // close-up — which is a high-resolution crop of just the schedule — gives
+    // the model a clean, unambiguous view and produces accurate results.
+    const imagesToSend = closeupImages.length > 0 ? closeupImages : pageImages;
+    const imageItems = imagesToSend.map(b64 => ({
       type: 'image_url' as const,
       image_url: { url: `data:image/png;base64,${b64}` },
     }));
-    const closeupNote = closeupImages.length > 0
-      ? `\n\nNOTE: the final ${closeupImages.length} image(s) are HIGH-RESOLUTION CLOSE-UPS of table regions embedded in the sheet(s) shown before them — the same content, magnified. Read fine details (checkbox states, set numbers, quantities, codes, finishes) from these close-ups rather than from the small full-sheet view.`
+    const sourceNote = closeupImages.length > 0
+      ? `\n\nNOTE: This image is a HIGH-RESOLUTION EXTRACT of the hardware schedule table from the original document. Read ALL hardware groups from this image exactly as printed.`
       : '';
     messageContent = [
       ...imageItems,
-      { type: 'text', text: USER_PROMPT + closeupNote },
+      { type: 'text', text: USER_PROMPT + sourceNote },
     ];
-    console.log(`[hardwarePdf:visual] Sending ${pageImages.length} rendered page(s) to ${MODEL}…`);
+    console.log(`[hardwarePdf:visual] Sending ${imagesToSend.length} image(s) to ${MODEL} (${closeupImages.length > 0 ? 'close-up only — skipping noisy full-page render' : 'full page'})…`);
   } else {
     // Direct PDF path: send the raw file as inline base64 — no canvas needed
     const pdfBase64 = buffer.toString('base64');
