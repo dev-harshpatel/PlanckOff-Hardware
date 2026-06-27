@@ -42,6 +42,66 @@ function isValidSet(item: unknown): item is Record<string, unknown> {
   );
 }
 
+/**
+ * Walk a JSON string character-by-character and collect every complete top-level
+ * object from inside a `"sets": [...]` array, stopping when the array ends or
+ * the string is truncated. Used as a fallback when the full JSON.parse fails
+ * because the AI response was cut off mid-stream at the max_tokens limit.
+ *
+ * Returns an array of parsed set objects (may be empty), or null if the string
+ * doesn't have the expected `{ "sets": [` structure at all.
+ */
+function recoverPartialSets(text: string): unknown[] | null {
+  // Locate the sets array opening bracket
+  const setsKeyIdx = text.search(/"sets"\s*:/);
+  if (setsKeyIdx === -1) return null;
+  const arrStart = text.indexOf('[', setsKeyIdx);
+  if (arrStart === -1) return null;
+
+  const recovered: unknown[] = [];
+  let i = arrStart + 1;
+
+  while (i < text.length) {
+    // Skip whitespace and commas between objects
+    while (i < text.length && /[\s,]/.test(text[i])) i++;
+    if (i >= text.length || text[i] === ']') break;
+    if (text[i] !== '{') break;
+
+    // Walk forward counting brace depth to find the end of this object
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let j = i;
+
+    for (; j < text.length; j++) {
+      const ch = text[j];
+      if (esc)          { esc = false; continue; }
+      if (ch === '\\' && inStr) { esc = true; continue; }
+      if (ch === '"')   { inStr = !inStr; continue; }
+      if (inStr)        continue;
+      if (ch === '{' || ch === '[') depth++;
+      if (ch === '}' || ch === ']') {
+        depth--;
+        if (depth === 0) {
+          // This object is complete — try to parse it
+          try {
+            recovered.push(JSON.parse(text.slice(i, j + 1)));
+          } catch {
+            // Malformed individual object — skip it
+          }
+          i = j + 1;
+          break;
+        }
+      }
+    }
+
+    // j reached the end of the string without closing the object → truncated
+    if (j >= text.length) break;
+  }
+
+  return recovered;
+}
+
 export function parseResponse(raw: string, label = ''): { sets: ExtractedHardwareSet[]; parseWarning?: string } {
   let text = raw.trim();
   const prefix = label ? `[hardwarePdf:parse${label}]` : '[hardwarePdf:parse]';
@@ -81,7 +141,20 @@ export function parseResponse(raw: string, label = ''): { sets: ExtractedHardwar
     console.warn(`${prefix} unexpected structure — keys: ${Object.keys(parsed as object).join(', ')}`);
     return { sets: [], parseWarning: 'AI response was valid JSON but had unexpected structure.' };
   } catch (e) {
-    console.error(`${prefix} JSON.parse failed: ${e instanceof Error ? e.message : e}. First 500 chars: ${text.slice(0, 500)}`);
-    return { sets: [], parseWarning: 'AI response was not valid JSON. No sets extracted.' };
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.error(`${prefix} JSON.parse failed: ${errMsg}. First 500 chars: ${text.slice(0, 500)}`);
+
+    // The response is likely truncated at the max_tokens limit. Walk the partial
+    // JSON to recover all complete set objects before the cut-off point.
+    const partial = recoverPartialSets(text);
+    if (partial !== null && partial.length > 0) {
+      const sets = partial.filter(isValidSet).map(normalizeSet);
+      if (sets.length > 0) {
+        console.warn(`${prefix} recovered ${sets.length} complete set(s) from truncated response`);
+        return { sets, parseWarning: `AI response was truncated (token limit). Recovered ${sets.length} complete set(s).` };
+      }
+    }
+
+    return { sets: [], parseWarning: 'AI response was not valid JSON and could not be recovered. No sets extracted.' };
   }
 }

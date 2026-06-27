@@ -38,6 +38,21 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const maxDuration = 300;
 
+/**
+ * DELETE /api/projects/[id]/process
+ *
+ * Releases any processing lock held for this project. Called by the client
+ * when the user explicitly cancels — ensures the lock is cleared even if
+ * Vercel killed the Lambda before the POST handler's finally block could run.
+ */
+export const DELETE = withProjectAuth(
+  async (_req: NextRequest, _ctx: AuthContext, params?: RouteParams) => {
+    const projectId = params?.id as string;
+    await releaseProcessingLock(projectId);
+    return NextResponse.json({ ok: true });
+  },
+);
+
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function saveExcelDebugFiles(projectId: string, filename: string, result: DoorScheduleResult): void {

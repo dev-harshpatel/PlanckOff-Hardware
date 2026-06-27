@@ -54,17 +54,20 @@ export async function acquireProcessingLock(
 /**
  * Releases the lock for the given project.
  *
- * The `lockId` match ensures a late-running stale cleanup does not accidentally
- * delete a fresh lock that a different job just acquired.
+ * When `lockId` is provided the delete is scoped to that specific job, so a
+ * late-running stale cleanup cannot accidentally remove a fresh lock. When
+ * omitted (e.g. an explicit user-initiated cancel) any lock for the project
+ * is removed unconditionally.
  */
 export async function releaseProcessingLock(
   projectId: string,
-  lockId: string,
+  lockId?: string,
 ): Promise<void> {
   const db = createSupabaseAdminClient();
-  await db
+  let query = db
     .from('project_processing_locks')
     .delete()
-    .eq('project_id', projectId)
-    .eq('lock_id', lockId);
+    .eq('project_id', projectId);
+  if (lockId) query = query.eq('lock_id', lockId);
+  await query;
 }

@@ -665,7 +665,17 @@ export function useProjectUploads({
                 throw new Error(ERRORS.HARDWARE.SERVER_ERROR.message);
             }
 
-            if (!res.ok) throw new Error(json?.error ?? ERRORS.HARDWARE.SERVER_ERROR.message);
+            if (!res.ok) {
+                // 429 means a previous job's lock is still held (Vercel killed it before
+                // its finally block could run). Release the lock and let the user retry.
+                if (res.status === 429) {
+                    await fetch(`/api/projects/${projectId}/process`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                    }).catch(() => {});
+                }
+                throw new Error(json?.error ?? ERRORS.HARDWARE.SERVER_ERROR.message);
+            }
 
             const { setCount, matchedDoorCount, unmatchedDoorCount, unmatchedDoorCodes, pdfSetsWithNoDoors, rowCount, itemCount, warnings, masterQueueWarning } = json!.data!;
 
@@ -805,8 +815,15 @@ export function useProjectUploads({
 
     const handleCancelProcessing = useCallback(() => {
         if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+        // Release the server-side lock before aborting the fetch. Vercel may kill
+        // the Lambda before its finally block runs, leaving the lock orphaned.
+        // This DELETE is fire-and-forget — abort regardless of its outcome.
+        fetch(`/api/projects/${projectId}/process`, {
+            method: 'DELETE',
+            credentials: 'include',
+        }).catch(() => {});
         cancelControllerRef.current?.abort();
-    }, []);
+    }, [projectId]);
 
     const handleSaveSet = (set: HardwareSet) => {
         const index = hardwareSets.findIndex(s => s.id === set.id);
