@@ -1,9 +1,13 @@
 /**
- * Visual extraction: render PDF pages to images and send to the vision model.
+ * Visual extraction: send PDF to the vision model.
  *
- * Used as the fallback tier when text extraction is garbled or finds 0 sets.
- * Also hosts the Format F (matrix/checkbox) entry point, since matrix
- * schedules are only detectable from the rendered close-up images.
+ * Primary path: render PDF pages to PNG images via @napi-rs/canvas, then send
+ * to the model. Works locally and in environments with native module support.
+ *
+ * Fallback path (no canvas): encode the raw PDF as base64 and send it directly
+ * as data:application/pdf. Gemini natively understands PDF files, so this
+ * produces equivalent results without any native binary dependency — making it
+ * safe on Vercel's serverless Lambda where @napi-rs/canvas may be unavailable.
  */
 
 import type OpenAI from 'openai';
@@ -22,65 +26,84 @@ export async function visualExtract(
 ): Promise<{ raw: string; sets: ExtractedHardwareSet[]; warnings: string[] }> {
   const warnings: string[] = [];
 
-  // Render PDF pages to PNG images using pdfjs's glyph renderer.
-  // This bypasses broken font ToUnicode mappings entirely — the model receives
-  // the exact same visual output a user sees in a PDF viewer, so garbled font
-  // encoding cannot affect what the model reads or hallucinates about.
-  console.log(`[hardwarePdf:visual] Rendering PDF pages to images…`);
-  const pageImages = await renderPdfToImages(buffer);
-
-  // Some sheets embed their hardware schedule as a raster IMAGE (e.g. a matrix
-  // checkbox table pasted into the drawing). At full-sheet render scale those
-  // tables are illegible — checkbox states cannot be read. Render high-zoom
-  // close-ups of such regions and append them after the full-page images.
-  // PDFs without large embedded images get an empty array — nothing changes.
+  // ── Attempt image rendering (requires @napi-rs/canvas) ────────────────────
+  // Rendering gives pdfjs's glyph output — bypasses broken font encodings and
+  // enables matrix/close-up extraction. Falls back to direct PDF if unavailable.
+  let pageImages: string[] = [];
   let closeupImages: string[] = [];
+
   try {
-    closeupImages = await renderEmbeddedImageCloseups(buffer);
-    if (closeupImages.length > 0) {
-      console.log(`[hardwarePdf:visual] Added ${closeupImages.length} high-res close-up(s) of embedded schedule image(s).`);
-    }
-  } catch (closeupErr) {
-    if (closeupErr instanceof Error && closeupErr.name === 'AbortError') throw closeupErr;
-    console.warn('[hardwarePdf:visual] Embedded-image close-up rendering failed — continuing with page renders only:', closeupErr);
-  }
+    console.log('[hardwarePdf:visual] Rendering PDF pages to images…');
+    pageImages = await renderPdfToImages(buffer);
 
-  // Matrix/checkbox schedules (Format F) need the dedicated transcription
-  // path — single-shot extraction cannot transpose the checkbox grid. Only
-  // attempted when close-ups exist; any non-matrix document falls through to
-  // the normal visual extraction below, unchanged.
-  if (closeupImages.length > 0) {
     try {
-      const matrixResult = await tryMatrixExtraction(client, closeupImages, signal);
-      if (matrixResult) {
-        return { raw: matrixResult.raw, sets: matrixResult.sets, warnings };
+      closeupImages = await renderEmbeddedImageCloseups(buffer);
+      if (closeupImages.length > 0) {
+        console.log(`[hardwarePdf:visual] Added ${closeupImages.length} high-res close-up(s) of embedded schedule image(s).`);
       }
-    } catch (matrixErr) {
-      if (matrixErr instanceof Error && matrixErr.name === 'AbortError') throw matrixErr;
-      console.warn('[hardwarePdf:matrix] Matrix extraction failed — continuing with normal visual extraction:', matrixErr);
+    } catch (closeupErr) {
+      if (closeupErr instanceof Error && closeupErr.name === 'AbortError') throw closeupErr;
+      console.warn('[hardwarePdf:visual] Embedded-image close-up rendering failed — continuing without close-ups:', closeupErr);
     }
+
+    // Matrix/checkbox schedules need the dedicated transcription path.
+    // Only attempted when close-ups are present.
+    if (closeupImages.length > 0) {
+      try {
+        const matrixResult = await tryMatrixExtraction(client, closeupImages, signal);
+        if (matrixResult) {
+          return { raw: matrixResult.raw, sets: matrixResult.sets, warnings };
+        }
+      } catch (matrixErr) {
+        if (matrixErr instanceof Error && matrixErr.name === 'AbortError') throw matrixErr;
+        console.warn('[hardwarePdf:matrix] Matrix extraction failed — continuing with normal visual extraction:', matrixErr);
+      }
+    }
+  } catch (canvasErr) {
+    if (canvasErr instanceof Error && canvasErr.name === 'AbortError') throw canvasErr;
+    // @napi-rs/canvas not available in this environment (e.g. Vercel Lambda).
+    // Fall through to the direct PDF path below.
+    console.warn(
+      `[hardwarePdf:visual] Image rendering unavailable (platform=${process.platform} arch=${process.arch}) — falling back to direct PDF upload`,
+      canvasErr,
+    );
+    pageImages = [];
+    closeupImages = [];
   }
 
-  console.log(`[hardwarePdf:visual] Rendered ${pageImages.length} page(s) — sending to ${MODEL}…`);
+  // ── Build message content ─────────────────────────────────────────────────
+  let messageContent: Array<{ type: 'image_url'; image_url: { url: string } } | { type: 'text'; text: string }>;
 
-  const imageContent = [...pageImages, ...closeupImages].map(b64 => ({
-    type: 'image_url' as const,
-    image_url: { url: `data:image/png;base64,${b64}` },
-  }));
-
-  const closeupNote = closeupImages.length > 0
-    ? `\n\nNOTE: the final ${closeupImages.length} image(s) are HIGH-RESOLUTION CLOSE-UPS of table regions embedded in the sheet(s) shown before them — the same content, magnified. Read fine details (checkbox states, set numbers, quantities, codes, finishes) from these close-ups rather than from the small full-sheet view.`
-    : '';
+  if (pageImages.length > 0) {
+    // Image path: rendered pages + optional close-ups
+    const imageItems = [...pageImages, ...closeupImages].map(b64 => ({
+      type: 'image_url' as const,
+      image_url: { url: `data:image/png;base64,${b64}` },
+    }));
+    const closeupNote = closeupImages.length > 0
+      ? `\n\nNOTE: the final ${closeupImages.length} image(s) are HIGH-RESOLUTION CLOSE-UPS of table regions embedded in the sheet(s) shown before them — the same content, magnified. Read fine details (checkbox states, set numbers, quantities, codes, finishes) from these close-ups rather than from the small full-sheet view.`
+      : '';
+    messageContent = [
+      ...imageItems,
+      { type: 'text', text: USER_PROMPT + closeupNote },
+    ];
+    console.log(`[hardwarePdf:visual] Sending ${pageImages.length} rendered page(s) to ${MODEL}…`);
+  } else {
+    // Direct PDF path: send the raw file as inline base64 — no canvas needed
+    const pdfBase64 = buffer.toString('base64');
+    messageContent = [
+      {
+        type: 'image_url' as const,
+        image_url: { url: `data:application/pdf;base64,${pdfBase64}` },
+      },
+      { type: 'text', text: USER_PROMPT },
+    ];
+    console.log(`[hardwarePdf:visual] Sending PDF directly (${(buffer.length / 1024 / 1024).toFixed(1)} MB) to ${MODEL}…`);
+  }
 
   const raw = await callOpenRouterForSets(client, [
     { role: 'system', content: SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: [
-        ...imageContent,
-        { type: 'text', text: USER_PROMPT + closeupNote },
-      ],
-    },
+    { role: 'user', content: messageContent },
   ], signal);
 
   console.log(`[hardwarePdf:visual] Response received — ${raw.length} chars`);
