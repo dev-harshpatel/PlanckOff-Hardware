@@ -158,7 +158,8 @@ export async function extractHardwareSetsFromPdf(
         if (t2Err instanceof Error && t2Err.name === 'AbortError') throw t2Err;
         const msg = t2Err instanceof Error ? t2Err.message : String(t2Err);
         warnings.push(`Tier 2 (visual) failed: ${msg}`);
-        console.warn(`[hardwarePdf] Tier 2 failed: ${msg}`);
+        // Log with full details so Vercel function logs show the exact failure cause
+        console.error(`[hardwarePdf] Tier 2 failed — platform=${process.platform} arch=${process.arch} — ${msg}`, t2Err);
       }
     }
   }

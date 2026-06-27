@@ -21,7 +21,7 @@ export function LiveLogTicker({ log, fallback }: LiveLogTickerProps) {
   const colorClass = log ? LEVEL_TEXT[log.level] : 'text-[var(--text-faint)]';
 
   return (
-    <p key={text} className={`text-[11px] mt-0.5 leading-snug animate-fadeIn truncate ${colorClass}`}>
+    <p key={text} className={`text-[11px] mt-0.5 leading-snug animate-fadeIn break-words ${colorClass}`}>
       {text}
     </p>
   );

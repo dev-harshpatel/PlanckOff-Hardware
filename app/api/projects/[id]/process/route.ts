@@ -203,11 +203,11 @@ export const POST = withProjectAuth(
     }
 
     if (pdfResult.setCount === 0) {
-      const diagInfo = pdfResult.warnings.length > 0
-        ? ` Diagnostics: ${pdfResult.warnings.join(' | ')}`
-        : '';
+      if (pdfResult.warnings.length > 0) {
+        console.error(`[process] PDF extraction returned 0 sets — warnings: ${pdfResult.warnings.join(' | ')}`);
+      }
       return NextResponse.json(
-        { error: `No hardware sets were found in the PDF. Check that this is a Division 08 hardware schedule PDF.${diagInfo}` },
+        { error: 'No hardware sets were found in the PDF. Please verify this is a Division 08 hardware schedule PDF and try again.' },
         { status: 422 },
       );
     }

@@ -45,7 +45,8 @@ const nextConfig: NextConfig = {
   },
 
   // pdfjs-dist dynamically loads its worker at runtime via GlobalWorkerOptions.workerSrc.
-  // Vercel's static output file tracing misses it — this forces inclusion in the Lambda bundle.
+  // @napi-rs/canvas selects its platform binary at runtime via process.platform+arch checks —
+  // both are invisible to static analysis. Force Vercel to include them in the Lambda bundle.
   outputFileTracingIncludes: {
     '/api/**': [
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -53,6 +54,12 @@ const nextConfig: NextConfig = {
       // @sparticuz/chromium reads these brotli-compressed binaries from disk at runtime
       // (chromium.executablePath()) rather than via require(), so static tracing misses them.
       './node_modules/@sparticuz/chromium/bin/**',
+      // @napi-rs/canvas loads a platform-specific .node binary via a runtime platform check.
+      // Vercel (Linux x64/arm64 GNU) needs these two; musl variants included as a safety net.
+      './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
+      './node_modules/@napi-rs/canvas-linux-arm64-gnu/**',
+      './node_modules/@napi-rs/canvas-linux-x64-musl/**',
+      './node_modules/@napi-rs/canvas-linux-arm64-musl/**',
     ],
   },
 
